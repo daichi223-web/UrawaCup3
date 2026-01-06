@@ -1,9 +1,10 @@
-import { Calendar, Users, Trophy, FileText, Clock } from 'lucide-react'
+import { Calendar, Users, Trophy, FileText, Clock, Eye } from 'lucide-react'
 import { useState, useEffect } from 'react';
 import { matchApi } from '@/features/matches';
 import api from '@/core/http';
 import { Team } from '@shared/types';
 import { useAppStore } from '@/stores/appStore';
+import { useAuthStore } from '@/stores/authStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 /**
@@ -13,6 +14,8 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 function Dashboard() {
   const [loading, setLoading] = useState(true);
   const { currentTournament: tournament } = useAppStore();
+  const { user } = useAuthStore();
+  const isViewer = user?.role === 'viewer';
   const [stats, setStats] = useState({
     totalTeams: 24,
     registeredTeams: 0,
@@ -93,67 +96,104 @@ function Dashboard() {
       </div>
 
       {/* 統計カード */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${isViewer ? 'lg:grid-cols-2' : 'lg:grid-cols-4'} gap-4`}>
         <StatCard
           icon={Users}
-          label="登録チーム"
-          value={`${stats.registeredTeams} / ${stats.totalTeams}`}
+          label="参加チーム"
+          value={`${stats.registeredTeams} チーム`}
           color="blue"
         />
         <StatCard
           icon={Trophy}
-          label="完了試合"
+          label="試合進行"
           value={`${stats.completedMatches} / ${stats.totalMatches}`}
           color="green"
         />
-        <StatCard
-          icon={FileText}
-          label="未送信報告書"
-          value={stats.pendingReports.toString()}
-          color="yellow"
-        />
-        <StatCard
-          icon={Clock}
-          label="次の試合"
-          value={stats.totalMatches > stats.completedMatches ? "進行中" : "完了"}
-          color="gray"
-        />
+        {!isViewer && (
+          <>
+            <StatCard
+              icon={FileText}
+              label="未送信報告書"
+              value={stats.pendingReports.toString()}
+              color="yellow"
+            />
+            <StatCard
+              icon={Clock}
+              label="次の試合"
+              value={stats.totalMatches > stats.completedMatches ? "進行中" : "完了"}
+              color="gray"
+            />
+          </>
+        )}
       </div>
 
-      {/* クイックアクション */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="text-lg font-semibold">クイックアクション</h3>
-        </div>
-        <div className="card-body">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <QuickActionButton
-              href="/teams"
-              label="チーム登録"
-              description="参加チームの登録・編集"
-              icon={Users}
-            />
-            <QuickActionButton
-              href="/results"
-              label="試合結果入力"
-              description="スコア・得点者を入力"
-              icon={Trophy}
-            />
-            <QuickActionButton
-              href="/standings"
-              label="順位表確認"
-              description="グループ別順位・星取表"
-              icon={Trophy}
-            />
-            <QuickActionButton
-              href="/schedule"
-              label="日程管理"
-              description="試合日程の生成・確認"
-              icon={Calendar}
-            />
+      {/* クイックアクション（閲覧者以外）または 閲覧リンク（閲覧者） */}
+      {isViewer ? (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              閲覧メニュー
+            </h3>
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <QuickActionButton
+                href="/standings"
+                label="順位表"
+                description="グループ別順位・星取表"
+                icon={Trophy}
+              />
+              <QuickActionButton
+                href="/schedule"
+                label="試合日程"
+                description="本日の試合予定を確認"
+                icon={Calendar}
+              />
+              <QuickActionButton
+                href="/teams"
+                label="参加チーム"
+                description="チーム一覧を確認"
+                icon={Users}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="text-lg font-semibold">クイックアクション</h3>
+          </div>
+          <div className="card-body">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <QuickActionButton
+                href="/teams"
+                label="チーム登録"
+                description="参加チームの登録・編集"
+                icon={Users}
+              />
+              <QuickActionButton
+                href="/results"
+                label="試合結果入力"
+                description="スコア・得点者を入力"
+                icon={Trophy}
+              />
+              <QuickActionButton
+                href="/standings"
+                label="順位表確認"
+                description="グループ別順位・星取表"
+                icon={Trophy}
+              />
+              <QuickActionButton
+                href="/schedule"
+                label="日程管理"
+                description="試合日程の生成・確認"
+                icon={Calendar}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

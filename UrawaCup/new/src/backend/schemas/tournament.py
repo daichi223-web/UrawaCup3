@@ -20,6 +20,10 @@ class TournamentBase(CamelCaseModel):
     match_duration: int = Field(default=50, ge=10, le=120, description="試合時間（分）")
     half_duration: int = Field(default=25, ge=5, le=60, description="ハーフタイム（分）")
     interval_minutes: int = Field(default=15, ge=5, le=60, description="試合間インターバル（分）")
+    # チーム構成設定
+    group_count: int = Field(default=4, description="グループ数（2/4/8）")
+    teams_per_group: int = Field(default=4, ge=3, le=6, description="グループ内チーム数（3-6）")
+    advancing_teams: int = Field(default=1, ge=1, le=2, description="決勝T進出チーム数（1-2）")
     # 報告書発信元情報
     sender_organization: Optional[str] = Field(None, max_length=100, description="発信元所属")
     sender_name: Optional[str] = Field(None, max_length=100, description="発信元氏名")
@@ -42,6 +46,10 @@ class TournamentUpdate(CamelCaseModel):
     match_duration: Optional[int] = Field(None, ge=10, le=120)
     half_duration: Optional[int] = Field(None, ge=5, le=60)
     interval_minutes: Optional[int] = Field(None, ge=5, le=60)
+    # チーム構成設定
+    group_count: Optional[int] = Field(None, description="グループ数（2/4/8）")
+    teams_per_group: Optional[int] = Field(None, ge=3, le=6)
+    advancing_teams: Optional[int] = Field(None, ge=1, le=2)
     # 報告書発信元情報
     sender_organization: Optional[str] = Field(None, max_length=100)
     sender_name: Optional[str] = Field(None, max_length=100)

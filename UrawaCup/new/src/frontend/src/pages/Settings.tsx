@@ -36,6 +36,9 @@ function Settings() {
     endDate: '',
     matchDuration: 50,
     intervalMinutes: 15,
+    groupCount: 4,
+    teamsPerGroup: 4,
+    advancingTeams: 1,
   })
 
   // 会場編集モーダル
@@ -94,6 +97,9 @@ function Settings() {
         endDate: tournament.endDate || '',
         matchDuration: tournament.matchDuration || 50,
         intervalMinutes: tournament.intervalMinutes || 15,
+        groupCount: tournament.groupCount || 4,
+        teamsPerGroup: tournament.teamsPerGroup || 4,
+        advancingTeams: tournament.advancingTeams || 1,
       })
     }
   }, [tournament])
@@ -108,6 +114,9 @@ function Settings() {
       endDate: string;
       matchDuration: number;
       intervalMinutes: number;
+      groupCount: number;
+      teamsPerGroup: number;
+      advancingTeams: number;
     }) => {
       const response = await api.patch<Tournament>(`/tournaments/${tournamentId}`, {
         name: data.name,
@@ -117,6 +126,9 @@ function Settings() {
         end_date: data.endDate,
         match_duration: data.matchDuration,
         interval_minutes: data.intervalMinutes,
+        group_count: data.groupCount,
+        teams_per_group: data.teamsPerGroup,
+        advancing_teams: data.advancingTeams,
       })
       return response.data
     },
@@ -383,6 +395,57 @@ function Settings() {
               />
             </div>
           </div>
+
+          {/* チーム構成設定 */}
+          <div className="border-t pt-4 mt-4">
+            <h4 className="font-medium mb-3 text-gray-700">チーム構成設定</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              ※ グループやチームが既に登録されている場合、変更すると整合性が崩れる可能性があります
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="form-label">グループ数</label>
+                <select
+                  className="form-input"
+                  value={tournamentForm.groupCount}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, groupCount: parseInt(e.target.value) || 4 }))}
+                >
+                  <option value={2}>2グループ</option>
+                  <option value={4}>4グループ</option>
+                  <option value={8}>8グループ</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label">グループ内チーム数</label>
+                <select
+                  className="form-input"
+                  value={tournamentForm.teamsPerGroup}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, teamsPerGroup: parseInt(e.target.value) || 4 }))}
+                >
+                  <option value={3}>3チーム</option>
+                  <option value={4}>4チーム</option>
+                  <option value={5}>5チーム</option>
+                  <option value={6}>6チーム</option>
+                </select>
+              </div>
+              <div>
+                <label className="form-label">決勝T進出チーム数</label>
+                <select
+                  className="form-input"
+                  value={tournamentForm.advancingTeams}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, advancingTeams: parseInt(e.target.value) || 1 }))}
+                >
+                  <option value={1}>各グループ1位のみ</option>
+                  <option value={2}>各グループ1・2位</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              総チーム数: {tournamentForm.groupCount * tournamentForm.teamsPerGroup}チーム /
+              決勝T参加: {tournamentForm.groupCount * tournamentForm.advancingTeams}チーム
+            </p>
+          </div>
+
           <div className="flex justify-end">
             <button
               className="btn-primary"

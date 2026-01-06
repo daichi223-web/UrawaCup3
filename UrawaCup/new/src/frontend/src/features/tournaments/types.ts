@@ -11,6 +11,7 @@ export interface Tournament {
   intervalMinutes: number; // インターバル（分）
   groupCount: number;
   teamsPerGroup: number;
+  advancingTeams: number; // 決勝T進出チーム数（1-2）
   description: string | null;
   createdAt: string;
   updatedAt: string;

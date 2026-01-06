@@ -326,6 +326,14 @@ class StandingService:
             Standing.rank == 1,
         ).first()
 
+    def get_group_nth_place(self, tournament_id: int, group_id: str, rank: int) -> Standing:
+        """グループのN位のチームを取得"""
+        return self.db.query(Standing).filter(
+            Standing.tournament_id == tournament_id,
+            Standing.group_id == group_id,
+            Standing.rank == rank,
+        ).first()
+
     def get_teams_by_rank(self, tournament_id: int, rank: int) -> List[Standing]:
         """指定順位のチームを全グループから取得"""
         return self.db.query(Standing).filter(

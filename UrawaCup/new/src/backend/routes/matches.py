@@ -649,14 +649,15 @@ def generate_preliminary_schedule(
     tournament_id: int,
     start_time: time = Query(time(9, 30), description="開始時刻"),
     interval_minutes: Optional[int] = Query(None, description="試合間隔（分）、省略時は大会設定を使用"),
+    matches_per_day: int = Query(6, ge=1, le=12, description="1日あたりの試合数"),
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
     """
     予選リーグの日程を自動生成（管理者専用）
 
-    対戦除外設定に基づき、各グループ12試合を生成。
-    Day1に6試合、Day2に6試合ずつ配分。
+    大会設定に基づき、各グループでラウンドロビン（総当たり）試合を生成。
+    6チーム変則リーグの場合は対戦除外設定に基づき12試合を生成。
     """
     # 大会の存在確認
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
@@ -681,10 +682,22 @@ def generate_preliminary_schedule(
     match_interval = interval_minutes or tournament.interval_minutes
     match_duration = tournament.match_duration + match_interval
 
+    # 大会設定からグループ数とチーム数を取得
+    group_count = getattr(tournament, 'group_count', 4) or 4
+    teams_per_group = getattr(tournament, 'teams_per_group', 4) or 4
+
+    # グループIDのリストを生成（A, B, C, D, E, F, G, H...）
+    group_ids = [chr(ord('A') + i) for i in range(group_count)]
+
+    # ラウンドロビンの試合数を計算: N*(N-1)/2
+    # 6チーム変則の場合は12試合（除外設定あり）
+    expected_matches_full = teams_per_group * (teams_per_group - 1) // 2
+    uses_exclusion = teams_per_group == 6  # 6チーム変則リーグ
+
     # 各グループの試合を生成
     created_matches = []
 
-    for group_id in ["A", "B", "C", "D"]:
+    for group_id in group_ids:
         # グループのチームを取得
         teams = (
             db.query(Team)
@@ -696,10 +709,10 @@ def generate_preliminary_schedule(
             .all()
         )
 
-        if len(teams) != 6:
+        if len(teams) != teams_per_group:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"グループ{group_id}のチーム数が6チームではありません（現在: {len(teams)}チーム）"
+                detail=f"グループ{group_id}のチーム数が{teams_per_group}チームではありません（現在: {len(teams)}チーム）"
             )
 
         # 会場を取得
@@ -713,16 +726,17 @@ def generate_preliminary_schedule(
                 detail=f"グループ{group_id}に会場が設定されていません"
             )
 
-        # 除外ペアを取得
-        exclusion_pairs = db.query(ExclusionPair).filter(
-            ExclusionPair.tournament_id == tournament_id,
-            ExclusionPair.group_id == group_id,
-        ).all()
-
+        # 除外ペアを取得（6チーム変則リーグの場合のみ使用）
         excluded_set = set()
-        for pair in exclusion_pairs:
-            excluded_set.add((pair.team1_id, pair.team2_id))
-            excluded_set.add((pair.team2_id, pair.team1_id))
+        if uses_exclusion:
+            exclusion_pairs = db.query(ExclusionPair).filter(
+                ExclusionPair.tournament_id == tournament_id,
+                ExclusionPair.group_id == group_id,
+            ).all()
+
+            for pair in exclusion_pairs:
+                excluded_set.add((pair.team1_id, pair.team2_id))
+                excluded_set.add((pair.team2_id, pair.team1_id))
 
         # 総当たりから除外ペアを除いた対戦カードを生成
         matchups = []
@@ -731,20 +745,29 @@ def generate_preliminary_schedule(
                 if (team1.id, team2.id) not in excluded_set:
                     matchups.append((team1.id, team2.id))
 
-        if len(matchups) != 12:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"グループ{group_id}の対戦数が12試合になりません（現在: {len(matchups)}試合）。除外設定を確認してください。"
-            )
+        # 試合数のバリデーション
+        if uses_exclusion:
+            if len(matchups) != 12:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"グループ{group_id}の対戦数が12試合になりません（現在: {len(matchups)}試合）。除外設定を確認してください。"
+                )
+        else:
+            if len(matchups) != expected_matches_full:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"グループ{group_id}の対戦数が{expected_matches_full}試合になりません（現在: {len(matchups)}試合）"
+                )
 
-        # Day1, Day2に振り分け
+        # 日程に振り分け
         day1_date = tournament.start_date
-        day2_date = tournament.start_date + timedelta(days=1)
+        total_matches = len(matchups)
 
         for idx, (home_id, away_id) in enumerate(matchups):
-            is_day1 = idx < 6
-            match_date = day1_date if is_day1 else day2_date
-            match_order = (idx % 6) + 1
+            # 日付を計算
+            day_num = idx // matches_per_day
+            match_date = day1_date + timedelta(days=day_num)
+            match_order = (idx % matches_per_day) + 1
 
             # 開始時刻を計算
             minutes_offset = (match_order - 1) * match_duration
@@ -964,8 +987,10 @@ def generate_final_matches(
     """
     決勝トーナメントの組み合わせを自動生成（管理者専用）
 
-    各グループ1位の4チームで準決勝・3位決定戦・決勝を生成。
-    組み合わせパターン: A1位 vs B1位, C1位 vs D1位
+    大会設定に基づき決勝トーナメントを生成。
+    - 4グループ×1位進出: 4チームで準決勝・3決・決勝（従来方式）
+    - 4グループ×2位進出: 8チームで準々決勝・準決勝・3決・決勝
+    - 2グループ×1位進出: 2チームで決勝のみ
     """
     # 大会の存在確認
     tournament = db.query(Tournament).filter(Tournament.id == tournament_id).first()
@@ -974,6 +999,11 @@ def generate_final_matches(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"大会が見つかりません (ID: {tournament_id})"
         )
+
+    # 大会設定を取得
+    group_count = getattr(tournament, 'group_count', 4) or 4
+    advancing_teams = getattr(tournament, 'advancing_teams', 1) or 1
+    total_finalists = group_count * advancing_teams
 
     # 既存の決勝トーナメント試合があるかチェック
     existing_finals = db.query(Match).filter(
@@ -1013,116 +1043,202 @@ def generate_final_matches(
                 detail="決勝会場が設定されていません。会場設定で「決勝会場フラグ」をオンにしてください。"
             )
 
-    # 各グループ1位を取得
+    # グループIDのリストを生成
+    group_ids = [chr(ord('A') + i) for i in range(group_count)]
+
+    # 各グループの進出チームを取得
     from services.standing_service import StandingService
     standing_service = StandingService(db)
 
     qualified_teams = {}
-    for group_id in ["A", "B", "C", "D"]:
-        standing = standing_service.get_group_first_place(tournament_id, group_id)
-        if not standing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"グループ{group_id}の1位がまだ確定していません。予選リーグを完了してください。"
-            )
-        qualified_teams[group_id] = standing.team_id
+    for group_id in group_ids:
+        for rank in range(1, advancing_teams + 1):
+            standing = standing_service.get_group_nth_place(tournament_id, group_id, rank)
+            if not standing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"グループ{group_id}の{rank}位がまだ確定していません。予選リーグを完了してください。"
+                )
+            qualified_teams[f"{group_id}{rank}"] = standing.team_id
 
     # 試合間隔の計算
     match_interval = tournament.match_duration + tournament.interval_minutes
 
-    # 決勝トーナメントの試合を作成
-    # 準決勝1: A1位 vs C1位（対角グループ対戦）
-    # 準決勝2: B1位 vs D1位（対角グループ対戦）
-    # 3位決定戦: 準決勝敗者同士（後で手動設定またはスコア入力後に更新）
-    # 決勝: 準決勝勝者同士（後で手動設定またはスコア入力後に更新）
     created_matches = []
+    match_order = 0
 
-    # 準決勝1 (第1試合): A1位 vs C1位
-    sf1_time = start_time
-    semifinal1 = Match(
-        tournament_id=tournament_id,
-        group_id=None,
-        venue_id=final_venue.id,
-        home_team_id=qualified_teams["A"],
-        away_team_id=qualified_teams["C"],
-        match_date=match_date,
-        match_time=sf1_time,
-        match_order=1,
-        stage=MatchStage.SEMIFINAL,
-        status=MatchStatus.SCHEDULED,
-        home_seed="A1位",
-        away_seed="C1位",
-        notes="準決勝1: A組1位 vs C組1位",
-    )
-    db.add(semifinal1)
-    created_matches.append(semifinal1)
+    # トーナメント構造を決定
+    if total_finalists == 2:
+        # 2チーム: 決勝のみ
+        match_order += 1
+        final_match = Match(
+            tournament_id=tournament_id,
+            group_id=None,
+            venue_id=final_venue.id,
+            home_team_id=qualified_teams[f"{group_ids[0]}1"],
+            away_team_id=qualified_teams[f"{group_ids[1]}1"],
+            match_date=match_date,
+            match_time=start_time,
+            match_order=match_order,
+            stage=MatchStage.FINAL,
+            status=MatchStatus.SCHEDULED,
+            notes="決勝",
+        )
+        db.add(final_match)
+        created_matches.append(final_match)
 
-    # 準決勝2 (第2試合): B1位 vs D1位
-    sf2_time = (
-        datetime.combine(date.today(), start_time) +
-        timedelta(minutes=match_interval)
-    ).time()
-    semifinal2 = Match(
-        tournament_id=tournament_id,
-        group_id=None,
-        venue_id=final_venue.id,
-        home_team_id=qualified_teams["B"],
-        away_team_id=qualified_teams["D"],
-        match_date=match_date,
-        match_time=sf2_time,
-        match_order=2,
-        stage=MatchStage.SEMIFINAL,
-        status=MatchStatus.SCHEDULED,
-        home_seed="B1位",
-        away_seed="D1位",
-        notes="準決勝2: B組1位 vs D組1位",
-    )
-    db.add(semifinal2)
-    created_matches.append(semifinal2)
+    elif total_finalists == 4:
+        # 4チーム: 準決勝×2 + 3位決定戦 + 決勝（従来方式）
+        # 準決勝1: A1位 vs C1位（対角グループ対戦）
+        match_order += 1
+        sf1_time = start_time
+        semifinal1 = Match(
+            tournament_id=tournament_id,
+            group_id=None,
+            venue_id=final_venue.id,
+            home_team_id=qualified_teams[f"{group_ids[0]}1"],
+            away_team_id=qualified_teams[f"{group_ids[2]}1"] if group_count >= 4 else qualified_teams[f"{group_ids[1]}1"],
+            match_date=match_date,
+            match_time=sf1_time,
+            match_order=match_order,
+            stage=MatchStage.SEMIFINAL,
+            status=MatchStatus.SCHEDULED,
+            notes=f"準決勝1: {group_ids[0]}組1位 vs {group_ids[2] if group_count >= 4 else group_ids[1]}組1位",
+        )
+        db.add(semifinal1)
+        created_matches.append(semifinal1)
 
-    # 3位決定戦 (第3試合) - チームは準決勝後に決まるのでプレースホルダーとして作成
-    # ※初期値として準決勝1のホーム(A) vs 準決勝2のホーム(B)を設定（後で変更可能）
-    third_time = (
-        datetime.combine(date.today(), start_time) +
-        timedelta(minutes=match_interval * 2)
-    ).time()
-    third_place = Match(
-        tournament_id=tournament_id,
-        group_id=None,
-        venue_id=final_venue.id,
-        home_team_id=qualified_teams["A"],  # プレースホルダー（準決勝1敗者）
-        away_team_id=qualified_teams["B"],  # プレースホルダー（準決勝2敗者）
-        match_date=match_date,
-        match_time=third_time,
-        match_order=3,
-        stage=MatchStage.THIRD_PLACE,
-        status=MatchStatus.SCHEDULED,
-        notes="3位決定戦（準決勝結果後に組み合わせ確定）",
-    )
-    db.add(third_place)
-    created_matches.append(third_place)
+        # 準決勝2: B1位 vs D1位
+        match_order += 1
+        sf2_time = (
+            datetime.combine(date.today(), start_time) +
+            timedelta(minutes=match_interval)
+        ).time()
+        semifinal2 = Match(
+            tournament_id=tournament_id,
+            group_id=None,
+            venue_id=final_venue.id,
+            home_team_id=qualified_teams[f"{group_ids[1]}1"],
+            away_team_id=qualified_teams[f"{group_ids[3]}1"] if group_count >= 4 else qualified_teams[f"{group_ids[0]}1"],
+            match_date=match_date,
+            match_time=sf2_time,
+            match_order=match_order,
+            stage=MatchStage.SEMIFINAL,
+            status=MatchStatus.SCHEDULED,
+            notes=f"準決勝2: {group_ids[1]}組1位 vs {group_ids[3] if group_count >= 4 else group_ids[0]}組1位",
+        )
+        db.add(semifinal2)
+        created_matches.append(semifinal2)
 
-    # 決勝 (第4試合) - チームは準決勝後に決まるのでプレースホルダーとして作成
-    # ※初期値として準決勝1のアウェイ(C) vs 準決勝2のアウェイ(D)を設定（後で変更可能）
-    final_time = (
-        datetime.combine(date.today(), start_time) +
-        timedelta(minutes=match_interval * 3)
-    ).time()
-    final_match = Match(
-        tournament_id=tournament_id,
-        group_id=None,
-        venue_id=final_venue.id,
-        home_team_id=qualified_teams["C"],  # プレースホルダー（準決勝1勝者）
-        away_team_id=qualified_teams["D"],  # プレースホルダー（準決勝2勝者）
-        match_date=match_date,
-        match_time=final_time,
-        match_order=4,
-        stage=MatchStage.FINAL,
-        status=MatchStatus.SCHEDULED,
-        notes="決勝（準決勝結果後に組み合わせ確定）",
-    )
-    db.add(final_match)
-    created_matches.append(final_match)
+        # 3位決定戦
+        match_order += 1
+        third_time = (
+            datetime.combine(date.today(), start_time) +
+            timedelta(minutes=match_interval * 2)
+        ).time()
+        third_place = Match(
+            tournament_id=tournament_id,
+            group_id=None,
+            venue_id=final_venue.id,
+            home_team_id=qualified_teams[f"{group_ids[0]}1"],  # プレースホルダー
+            away_team_id=qualified_teams[f"{group_ids[1]}1"],  # プレースホルダー
+            match_date=match_date,
+            match_time=third_time,
+            match_order=match_order,
+            stage=MatchStage.THIRD_PLACE,
+            status=MatchStatus.SCHEDULED,
+            notes="3位決定戦（準決勝結果後に組み合わせ確定）",
+        )
+        db.add(third_place)
+        created_matches.append(third_place)
+
+        # 決勝
+        match_order += 1
+        final_time = (
+            datetime.combine(date.today(), start_time) +
+            timedelta(minutes=match_interval * 3)
+        ).time()
+        final_match = Match(
+            tournament_id=tournament_id,
+            group_id=None,
+            venue_id=final_venue.id,
+            home_team_id=qualified_teams[f"{group_ids[2]}1"] if group_count >= 4 else qualified_teams[f"{group_ids[0]}1"],
+            away_team_id=qualified_teams[f"{group_ids[3]}1"] if group_count >= 4 else qualified_teams[f"{group_ids[1]}1"],
+            match_date=match_date,
+            match_time=final_time,
+            match_order=match_order,
+            stage=MatchStage.FINAL,
+            status=MatchStatus.SCHEDULED,
+            notes="決勝（準決勝結果後に組み合わせ確定）",
+        )
+        db.add(final_match)
+        created_matches.append(final_match)
+
+    elif total_finalists == 8:
+        # 8チーム: 準々決勝×4 + 準決勝×2 + 3決 + 決勝
+        # 組み合わせ: A1vsD2, B1vsC2, C1vsB2, D1vsA2
+        qf_matchups = [
+            (f"{group_ids[0]}1", f"{group_ids[3]}2"),  # A1 vs D2
+            (f"{group_ids[1]}1", f"{group_ids[2]}2"),  # B1 vs C2
+            (f"{group_ids[2]}1", f"{group_ids[1]}2"),  # C1 vs B2
+            (f"{group_ids[3]}1", f"{group_ids[0]}2"),  # D1 vs A2
+        ]
+
+        for i, (home_key, away_key) in enumerate(qf_matchups):
+            match_order += 1
+            qf_time = (
+                datetime.combine(date.today(), start_time) +
+                timedelta(minutes=match_interval * i)
+            ).time()
+            qf_match = Match(
+                tournament_id=tournament_id,
+                group_id=None,
+                venue_id=final_venue.id,
+                home_team_id=qualified_teams[home_key],
+                away_team_id=qualified_teams[away_key],
+                match_date=match_date,
+                match_time=qf_time,
+                match_order=match_order,
+                stage=MatchStage.SEMIFINAL,  # 準々決勝もSEMIFINALとして扱う
+                status=MatchStatus.SCHEDULED,
+                notes=f"準々決勝{i+1}: {home_key} vs {away_key}",
+            )
+            db.add(qf_match)
+            created_matches.append(qf_match)
+
+        # 準決勝・3決・決勝はプレースホルダーとして作成
+        for stage_name, stage_enum in [
+            ("準決勝1", MatchStage.SEMIFINAL),
+            ("準決勝2", MatchStage.SEMIFINAL),
+            ("3位決定戦", MatchStage.THIRD_PLACE),
+            ("決勝", MatchStage.FINAL),
+        ]:
+            match_order += 1
+            stage_time = (
+                datetime.combine(date.today(), start_time) +
+                timedelta(minutes=match_interval * match_order)
+            ).time()
+            stage_match = Match(
+                tournament_id=tournament_id,
+                group_id=None,
+                venue_id=final_venue.id,
+                home_team_id=qualified_teams[f"{group_ids[0]}1"],  # プレースホルダー
+                away_team_id=qualified_teams[f"{group_ids[1]}1"],  # プレースホルダー
+                match_date=match_date,
+                match_time=stage_time,
+                match_order=match_order,
+                stage=stage_enum,
+                status=MatchStatus.SCHEDULED,
+                notes=f"{stage_name}（前試合結果後に組み合わせ確定）",
+            )
+            db.add(stage_match)
+            created_matches.append(stage_match)
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"決勝進出チーム数{total_finalists}チームには対応していません。2, 4, 8チームのいずれかを設定してください。"
+        )
 
     db.commit()
 

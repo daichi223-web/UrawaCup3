@@ -70,6 +70,12 @@ export interface Tournament {
   halfDuration: number;
   /** 試合間インターバル（分）デフォルト: 15 */
   intervalMinutes: number;
+  /** グループ数（2/4/8）デフォルト: 4 */
+  groupCount: number;
+  /** グループ内チーム数（3-6）デフォルト: 4 */
+  teamsPerGroup: number;
+  /** 決勝T進出チーム数（1-2）デフォルト: 1 */
+  advancingTeams: number;
   /** 作成日時 */
   createdAt: string;
   /** 更新日時 */
