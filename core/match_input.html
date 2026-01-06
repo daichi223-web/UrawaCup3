@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>浦和カップ - 予選結果入力</title>
+    <!-- PDF生成はPythonスクリプトで行う -->
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #1a365d;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        
+        /* タブ */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: #e2e8f0;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .tab.active {
+            background: #2b6cb0;
+            color: white;
+        }
+        .tab:hover:not(.active) {
+            background: #cbd5e0;
+        }
+        
+        /* 会場選択 */
+        .venue-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .venue-tab {
+            padding: 8px 15px;
+            background: #fff;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .venue-tab.active {
+            border-color: #2b6cb0;
+            background: #ebf8ff;
+        }
+        
+        /* 試合カード */
+        .match-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #2b6cb0;
+        }
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .match-number {
+            font-weight: bold;
+            color: #2b6cb0;
+        }
+        .match-time {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        /* スコア入力 */
+        .score-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .team-name {
+            width: 120px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .team-name.home {
+            text-align: right;
+        }
+        .team-name.away {
+            text-align: left;
+        }
+        .score-input-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        .score-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .score-label {
+            font-size: 11px;
+            color: #666;
+            width: 35px;
+        }
+        .score-input {
+            width: 45px;
+            height: 35px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+        }
+        .score-input:focus {
+            outline: none;
+            border-color: #2b6cb0;
+        }
+        .score-total {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1a365d;
+            width: 40px;
+            text-align: center;
+        }
+        .vs {
+            color: #999;
+            font-size: 14px;
+        }
+        
+        /* 得点者入力 */
+        .scorers-section {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .scorers-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .scorers-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #4a5568;
+        }
+        .add-scorer-btn {
+            padding: 5px 10px;
+            background: #2b6cb0;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .add-scorer-btn:hover {
+            background: #2c5282;
+        }
+        .scorer-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .scorer-input {
+            padding: 6px 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+        .scorer-time {
+            width: 50px;
+        }
+        .scorer-team {
+            width: 120px;
+        }
+        .scorer-name {
+            flex: 1;
+            min-width: 100px;
+        }
+        .remove-scorer-btn {
+            padding: 5px 8px;
+            background: #e53e3e;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .no-scorers {
+            color: #999;
+            font-size: 13px;
+            text-align: center;
+            padding: 10px;
+        }
+        
+        /* 順位表 */
+        .standings-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .standings-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1a365d;
+            margin-bottom: 15px;
+        }
+        .standings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .standings-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .standings-table th,
+        .standings-table td {
+            padding: 6px 4px;
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .standings-table th {
+            background: #2b6cb0;
+            color: white;
+            font-weight: bold;
+        }
+        .standings-table tr:hover {
+            background: #f7fafc;
+        }
+        .standings-table .team-col {
+            text-align: left;
+            font-weight: bold;
+        }
+        .rank-1 {
+            background: #fef3c7 !important;
+        }
+        
+        /* アクションボタン */
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background: #2b6cb0;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2c5282;
+        }
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #1a365d;
+        }
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+        .btn-success {
+            background: #38a169;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #2f855a;
+        }
+        
+        /* モーダル */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #1a365d;
+        }
+        .modal-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        /* レスポンシブ */
+        @media (max-width: 600px) {
+            .score-section {
+                flex-wrap: wrap;
+            }
+            .team-name {
+                width: 100%;
+                text-align: center !important;
+            }
+            .scorer-row {
+                flex-wrap: wrap;
+            }
+            .scorer-team, .scorer-name {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🏆 浦和カップ - 予選結果入力</h1>
+    <p class="subtitle">第44回浦和カップ高校サッカーフェスティバル</p>
+    
+    <!-- 日程タブ -->
+    <div class="tabs">
+        <button class="tab active" onclick="switchDay(1)">Day1 (3/29)</button>
+        <button class="tab" onclick="switchDay(2)">Day2 (3/30)</button>
+    </div>
+    
+    <!-- 会場タブ -->
+    <div class="venue-tabs" id="venueTabs"></div>
+    
+    <!-- 試合入力エリア -->
+    <div id="matchesContainer"></div>
+    
+    <!-- 順位表 -->
+    <div class="standings-section">
+        <div class="standings-title">📊 グループ別順位表</div>
+        <div class="standings-grid" id="standingsContainer"></div>
+    </div>
+    
+    <!-- アクションボタン -->
+    <div class="actions">
+        <button class="btn btn-primary" onclick="saveData()">💾 保存</button>
+        <button class="btn btn-secondary" onclick="loadData()">📂 読み込み</button>
+        <button class="btn btn-success" onclick="exportForPDF()">📄 PDF用JSONエクスポート</button>
+    </div>
+    
+    <div style="margin-top: 15px; padding: 15px; background: #e6fffa; border-radius: 8px; font-size: 13px;">
+        <strong>📝 PDF生成手順：</strong><br>
+        1. 「PDF用JSONエクスポート」でJSONファイルをダウンロード<br>
+        2. Pythonスクリプトで変換: <code>python generate_daily_report_pdf.py ファイル名.json</code><br>
+        3. 日本語対応の日次報告書PDFが生成されます
+    </div>
+    
+    <!-- PDF設定モーダル -->
+    <div class="modal" id="pdfModal">
+        <div class="modal-content">
+            <div class="modal-title">📄 PDF用JSONエクスポート</div>
+            <label>送信先：</label>
+            <input type="text" class="modal-input" id="pdfRecipient" value="埼玉県サッカー協会 御中">
+            <label>発信元：</label>
+            <input type="text" class="modal-input" id="pdfSender" value="県立浦和高校　森川大地">
+            <label>連絡先：</label>
+            <input type="text" class="modal-input" id="pdfContact" value="090-8519-7032">
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closePDFModal()">キャンセル</button>
+                <button class="btn btn-success" onclick="doExportForPDF()">JSONエクスポート</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =============================================================================
+        // 設定
+        // =============================================================================
+        const CONFIG = {
+            numGroups: 4,
+            teamsPerGroup: 6,
+            groups: ['A', 'B', 'C', 'D'],
+            venues: ['浦和南高G', '市立浦和高G', 'RHF駒場', '浦和学院高G', '武南高G', '浦和西高G'],
+            days: {
+                1: '2025年3月29日（土）',
+                2: '2025年3月30日（日）',
+            }
+        };
+        
+        // チームデータ
+        const TEAMS = {
+            A: [
+                { id: 1, name: '浦和南' },
+                { id: 2, name: '東海大相模' },
+                { id: 3, name: '健大高崎' },
+                { id: 4, name: '専大北上' },
+                { id: 5, name: '日本文理' },
+                { id: 6, name: '新潟西' },
+            ],
+            B: [
+                { id: 7, name: '市立浦和' },
+                { id: 8, name: '富士市立' },
+                { id: 9, name: '旭川実業' },
+                { id: 10, name: 'RB大宮' },
+                { id: 11, name: '聖和学園' },
+                { id: 12, name: '帝京大可児' },
+            ],
+            C: [
+                { id: 13, name: '浦和学院' },
+                { id: 14, name: '浦和レッズ' },
+                { id: 15, name: '野辺地西' },
+                { id: 16, name: '磐田東' },
+                { id: 17, name: '浦和東' },
+                { id: 18, name: '浦和' },
+            ],
+            D: [
+                { id: 19, name: '武南' },
+                { id: 20, name: '佐野日大' },
+                { id: 21, name: '韮崎' },
+                { id: 22, name: '國學院久我山' },
+                { id: 23, name: '日大明誠' },
+                { id: 24, name: '浦和西' },
+            ],
+        };
+        
+        // =============================================================================
+        // 状態
+        // =============================================================================
+        let currentDay = 1;
+        let currentVenue = CONFIG.venues[0];
+        let matchData = { 1: {}, 2: {} };
+        
+        // =============================================================================
+        // 初期化
+        // =============================================================================
+        function init() {
+            generateInitialMatches();
+            renderVenueTabs();
+            renderMatches();
+            calculateAllStandings();
+        }
+        
+        function generateInitialMatches() {
+            CONFIG.venues.forEach(venue => {
+                matchData[1][venue] = [];
+                matchData[2][venue] = [];
+            });
+            
+            // Day1サンプル
+            const day1Matches = {
+                '浦和南高G': [
+                    { home: TEAMS.A[0], away: TEAMS.A[3], kickoff: '9:00' },
+                    { home: TEAMS.A[1], away: TEAMS.A[2], kickoff: '10:05' },
+                    { home: TEAMS.A[2], away: TEAMS.A[3], kickoff: '11:10' },
+                    { home: TEAMS.A[0], away: TEAMS.A[1], kickoff: '12:15' },
+                ],
+                '市立浦和高G': [
+                    { home: TEAMS.B[0], away: TEAMS.B[3], kickoff: '9:00' },
+                    { home: TEAMS.B[4], away: TEAMS.B[5], kickoff: '10:05' },
+                    { home: TEAMS.B[0], away: TEAMS.B[4], kickoff: '11:10' },
+                    { home: TEAMS.B[3], away: TEAMS.B[5], kickoff: '12:15' },
+                ],
+                'RHF駒場': [
+                    { home: TEAMS.C[0], away: TEAMS.C[5], kickoff: '9:00' },
+                    { home: TEAMS.C[1], away: TEAMS.C[4], kickoff: '10:05' },
+                    { home: TEAMS.C[2], away: TEAMS.C[3], kickoff: '11:10' },
+                    { home: TEAMS.C[0], away: TEAMS.C[1], kickoff: '12:15' },
+                ],
+                '武南高G': [
+                    { home: TEAMS.D[0], away: TEAMS.D[5], kickoff: '9:00' },
+                    { home: TEAMS.D[1], away: TEAMS.D[4], kickoff: '10:05' },
+                    { home: TEAMS.D[0], away: TEAMS.D[1], kickoff: '11:10' },
+                    { home: TEAMS.D[2], away: TEAMS.D[3], kickoff: '12:15' },
+                ],
+            };
+            
+            Object.keys(day1Matches).forEach(venue => {
+                matchData[1][venue] = day1Matches[venue].map((m, idx) => ({
+                    id: `d1-${venue.replace(/\s/g, '')}-${idx}`,
+                    homeTeam: m.home,
+                    awayTeam: m.away,
+                    kickoff: m.kickoff,
+                    homeScore1H: '',
+                    homeScore2H: '',
+                    awayScore1H: '',
+                    awayScore2H: '',
+                    scorers: [],
+                }));
+            });
+        }
+        
+        // =============================================================================
+        // レンダリング
+        // =============================================================================
+        function renderVenueTabs() {
+            const container = document.getElementById('venueTabs');
+            const venuesWithMatches = CONFIG.venues.filter(v => 
+                (matchData[currentDay][v] || []).length > 0
+            );
+            
+            container.innerHTML = venuesWithMatches.map(venue => `
+                <button class="venue-tab ${venue === currentVenue ? 'active' : ''}" 
+                        onclick="switchVenue('${venue}')">
+                    ${venue}
+                </button>
+            `).join('');
+            
+            if (venuesWithMatches.length > 0 && !venuesWithMatches.includes(currentVenue)) {
+                currentVenue = venuesWithMatches[0];
+            }
+        }
+        
+        function renderMatches() {
+            const container = document.getElementById('matchesContainer');
+            const matches = matchData[currentDay][currentVenue] || [];
+            
+            if (matches.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:#999;padding:40px;">この会場の試合データがありません</p>';
+                return;
+            }
+            
+            container.innerHTML = matches.map((match, idx) => `
+                <div class="match-card" data-match-id="${match.id}">
+                    <div class="match-header">
+                        <span class="match-number">第${idx + 1}試合</span>
+                        <span class="match-time">KO ${match.kickoff}</span>
+                    </div>
+                    
+                    <div class="score-section">
+                        <div class="team-name home">${match.homeTeam.name}</div>
+                        <div class="score-total" id="homeTotal-${match.id}">${calcTotal(match.homeScore1H, match.homeScore2H)}</div>
+                        
+                        <div class="score-input-group">
+                            <div class="score-row">
+                                <span class="score-label">前半</span>
+                                <input type="number" class="score-input" min="0" max="99"
+                                       value="${match.homeScore1H}"
+                                       onchange="updateScore('${match.id}', 'homeScore1H', this.value)">
+                                <span class="vs">-</span>
+                                <input type="number" class="score-input" min="0" max="99"
+                                       value="${match.awayScore1H}"
+                                       onchange="updateScore('${match.id}', 'awayScore1H', this.value)">
+                            </div>
+                            <div class="score-row">
+                                <span class="score-label">後半</span>
+                                <input type="number" class="score-input" min="0" max="99"
+                                       value="${match.homeScore2H}"
+                                       onchange="updateScore('${match.id}', 'homeScore2H', this.value)">
+                                <span class="vs">-</span>
+                                <input type="number" class="score-input" min="0" max="99"
+                                       value="${match.awayScore2H}"
+                                       onchange="updateScore('${match.id}', 'awayScore2H', this.value)">
+                            </div>
+                        </div>
+                        
+                        <div class="score-total" id="awayTotal-${match.id}">${calcTotal(match.awayScore1H, match.awayScore2H)}</div>
+                        <div class="team-name away">${match.awayTeam.name}</div>
+                    </div>
+                    
+                    <div class="scorers-section">
+                        <div class="scorers-header">
+                            <span class="scorers-title">⚽ 得点経過</span>
+                            <button class="add-scorer-btn" onclick="addScorer('${match.id}')">+ 追加</button>
+                        </div>
+                        <div id="scorers-${match.id}">
+                            ${renderScorers(match)}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderScorers(match) {
+            if (match.scorers.length === 0) {
+                return '<div class="no-scorers">得点なし</div>';
+            }
+            return match.scorers.map((scorer, idx) => `
+                <div class="scorer-row">
+                    <input type="text" class="scorer-input scorer-time" placeholder="分" 
+                           value="${scorer.time}"
+                           onchange="updateScorer('${match.id}', ${idx}, 'time', this.value)">
+                    <select class="scorer-input scorer-team" 
+                            onchange="updateScorer('${match.id}', ${idx}, 'team', this.value)">
+                        <option value="${match.homeTeam.name}" ${scorer.team === match.homeTeam.name ? 'selected' : ''}>
+                            ${match.homeTeam.name}
+                        </option>
+                        <option value="${match.awayTeam.name}" ${scorer.team === match.awayTeam.name ? 'selected' : ''}>
+                            ${match.awayTeam.name}
+                        </option>
+                    </select>
+                    <input type="text" class="scorer-input scorer-name" placeholder="選手名"
+                           value="${scorer.name}"
+                           onchange="updateScorer('${match.id}', ${idx}, 'name', this.value)">
+                    <button class="remove-scorer-btn" onclick="removeScorer('${match.id}', ${idx})">✕</button>
+                </div>
+            `).join('');
+        }
+        
+        function renderStandings() {
+            const container = document.getElementById('standingsContainer');
+            container.innerHTML = CONFIG.groups.map(group => {
+                const standings = calculateGroupStandings(group);
+                return `
+                    <div>
+                        <h4 style="color: #2b6cb0; margin-bottom: 8px;">グループ ${group}</h4>
+                        <table class="standings-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th class="team-col">チーム</th>
+                                    <th>試</th>
+                                    <th>勝</th>
+                                    <th>分</th>
+                                    <th>敗</th>
+                                    <th>得</th>
+                                    <th>失</th>
+                                    <th>差</th>
+                                    <th>点</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${standings.map((team, idx) => `
+                                    <tr class="${idx === 0 ? 'rank-1' : ''}">
+                                        <td>${idx + 1}</td>
+                                        <td class="team-col">${team.name}</td>
+                                        <td>${team.played}</td>
+                                        <td>${team.won}</td>
+                                        <td>${team.drawn}</td>
+                                        <td>${team.lost}</td>
+                                        <td>${team.goalsFor}</td>
+                                        <td>${team.goalsAgainst}</td>
+                                        <td>${team.goalDiff > 0 ? '+' : ''}${team.goalDiff}</td>
+                                        <td><strong>${team.points}</strong></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // =============================================================================
+        // イベント
+        // =============================================================================
+        function switchDay(day) {
+            currentDay = day;
+            document.querySelectorAll('.tab').forEach((tab, idx) => {
+                tab.classList.toggle('active', idx + 1 === day);
+            });
+            renderVenueTabs();
+            renderMatches();
+        }
+        
+        function switchVenue(venue) {
+            currentVenue = venue;
+            renderVenueTabs();
+            renderMatches();
+        }
+        
+        function updateScore(matchId, field, value) {
+            const match = findMatch(matchId);
+            if (match) {
+                match[field] = value === '' ? '' : parseInt(value) || 0;
+                document.getElementById(`homeTotal-${matchId}`).textContent = 
+                    calcTotal(match.homeScore1H, match.homeScore2H);
+                document.getElementById(`awayTotal-${matchId}`).textContent = 
+                    calcTotal(match.awayScore1H, match.awayScore2H);
+                calculateAllStandings();
+            }
+        }
+        
+        function addScorer(matchId) {
+            const match = findMatch(matchId);
+            if (match) {
+                match.scorers.push({ time: '', team: match.homeTeam.name, name: '' });
+                document.getElementById(`scorers-${matchId}`).innerHTML = renderScorers(match);
+            }
+        }
+        
+        function updateScorer(matchId, idx, field, value) {
+            const match = findMatch(matchId);
+            if (match && match.scorers[idx]) {
+                match.scorers[idx][field] = value;
+            }
+        }
+        
+        function removeScorer(matchId, idx) {
+            const match = findMatch(matchId);
+            if (match) {
+                match.scorers.splice(idx, 1);
+                document.getElementById(`scorers-${matchId}`).innerHTML = renderScorers(match);
+            }
+        }
+        
+        // =============================================================================
+        // ユーティリティ
+        // =============================================================================
+        function findMatch(matchId) {
+            for (const day of Object.keys(matchData)) {
+                for (const venue of Object.keys(matchData[day])) {
+                    const match = matchData[day][venue].find(m => m.id === matchId);
+                    if (match) return match;
+                }
+            }
+            return null;
+        }
+        
+        function calcTotal(score1H, score2H) {
+            const s1 = score1H === '' ? 0 : parseInt(score1H) || 0;
+            const s2 = score2H === '' ? 0 : parseInt(score2H) || 0;
+            if (score1H === '' && score2H === '') return '-';
+            return s1 + s2;
+        }
+        
+        function calcTotalNum(score1H, score2H) {
+            return (parseInt(score1H) || 0) + (parseInt(score2H) || 0);
+        }
+        
+        // =============================================================================
+        // 順位計算
+        // =============================================================================
+        function calculateGroupStandings(group) {
+            const teams = TEAMS[group].map(t => ({
+                ...t,
+                played: 0, won: 0, drawn: 0, lost: 0,
+                goalsFor: 0, goalsAgainst: 0, goalDiff: 0, points: 0,
+            }));
+            
+            const teamMap = {};
+            teams.forEach(t => teamMap[t.id] = t);
+            
+            for (const day of Object.keys(matchData)) {
+                for (const venue of Object.keys(matchData[day])) {
+                    matchData[day][venue].forEach(match => {
+                        const home = teamMap[match.homeTeam.id];
+                        const away = teamMap[match.awayTeam.id];
+                        if (!home || !away) return;
+                        if (match.homeScore1H === '' && match.homeScore2H === '') return;
+                        
+                        const homeGoals = calcTotalNum(match.homeScore1H, match.homeScore2H);
+                        const awayGoals = calcTotalNum(match.awayScore1H, match.awayScore2H);
+                        
+                        home.played++; away.played++;
+                        home.goalsFor += homeGoals; home.goalsAgainst += awayGoals;
+                        away.goalsFor += awayGoals; away.goalsAgainst += homeGoals;
+                        
+                        if (homeGoals > awayGoals) {
+                            home.won++; home.points += 3; away.lost++;
+                        } else if (homeGoals < awayGoals) {
+                            away.won++; away.points += 3; home.lost++;
+                        } else {
+                            home.drawn++; away.drawn++;
+                            home.points += 1; away.points += 1;
+                        }
+                    });
+                }
+            }
+            
+            teams.forEach(t => t.goalDiff = t.goalsFor - t.goalsAgainst);
+            teams.sort((a, b) => {
+                if (b.points !== a.points) return b.points - a.points;
+                if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+                return b.goalsFor - a.goalsFor;
+            });
+            
+            return teams;
+        }
+        
+        function calculateAllStandings() {
+            renderStandings();
+        }
+        
+        // =============================================================================
+        // PDF用JSONエクスポート
+        // =============================================================================
+        function exportForPDF() {
+            document.getElementById('pdfModal').classList.add('active');
+        }
+        
+        function closePDFModal() {
+            document.getElementById('pdfModal').classList.remove('active');
+        }
+        
+        function doExportForPDF() {
+            const recipient = document.getElementById('pdfRecipient').value;
+            const sender = document.getElementById('pdfSender').value;
+            const contact = document.getElementById('pdfContact').value;
+            
+            const data = {
+                day: currentDay,
+                dateStr: CONFIG.days[currentDay],
+                reportConfig: {
+                    recipient: recipient,
+                    sender: sender,
+                    contact: contact,
+                },
+                matchData: matchData[currentDay],
+                standings: CONFIG.groups.map(g => ({
+                    group: g,
+                    teams: calculateGroupStandings(g),
+                })),
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `urawacup_day${currentDay}_for_pdf.json`;
+            a.click();
+            
+            closePDFModal();
+            alert('JSONファイルをダウンロードしました。\\n\\nPDF生成:\\npython generate_daily_report_pdf.py ' + a.download);
+        }
+        
+        // =============================================================================
+        // 保存・読込
+        // =============================================================================
+        function saveData() {
+            localStorage.setItem('urawaCup_matchData', JSON.stringify(matchData));
+            alert('Saved!');
+        }
+        
+        function loadData() {
+            const data = localStorage.getItem('urawaCup_matchData');
+            if (data) {
+                matchData = JSON.parse(data);
+                renderVenueTabs();
+                renderMatches();
+                calculateAllStandings();
+                alert('Loaded!');
+            } else {
+                alert('No saved data');
+            }
+        }
+        
+        // 初期化
+        init();
+    </script>
+</body>
+</html>

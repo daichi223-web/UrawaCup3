@@ -1,0 +1,112 @@
+_meta:
+  created_at: "2026-01-05"
+  description: "タスク管理"
+
+TASK-001:
+  title: "Hello World関数の実装"
+  description: "greet関数を実装し、名前を受け取って挨拶メッセージを返す"
+  decisions:
+    - DEC-001
+  priority: 1
+  status: approved
+  created_at: "2026-01-05"
+  reviewed_at: "2026-01-05"
+  review_detail: "DEC-001準拠確認済み。Hello, {name}!形式で正しく実装"
+  commit: "6a10654"
+  test_result: "4/4 passed"
+  open_questions:
+    - Q-001
+
+TASK-002:
+  title: "計算ユーティリティの実装"
+  description: "基本的な計算関数（add, subtract, multiply）を実装する"
+  decisions:
+    - DEC-002
+  priority: 2
+  status: approved
+  created_at: "2026-01-05"
+  reviewed_at: "2026-01-05"
+  review_detail: "DEC-002準拠確認済み。int|float型の引数で正しく実装"
+  commit: "6a10654"
+  test_result: "9/9 passed"
+  open_questions:
+    - Q-002
+    - Q-003
+
+TASK-003:
+  title: "トーナメントID取得のコンテキスト化"
+  description: "フロントエンド9箇所でハードコードされているtournamentIdをContext/Storeから動的取得に変更"
+  decisions:
+    - DEC-003
+  priority: 1
+  status: implemented
+  created_at: "2026-01-05"
+  implemented_at: "2026-01-05"
+  implementation_detail: |
+    - useTournament.tsフックを作成
+    - Layout.tsxで大会選択UI実装
+    - 全8ページでuseTournamentId()フックを使用
+    - appStore.tsのcurrentTournamentを活用
+  files_changed:
+    - src/frontend/src/hooks/useTournament.ts
+    - src/frontend/src/components/Layout.tsx
+    - src/frontend/src/pages/Dashboard.tsx
+    - src/frontend/src/pages/TeamManagement.tsx
+    - src/frontend/src/pages/PlayerManagement.tsx
+    - src/frontend/src/pages/Standings.tsx
+    - src/frontend/src/pages/ScorerRanking.tsx
+    - src/frontend/src/pages/ExclusionSettings.tsx
+    - src/frontend/src/pages/Reports.tsx
+    - src/frontend/src/pages/Settings.tsx
+    - src/frontend/src/App.tsx
+
+TASK-004:
+  title: "同順位時の抽選ロジック実装"
+  description: "順位表計算で同一ポイントの場合の抽選処理を実装"
+  decisions:
+    - DEC-004
+  priority: 2
+  status: implemented
+  created_at: "2026-01-05"
+  implemented_at: "2026-01-05"
+  implementation_detail: |
+    - SHA256ベースの決定的抽選に変更（MD5から）
+    - rank_reasonフィールドをStandingモデルに追加
+    - 直接対決/抽選の判定理由を記録
+  files_changed:
+    - src/backend/models/standing.py
+    - src/backend/services/standings.py
+
+TASK-005:
+  title: "最終日日付の動的算出"
+  description: "最終日の日付を大会期間設定から自動計算するよう変更"
+  decisions:
+    - DEC-005
+  priority: 2
+  status: implemented
+  created_at: "2026-01-05"
+  implemented_at: "2026-01-05"
+  implementation_detail: |
+    - tournament.end_dateを最終日日付として使用
+    - FinalDayServiceで動的に取得
+  files_changed:
+    - src/backend/services/final_day.py
+
+TASK-006:
+  title: "複数グループ対応の決勝T生成"
+  description: "4グループ以外の大会でも決勝トーナメントを生成できるよう対応"
+  decisions: []
+  priority: 3
+  status: implemented
+  created_at: "2026-01-05"
+  implemented_at: "2026-01-05"
+  implementation_detail: |
+    - 2グループ: 決勝のみ
+    - 4グループ: 準決勝2試合 + 3位決定戦 + 決勝
+    - 8グループ: 準々決勝4試合 + 準決勝2試合 + 3位決定戦 + 決勝
+    - 研修試合の自動組み合わせ生成
+  files_changed:
+    - src/backend/services/final_day.py
+    - src/backend/services/__init__.py
+  open_issues:
+    - ISSUE-006 (3,5,6,7グループは未対応)

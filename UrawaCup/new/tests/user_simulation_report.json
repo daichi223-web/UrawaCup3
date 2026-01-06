@@ -1,0 +1,71 @@
+{
+  "test_date": "2026-01-04T19:23:03.420004",
+  "summary": {
+    "successes": 12,
+    "issues": 2
+  },
+  "successes": [
+    {
+      "scenario": "ログイン",
+      "message": "管理者ログイン成功"
+    },
+    {
+      "scenario": "ダッシュボード",
+      "message": "トーナメント 2件 表示"
+    },
+    {
+      "scenario": "トーナメント詳細",
+      "message": "startDate=2027-03-20 パース成功"
+    },
+    {
+      "scenario": "チーム一覧",
+      "message": "24チーム表示"
+    },
+    {
+      "scenario": "チーム作成",
+      "message": "新規チーム作成成功"
+    },
+    {
+      "scenario": "順位表",
+      "message": "順位データなし（正常）"
+    },
+    {
+      "scenario": "得点ランキング",
+      "message": "得点データなし（正常）"
+    },
+    {
+      "scenario": "会場一覧",
+      "message": "5会場表示"
+    },
+    {
+      "scenario": "PDFレポート",
+      "message": "トーナメントデータなし（スキップ）"
+    },
+    {
+      "scenario": "Excelレポート",
+      "message": "トーナメントデータなし（スキップ）"
+    },
+    {
+      "scenario": "パブリック順位表",
+      "message": "エンドポイント未実装or データなし"
+    },
+    {
+      "scenario": "パブリック試合一覧",
+      "message": "エンドポイント未実装or データなし"
+    }
+  ],
+  "issues": [
+    {
+      "scenario": "試合スケジュール",
+      "message": "取得失敗 (Status: 500)",
+      "details": null,
+      "timestamp": "2026-01-04T19:22:56.410972"
+    },
+    {
+      "scenario": "試合結果入力",
+      "message": "試合取得失敗",
+      "details": null,
+      "timestamp": "2026-01-04T19:22:58.559365"
+    }
+  ]
+}

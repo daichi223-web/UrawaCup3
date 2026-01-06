@@ -1,0 +1,53 @@
+changes:
+  - decision_id: TASK-003
+    timestamp: "2026-01-05T12:00:00"
+    files:
+      - src/frontend/src/pages/TeamManagement.tsx
+      - src/frontend/src/pages/Standings.tsx
+      - src/frontend/src/pages/Settings.tsx
+      - src/frontend/src/pages/ExclusionSettings.tsx
+      - src/frontend/src/pages/Dashboard.tsx
+      - src/frontend/src/pages/PlayerManagement.tsx
+      - src/frontend/src/pages/ScorerRanking.tsx
+      - src/frontend/src/pages/Reports.tsx
+    status: done
+    summary: |
+      全8ページでハードコードされた tournamentId = 1 を
+      appStore.currentTournament?.id || 1 に変更。
+      DEC-003 (Zustand appStoreのcurrentTournamentIdを使用) に準拠。
+
+  - decision_id: TASK-004
+    timestamp: "2026-01-05T12:30:00"
+    files:
+      - src/backend/services/standing_service.py
+    status: done
+    summary: |
+      同順位時の抽選ロジックを実装。
+      - _deterministic_lottery_key(): 決定的シード生成
+      - _get_team_lottery_score(): チーム別抽選スコア
+      - _resolve_by_head_to_head(): 抽選により順位決定
+      - calculate_overall_standings(): ランダムから決定的抽選に変更
+      DEC-004 (シード値付き決定的抽選) に準拠。
+      SHA256ハッシュで大会ID+チームID組み合わせから再現可能な順位を決定。
+
+  - decision_id: TASK-005
+    timestamp: "2026-01-05T13:00:00"
+    files:
+      - src/backend/services/final_day_service.py
+    status: done
+    summary: |
+      最終日日付のハードコード (date(2026, 3, 29)) を
+      tournament.end_date から動的に取得するよう変更。
+      DEC-005 (tournament.end_date を使用) に準拠。
+
+  - decision_id: TASK-006
+    timestamp: "2026-01-05T13:30:00"
+    files:
+      - src/backend/services/final_day_service.py
+    status: done
+    summary: |
+      決勝トーナメント生成を複数グループ数に対応。
+      - 2グループ: 決勝のみ (A1 vs B1)
+      - 4グループ: 準決勝2試合 + 3位決定戦 + 決勝
+      - 8グループ: 準々決勝4試合 + 準決勝2試合 + 3位決定戦 + 決勝
+      未対応グループ数は警告メッセージを出力。

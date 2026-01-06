@@ -1,0 +1,30 @@
+Tournament Matches: 4
+Training Matches: 20
+
+--- Tournament Matches ---
+[semifinal] 09:30:00 A1 vs C1
+[semifinal] 09:30:00 B1 vs D1
+[third_place] 12:00:00 SF1敗者 vs SF2敗者
+[final] 13:30:00 SF1勝者 vs SF2勝者
+
+--- Training Matches ---
+[training] 09:30:00 TeamID:2 vs TeamID:14 (None)
+[training] 10:35:00 TeamID:4 vs TeamID:16 (None)
+[training] 11:40:00 TeamID:6 vs TeamID:18 (None)
+[training] 12:45:00 TeamID:3 vs TeamID:21 (None)
+[training] 13:50:00 TeamID:5 vs TeamID:23 (None)
+[training] 09:30:00 TeamID:8 vs TeamID:20 (None)
+[training] 10:35:00 TeamID:10 vs TeamID:22 (None)
+[training] 11:40:00 TeamID:12 vs TeamID:24 (None)
+[training] 12:45:00 TeamID:9 vs TeamID:15 (None)
+[training] 13:50:00 TeamID:11 vs TeamID:17 (None)
+[training] 09:30:00 TeamID:3 vs TeamID:15 (None)
+[training] 10:35:00 TeamID:5 vs TeamID:17 (None)
+[training] 11:40:00 TeamID:2 vs TeamID:20 (None)
+[training] 12:45:00 TeamID:4 vs TeamID:22 (None)
+[training] 13:50:00 TeamID:6 vs TeamID:24 (None)
+[training] 09:30:00 TeamID:9 vs TeamID:21 (None)
+[training] 10:35:00 TeamID:11 vs TeamID:23 (None)
+[training] 11:40:00 TeamID:8 vs TeamID:14 (None)
+[training] 12:45:00 TeamID:10 vs TeamID:16 (None)
+[training] 13:50:00 TeamID:12 vs TeamID:18 (None)

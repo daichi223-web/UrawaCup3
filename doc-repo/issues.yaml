@@ -1,0 +1,2212 @@
+_meta:
+  created_at: '2026-01-05'
+  description: impl-repo新規実装に向けた要件差分管理
+  reference_impl: UrawaCup/new/src/ (参照用)
+  target_repo: impl-repo/
+conclusion: 'impl-repo/ への新規実装が必要。
+
+
+  推奨実装順序:
+
+  1. Phase 1 (IMPL-001〜006, 030-031): バックエンド基盤 + コア機能
+
+  2. Phase 2 (IMPL-010〜014, 032-033): 認証 + 業務機能
+
+  3. Phase 3 (IMPL-020〜024): フロントエンド + PWA
+
+
+  参照実装: UrawaCup/new/src/ を参考にできる
+
+  '
+issues:
+- acceptance_criteria:
+  - GET /health が200を返す
+  - SQLiteデータベースに接続できる
+  description: 'FastAPI + SQLAlchemy + SQLiteのバックエンド基盤を構築
+
+    - main.py: FastAPIアプリケーション
+
+    - database.py: SQLAlchemy接続設定
+
+    - requirements.txt / pyproject.toml
+
+    '
+  id: IMPL-001
+  phase: 1
+  priority: critical
+  requirement_ref: 1.3 技術スタック
+  status: open
+  title: FastAPI + SQLAlchemyバックエンド基盤
+- acceptance_criteria:
+  - 全テーブルがマイグレーションで作成される
+  - 外部キー制約が正しく設定されている
+  description: '要件5.1-5.17の全テーブルを定義:
+
+    - tournaments, groups, teams, players, staff
+
+    - team_uniforms, venues, matches, goals, standings
+
+    - exclusion_pairs, tournament_awards, report_recipients
+
+    - users, match_locks (または matchに統合)
+
+    '
+  id: IMPL-002
+  phase: 1
+  priority: critical
+  requirement_ref: 5. データモデル
+  status: open
+  title: データモデル定義 (16テーブル)
+- description: '- GET/POST /api/tournaments
+
+    - GET/PUT/DELETE /api/tournaments/{id}
+
+    - 大会作成時にグループA-D自動作成
+
+    '
+  id: IMPL-003
+  phase: 1
+  priority: critical
+  requirement_ref: 3.1, 6.2
+  status: open
+  title: 大会管理API (F-01〜F-04)
+- description: '- CRUD: GET/POST/PUT/DELETE /api/teams
+
+    - CSVインポート: POST /api/teams/import
+
+    - グループ割当機能
+
+    '
+  id: IMPL-004
+  phase: 1
+  priority: critical
+  requirement_ref: 3.2, 6.3
+  status: open
+  title: チーム管理API (F-10〜F-14)
+- description: '- PUT /api/matches/{id}/score (前半/後半/PK)
+
+    - POST /api/matches/{id}/lock (同時編集防止)
+
+    - 得点合計の自動計算
+
+    '
+  id: IMPL-005
+  phase: 1
+  priority: critical
+  requirement_ref: 3.7, 6.4
+  status: open
+  title: 試合結果入力API (F-60〜F-64)
+- acceptance_criteria:
+  - 試合結果入力後に順位表が自動更新される
+  - 同順位の場合、ルールに従って順位が決定される
+  description: '5段階順位決定ルール:
+
+    1. 勝点 (勝=3, 分=1, 負=0)
+
+    2. 得失点差
+
+    3. 総得点
+
+    4. 直接対決
+
+    5. 抽選
+
+    '
+  id: IMPL-006
+  phase: 1
+  priority: critical
+  requirement_ref: 2.5, 3.8
+  status: open
+  title: 順位表自動計算 (F-70)
+- description: '- POST /api/auth/login
+
+    - POST /api/auth/logout
+
+    - GET /api/auth/me
+
+    - POST /api/auth/refresh
+
+    - bcryptパスワードハッシュ化
+
+    '
+  id: IMPL-010
+  phase: 2
+  priority: high
+  requirement_ref: 6.1, 7.2
+  status: open
+  title: 認証API (JWT)
+- description: '- CRUD操作
+
+    - Excel/CSVインポート
+
+    - 得点者サジェスト機能 (F-23)
+
+    '
+  id: IMPL-011
+  phase: 2
+  priority: high
+  requirement_ref: '3.3'
+  status: open
+  title: 選手管理API (F-20〜F-24)
+- description: '- POST /api/matches/generate-schedule/{id} (予選48試合)
+
+    - POST /api/matches/generate-finals/{id} (決勝T)
+
+    - POST /api/matches/generate-training/{id} (研修試合)
+
+    - 対戦除外設定反映
+
+    '
+  id: IMPL-012
+  phase: 2
+  priority: high
+  requirement_ref: 3.6, 6.4
+  status: open
+  title: 日程管理API (F-50〜F-55)
+- description: '- 日次報告書PDF
+
+    - グループ順位表PDF
+
+    - 最終日組み合わせ表PDF
+
+    - 最終結果報告書PDF
+
+    - Excel出力
+
+    '
+  id: IMPL-013
+  phase: 2
+  priority: high
+  requirement_ref: 3.9, 6.7
+  status: open
+  title: レポート出力API (F-80〜F-84)
+- description: '- POST /api/matches/{id}/approve
+
+    - POST /api/matches/{id}/reject
+
+    - 承認ステータス管理
+
+    '
+  id: IMPL-014
+  phase: 2
+  priority: high
+  requirement_ref: '3.7'
+  status: open
+  title: 結果承認フロー (F-64)
+- description: '- React + TypeScript + Vite
+
+    - TailwindCSS
+
+    - Zustand + TanStack Query
+
+    '
+  id: IMPL-020
+  phase: 3
+  priority: medium
+  requirement_ref: 1.3, 4章
+  status: open
+  title: Reactフロントエンド基盤
+- description: '13画面:
+
+    - Login, Dashboard, TeamManagement
+
+    - PlayerManagement, MatchSchedule, MatchResult
+
+    - MatchApproval, Standings, ScorerRanking
+
+    - ExclusionSettings, Reports, Settings
+
+    - FinalDaySchedule
+
+    '
+  id: IMPL-021
+  phase: 3
+  priority: medium
+  requirement_ref: '4.1'
+  status: open
+  title: 管理者画面 (S-01〜S-13)
+- description: '- 公開順位表 (認証不要)
+
+    - 公開試合一覧 (認証不要)
+
+    '
+  id: IMPL-022
+  phase: 3
+  priority: medium
+  requirement_ref: 4.2, 3.10
+  status: open
+  title: 公開画面 (P-01, P-02)
+- description: '- 試合結果のリアルタイム反映
+
+    - 順位表の自動更新
+
+    '
+  id: IMPL-023
+  phase: 3
+  priority: medium
+  requirement_ref: '7.4'
+  status: open
+  title: WebSocketリアルタイム更新
+- description: '- Service Worker
+
+    - IndexedDBローカル保存
+
+    - オフライン入力キュー
+
+    - 競合解決UI
+
+    '
+  id: IMPL-024
+  phase: 3
+  priority: medium
+  requirement_ref: '3.11'
+  status: open
+  title: PWA/オフライン対応 (F-100〜F-103)
+- id: IMPL-030
+  phase: 1
+  priority: high
+  requirement_ref: '3.5'
+  status: open
+  title: 会場管理API (F-40〜F-42)
+- id: IMPL-031
+  phase: 1
+  priority: high
+  requirement_ref: '3.4'
+  status: open
+  title: スタッフ管理API (F-30〜F-31)
+- id: IMPL-032
+  phase: 2
+  priority: medium
+  requirement_ref: '3.6'
+  status: open
+  title: 対戦除外設定API (F-50)
+- id: IMPL-033
+  phase: 2
+  priority: medium
+  requirement_ref: '3.8'
+  status: open
+  title: 得点ランキング (F-72)
+# レビューで発見したイシュー（参照実装との差分）- すべて解決済み
+
+- id: ISSUE-001
+  created_at: '2026-01-05T10:37:02.981283'
+  resolved_at: '2026-01-05T12:30:00'
+  cycle: 1
+  source_amb: AMB-006
+  status: resolved
+  label: 解決済み
+  title: 曖昧性AMB-006由来（ISSUE-002と重複）
+  resolution: |
+    AMB-006の曖昧性はISSUE-002（抽選ロジックのハッシュアルゴリズム）として
+    具体化され、そちらで解決済み。本イシューは重複のためクローズ。
+
+- id: ISSUE-002
+  created_at: '2026-01-05T12:00:00'
+  resolved_at: '2026-01-05T12:30:00'
+  label: 解決済み
+  title: 抽選ロジックのハッシュアルゴリズム差異
+  description: |
+    impl-repo: MD5ベースの決定的ハッシュ (standings.py:201)
+    参照実装: SHA256ベースの決定的ハッシュ (standing_service.py:154)
+  status: resolved
+  priority: low
+  related_task: TASK-004
+  resolution: |
+    【調査結果】ISSUE記載に誤りあり。
+    両実装ともSHA256ベースの決定的ハッシュを使用していることを確認:
+    - impl-repo/services/standings.py:208 → hashlib.sha256()
+    - UrawaCup/new/services/standing_service.py:154 → hashlib.sha256()
+    差異は存在しない。
+
+- id: ISSUE-003
+  created_at: '2026-01-05T12:00:00'
+  resolved_at: '2026-01-05T12:30:00'
+  label: 解決済み
+  title: rank_reasonフィールドの実装
+  description: |
+    参照実装にはstanding.rank_reasonフィールドがあり、
+    「直接対決で上位」「抽選により決定」などの理由が記録される。
+  status: resolved
+  priority: medium
+  related_task: TASK-004
+  resolution: |
+    【調査結果】両方で実装済み。
+    - impl-repo/models/standing.py:21 → rank_reason = Column(String(100), nullable=True)
+    - impl-repo/services/standings.py:144 → standing.rank_reason = rank_reasons.get(team_id)
+    - 「直接対決で上位」「抽選により決定」等の理由が正しく記録される。
+
+- id: ISSUE-004
+  created_at: '2026-01-05T12:00:00'
+  resolved_at: '2026-01-05T12:30:00'
+  label: 解決済み
+  title: FinalDayServiceの実装
+  description: |
+    参照実装: UrawaCup/new/src/backend/services/final_day_service.py
+    完全なFinalDayLogicクラスとFinalDayServiceクラスが実装済み
+  status: resolved
+  priority: high
+  related_task: TASK-006
+  resolution: |
+    【調査結果】impl-repoにFinalDayServiceが完全実装済み。
+    - impl-repo/services/final_day.py:396-551 → FinalDayServiceクラス
+    - 2/4/8グループ対応の決勝T生成
+    - 研修試合の自動組み合わせ生成
+    - 対戦済みペアの重複検出と警告
+    - 会場割り当てロジック
+    参照実装より堅牢な設計（グループ数動的取得、専用警告メソッド）
+
+- id: ISSUE-005
+  created_at: '2026-01-05T12:00:00'
+  resolved_at: '2026-01-05T12:30:00'
+  label: 解決済み
+  title: 最終日日付の取得方法
+  description: |
+    参照実装 (final_day_service.py:373):
+      final_day_date = tournament.end_date
+  status: resolved
+  priority: medium
+  related_task: TASK-005
+  resolution: |
+    【調査結果】impl-repoで実装済み。
+    - impl-repo/services/final_day.py:414-417
+      final_day_date = tournament.end_date
+      if not final_day_date:
+          raise ValueError("Tournament end_date is not set")
+    大会の終了日=最終日として動的に取得される。
+
+- id: ISSUE-006
+  created_at: '2026-01-05T12:00:00'
+  resolved_at: '2026-01-05T12:30:00'
+  label: 解決済み
+  title: 対応グループ数の仕様
+  description: |
+    参照実装では2/4/8グループに対応。それ以外は警告を出力。
+    浦和カップは常に4グループ固定か？
+  status: resolved
+  priority: medium
+  related_task: TASK-006
+  resolution: |
+    【調査結果】要件確認済み。
+    - 要件定義書(2.1節): 浦和カップは「4グループ（A,B,C,D）× 6チーム」固定
+    - impl-repoの実装: 2/4/8グループに動的対応（将来の拡張性確保）
+    - 結論: 浦和カップは4グループ固定で問題なく動作。
+      3,5,6,7グループは未対応だが、現行要件では不要。
+
+- id: ISSUE-007
+  created_at: '2026-01-05T12:00:00'
+  resolved_at: '2026-01-05T12:30:00'
+  label: 解決済み
+  title: 研修試合の組み合わせロジック
+  description: |
+    対戦済みの場合、警告だけで良いか、別の組み合わせを探すべきか？
+  status: resolved
+  priority: low
+  related_task: TASK-006
+  resolution: |
+    【調査結果】仕様確認済み。
+    - impl-repo/services/final_day.py:370-371
+      対戦済みペアには警告（⚠️対戦済み）を付与するのみ。
+    - 別の組み合わせを探すロジックは実装されていない。
+    - 理由: 研修試合は順位決定に影響しないため、対戦済みでも問題なし。
+      警告を見て運営者が手動で調整可能な設計。
+
+- id: ISSUE-008
+  created_at: '2026-01-05T12:00:00'
+  resolved_at: '2026-01-05T12:30:00'
+  label: 解決済み
+  title: フロントエンド画面の不足
+  description: |
+    必要な13画面との差分:
+    - Login, MatchSchedule, MatchResult, MatchApproval, FinalDaySchedule
+  status: resolved
+  priority: medium
+  related_task: IMPL-021
+  resolution: |
+    【調査結果】全13画面が実装済み。
+    impl-repo/src/frontend/src/pages/index.tsで確認:
+    - Dashboard, TeamManagement, PlayerManagement
+    - Standings, ScorerRanking, ExclusionSettings
+    - Reports, Settings
+    - Login, MatchSchedule, MatchResult, MatchApproval, FinalDaySchedule
+    すべてエクスポート登録済み。
+
+# 要件レビューで発見した未実装機能
+
+- id: ISSUE-009
+  created_at: '2026-01-05T14:00:00'
+  investigated_at: '2026-01-05T15:00:00'
+  resolved_at: '2026-01-05T17:00:00'
+  label: 解決済み
+  title: 結果承認フローAPI未実装
+  description: |
+    要件F-64(IMPL-014)で定義されている結果承認フローが未実装。
+    - POST /api/matches/{id}/approve が存在しない
+    - POST /api/matches/{id}/reject が存在しない
+    - Matchモデルにapproval_status等の承認ステータスフィールドが必要
+  status: resolved
+  priority: high
+  requirement_ref: F-64, IMPL-014, 3.7節
+  affected_files:
+    - impl-repo/src/backend/routes/matches.py
+    - impl-repo/src/backend/models/match.py
+  investigation_result: |
+    【調査完了】参照実装で完全実装済み。
+
+    参照実装（UrawaCup/new）の実装内容:
+    - GET /pending - 承認待ち試合一覧取得
+    - POST /{id}/approve - 試合結果承認（管理者専用）
+    - POST /{id}/reject - 試合結果却下（却下理由必須）
+    - POST /{id}/resubmit - 却下後の再提出
+
+    Matchモデルの追加フィールド:
+    - approval_status: Enum(pending/approved/rejected)
+    - approved_by: Integer (FK to users)
+    - approved_at: DateTime
+    - rejection_reason: String(500)
+    - entered_by: Integer (FK to users)
+    - entered_at: DateTime
+
+    権限要件:
+    - 承認/却下: 管理者のみ
+    - スコア入力: 会場担当者以上
+    - 再提出: 会場担当者以上
+  solution: |
+    参照実装（UrawaCup/new/src/backend/routes/matches.py L432-644）を
+    impl-repoに移植する。
+  resolution: |
+    【実装完了】matches.pyに以下を追加:
+    - GET /pending - 承認待ち試合一覧取得
+    - POST /{id}/approve - 試合結果承認
+    - POST /{id}/reject - 試合結果却下
+    - POST /{id}/resubmit - 却下後の再提出
+    - Matchモデルにapproval_status, approved_by, approved_at, rejection_reason追加
+
+- id: ISSUE-010
+  created_at: '2026-01-05T14:00:00'
+  investigated_at: '2026-01-05T15:00:00'
+  resolved_at: '2026-01-05T17:00:00'
+  label: 解決済み
+  title: Goals API未実装
+  description: |
+    得点者情報のCRUD操作用APIが存在しない。
+    - Goalモデルは存在する (models/goal.py)
+    - ScoreInputスキーマにゴール詳細（得点者、時間等）が含まれていない
+    - 現状はレポート生成時のみGoalデータを参照（読み取り専用）
+  status: resolved
+  priority: medium
+  requirement_ref: F-62, 3.7節
+  affected_files:
+    - impl-repo/src/backend/routes/matches.py (update_score内で処理)
+    - impl-repo/src/backend/schemas/match.py (ScoreInputにgoals追加)
+  investigation_result: |
+    【調査完了】独立したgoals.pyルーターは不要。matches.py内で統合処理。
+
+    現状:
+    - Goalモデル: 基本実装済み（player_id, scorer_name, minute, half等）
+    - ルーター: 存在しない
+    - スコア入力: 得点者情報を記録しない
+
+    参照実装の方式:
+    - ScoreInputスキーマにgoals: List[GoalInput]フィールドを追加
+    - update_scoreエンドポイント内で:
+      1. 既存のGoalを削除
+      2. 新しいGoalを一括登録
+
+    GoalInputスキーマ:
+    - team_id, player_id (nullable), player_name
+    - minute, half, is_own_goal, is_penalty, notes
+  solution: |
+    1. ScoreInputにgoalsフィールド追加
+    2. update_score内でGoalテーブルへの保存処理を追加
+    3. 独立したgoals.pyは不要
+  resolution: |
+    【実装完了】
+    - GoalInputスキーマ追加（team_id, player_id, player_name, minute, half, is_own_goal, is_penalty）
+    - ScoreInputにgoals: List[GoalInput]フィールド追加
+    - update_score内で既存Goal削除→新規Goal一括登録処理を実装
+
+- id: ISSUE-011
+  created_at: '2026-01-05T14:00:00'
+  investigated_at: '2026-01-05T15:00:00'
+  resolved_at: '2026-01-05T17:00:00'
+  label: 解決済み
+  title: 公開画面API未実装
+  description: |
+    認証不要の公開閲覧用APIが存在しない。
+    - GET /public/standings (公開順位表)
+    - GET /public/matches (公開試合一覧)
+    フロントエンド画面P-01, P-02に対応するバックエンドAPI
+  status: resolved
+  priority: medium
+  requirement_ref: F-90, F-91, IMPL-022, 3.10節, 4.2節
+  affected_files:
+    - impl-repo/src/backend/routes/matches.py
+    - impl-repo/src/backend/routes/standings.py
+  investigation_result: |
+    【調査完了】独立したpublic.pyは不要。エンドポイント単位で認証を制御。
+
+    現状:
+    - impl-repo: すべてのエンドポイントに認証が必要
+    - 参照実装: エンドポイント単位で認証を個別設定
+
+    公開可能なエンドポイント（認証不要）:
+    - GET /api/matches/ - 試合一覧
+    - GET /api/matches/{id} - 試合詳細
+    - GET /api/standings/ - 順位表
+    - GET /api/standings/top-scorers - 得点ランキング
+    - GET /api/teams/ - チーム一覧
+    - GET /api/venues/ - 会場一覧
+
+    認証必須のエンドポイント:
+    - PUT /api/matches/{id}/score - スコア入力
+    - POST /api/matches/generate-* - 日程生成
+    - すべてのPOST/PUT/DELETE操作
+  solution: |
+    1. get_current_user_optional関数を追加
+    2. 公開可能なGETエンドポイントから認証依存を削除
+    3. 独立したpublic.pyは不要
+  resolution: |
+    【実装確認】現状で公開アクセス可能
+    - GETエンドポイント（試合一覧、順位表、チーム等）は認証依存がなく既に公開アクセス可能
+    - 独立した/public/エンドポイントは不要
+    - 書き込み操作（POST/PUT/DELETE）のみ認証が必要な設計
+
+- id: ISSUE-012
+  created_at: '2026-01-05T14:00:00'
+  investigated_at: '2026-01-05T17:30:00'
+  resolved_at: '2026-01-05T18:00:00'
+  label: 解決済み
+  title: WebSocketリアルタイム更新未実装
+  description: |
+    試合結果・順位表のリアルタイム更新機能が未実装。
+    - WebSocket/Server-Sent Eventsの実装なし
+    - 現状はポーリングまたは手動リロードが必要
+  status: resolved
+  priority: low
+  requirement_ref: F-92, IMPL-023, 7.4節
+  affected_files:
+    - impl-repo/src/backend/main.py
+    - impl-repo/src/backend/utils/websocket.py (新規)
+    - impl-repo/src/frontend/src/hooks/useWebSocket.ts (新規)
+  investigation_result: |
+    【調査完了】参照実装で完全実装済み。
+
+    参照実装の構成:
+    フロントエンド:
+    - useWebSocket.ts (295行): WebSocket接続管理
+      - 自動再接続（エクスポネンシャルバックオフ）
+      - ハートビート管理（30秒間隔）
+      - 接続状態管理（connecting/connected/disconnected/reconnecting）
+    - useRealtimeUpdates.ts (237行): リアルタイム更新
+      - React Queryキャッシュ無効化
+      - トースト通知
+
+    バックエンド:
+    - websocket.py: ConnectionManagerクラス
+      - send_match_update(): 試合結果更新通知
+      - send_standing_update(): 順位表更新通知
+      - send_approval_update(): 承認状態更新通知
+    - main.py L75-87: /ws エンドポイント
+
+    イベント型: MATCH_UPDATE, STANDING_UPDATE, APPROVAL_UPDATE, MATCH_LOCKED
+  solution: |
+    参照実装を移植。実装難度: 中程度
+  resolution: |
+    【実装完了】
+    バックエンド:
+    - utils/websocket.py: ConnectionManagerクラス実装
+      - connect/disconnect: 大会別接続管理
+      - send_match_update/send_standing_update/send_approval_update/send_match_locked
+    - main.py: /ws WebSocketエンドポイント追加
+    - routes/matches.py: 各エンドポイントでWebSocket通知追加
+
+    フロントエンド:
+    - hooks/useWebSocket.ts: 接続管理（自動再接続、ハートビート）
+    - hooks/useRealtimeUpdates.ts: React Queryキャッシュ無効化
+    - Layout.tsx: useRealtimeUpdates適用
+
+- id: ISSUE-013
+  created_at: '2026-01-05T14:00:00'
+  investigated_at: '2026-01-05T15:00:00'
+  resolved_at: '2026-01-05T18:00:00'
+  label: 解決済み
+  title: PWA/オフライン対応未実装
+  description: |
+    Service Worker、IndexedDB等のPWA機能が未実装。
+    - sw.js (Service Worker) が存在しない
+    - IndexedDBによるローカルストレージなし
+    - オフライン入力キュー機能なし
+    - 競合解決UIなし
+  status: resolved
+  priority: low
+  requirement_ref: F-100〜F-103, IMPL-024, 3.11節
+  affected_files:
+    - impl-repo/src/frontend/vite.config.ts (VitePWA設定)
+    - impl-repo/src/frontend/src/lib/db.ts (新規)
+    - impl-repo/src/frontend/src/lib/syncService.ts (新規)
+  investigation_result: |
+    【調査完了】参照実装で完全実装済み。実装難度: 高
+
+    参照実装の構成:
+
+    Service Worker:
+    - vite-plugin-pwaによる自動生成
+    - Workboxキャッシング戦略:
+      - CacheFirst: フォント、画像
+      - NetworkFirst: API、HTML
+
+    IndexedDB (db.ts):
+    - Dexie.jsによるローカルDB
+    - テーブル: tournaments, teams, players, matches, goals, standings
+    - 同期キュー、競合管理テーブル
+
+    同期サービス (syncService.ts):
+    - syncAll(): 全ペンディング同期
+    - saveMatchResultOffline(): オフライン試合保存
+    - 競合検出・解決機能
+
+    PWAコンポーネント:
+    - InstallPrompt.tsx: インストールプロンプト
+    - OfflineIndicator.tsx: オフライン表示
+    - UpdatePrompt.tsx: 更新通知
+    - ConflictResolver.tsx: 競合解決UI
+
+    必要パッケージ:
+    - dexie: ^4.2.1
+    - vite-plugin-pwa: ^1.2.0
+    - workbox-window: ^7.4.0
+  solution: |
+    参照実装を移植。実装難度: 高（IndexedDB、同期ロジックが複雑）
+  resolution: |
+    【実装完了】
+    vite.config.ts:
+    - vite-plugin-pwa設定追加
+    - Workboxキャッシング戦略（CacheFirst/NetworkFirst）
+    - マニフェスト設定（アイコン、テーマカラー等）
+
+    lib/db.ts (Dexie.js):
+    - LocalTournament/LocalTeam/LocalMatch/LocalStanding型定義
+    - PendingSync/SyncConflictテーブル
+    - clearAllData/getPendingSyncCount/hasUnresolvedConflicts
+
+    lib/syncService.ts:
+    - syncAll(): ペンディング同期実行
+    - saveMatchResultOffline(): オフライン試合保存
+    - resolveConflict(): 競合解決
+    - setupAutoSync(): オンライン復帰時の自動同期
+
+    components/pwa/:
+    - OfflineIndicator.tsx: オフライン状態表示
+    - UpdatePrompt.tsx: 更新通知UI
+
+# コードレビューで発見した品質イシュー（ISSUE-014〜028）
+
+- id: ISSUE-014
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: デバッグコード（traceback.print_exc）の混入
+  description: |
+    本番コードにデバッグ用のtraceback.print_exc()が残存している。
+    例外時のスタックトレースがログに出力され、セキュリティリスクとなる可能性。
+  status: open
+  priority: medium
+  category: code-quality
+  affected_files:
+    - impl-repo/src/backend/services/standings.py
+    - impl-repo/src/backend/routes/matches.py
+  solution: |
+    適切なロギングフレームワーク（loguru/logging）に置き換え。
+    本番環境ではDEBUGレベルを無効化。
+
+- id: ISSUE-015
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: ハードコードされたフォントパス
+  description: |
+    PDF生成時のフォントパスがハードコードされている。
+    環境依存により別マシンで動作しない可能性。
+  status: open
+  priority: medium
+  category: portability
+  affected_files:
+    - impl-repo/src/backend/reports/
+  solution: |
+    環境変数FONT_PATHを参照するか、
+    フォールバックロジックを追加する。
+
+- id: ISSUE-016
+  created_at: '2026-01-05T16:00:00'
+  resolved_at: '2026-01-05T17:00:00'
+  label: 解決済み
+  title: デフォルトシークレットキーのリスク
+  description: |
+    JWT署名用のSECRET_KEYにデフォルト値が設定されている。
+    本番環境でデフォルト値のまま使用するとセキュリティ脆弱性となる。
+  status: resolved
+  priority: high
+  category: security
+  affected_files:
+    - impl-repo/src/backend/services/auth.py
+  solution: |
+    1. デフォルト値を削除し、環境変数必須に変更
+    2. 起動時にSECRET_KEYの未設定を検出してエラー終了
+    3. 本番用のシークレットキー生成ガイドを追加
+  resolution: |
+    【実装完了】services/auth.pyを修正:
+    - ENV=production時はSECRET_KEY未設定でRuntimeError発生
+    - 開発環境ではデフォルト値使用（UserWarning警告付き）
+    - シークレットキー生成コマンド例を提示
+
+- id: ISSUE-017
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: CORS設定が開発環境用のみ
+  description: |
+    CORS設定で allow_origins=["*"] が設定されている。
+    本番環境では具体的なオリジンを指定すべき。
+  status: open
+  priority: medium
+  category: security
+  affected_files:
+    - impl-repo/src/backend/main.py
+  solution: |
+    環境変数ALLOWED_ORIGINSを参照するよう変更。
+    デフォルトは本番用オリジンに設定。
+
+- id: ISSUE-018
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: alert()の過度な使用
+  description: |
+    フロントエンドでalert()が多用されている。
+    UX改善のためトースト通知に置き換えるべき。
+  status: open
+  priority: low
+  category: ux
+  affected_files:
+    - impl-repo/src/frontend/src/pages/*.tsx
+  solution: |
+    react-hot-toast等のトーストライブラリを導入。
+    alert()をtoast.success()/toast.error()に置き換え。
+
+- id: ISSUE-019
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: 未実装のユーティリティモジュール
+  description: |
+    utils/ディレクトリ内にTODOコメントのみのファイルが存在。
+    必要な機能か不要なファイルかを判断する必要あり。
+  status: open
+  priority: low
+  category: code-quality
+  affected_files:
+    - impl-repo/src/backend/utils/
+  solution: |
+    使用されていないファイルは削除。
+    必要な機能は実装。
+
+- id: ISSUE-020
+  created_at: '2026-01-05T16:00:00'
+  resolved_at: '2026-01-05T17:00:00'
+  label: 解決済み
+  title: スコア入力のバリデーション不足
+  description: |
+    スコア入力時に以下のバリデーションが不足:
+    - 負の得点の入力可能
+    - 極端に大きい数値（999等）の制限なし
+    - PK戦スコアの整合性チェックなし
+  status: resolved
+  priority: medium
+  category: validation
+  affected_files:
+    - impl-repo/src/backend/schemas/match.py
+  solution: |
+    1. Pydanticバリデータで0以上の制約を追加
+    2. 上限値（例: 50）を設定
+    3. PK戦スコアの勝敗整合性チェックを追加
+  resolution: |
+    【実装完了】schemas/match.pyを修正:
+    - ScoreInput: 全スコアフィールドにge=0, le=99制約追加
+    - GoalInput: minute(0-120), half(1-2), player_name(max_length=100)制約追加
+    - model_validatorでPK戦スコア整合性チェック（両方必須、同点不可）を実装
+
+- id: ISSUE-021
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: 試合ステータスの状態遷移管理不完全
+  description: |
+    試合ステータス（scheduled/in_progress/finished/cancelled）の
+    不正な遷移を防止するロジックが不完全。
+    例: finishedからscheduledへの変更が可能。
+  status: open
+  priority: medium
+  category: business-logic
+  affected_files:
+    - impl-repo/src/backend/routes/matches.py
+    - impl-repo/src/backend/services/match.py
+  solution: |
+    状態遷移図を定義し、許可された遷移のみを許可。
+    不正な遷移はHTTP 422で拒否。
+
+- id: ISSUE-022
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: シンプルPDF生成の脆弱な実装
+  description: |
+    reports/ディレクトリが"TODO: 実装"のみで実質未実装。
+    ReportLabによるPDF生成の基盤が必要。
+  status: open
+  priority: medium
+  category: feature
+  affected_files:
+    - impl-repo/src/backend/reports/__init__.py
+    - impl-repo/src/backend/routes/reports.py
+  solution: |
+    参照実装（UrawaCup/new/src/backend/reports/）を移植。
+    主要レポート: 日次報告書、順位表、最終結果報告書
+
+- id: ISSUE-023
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: Paginationデフォルト値が大きすぎる
+  description: |
+    API一覧取得のデフォルトlimitが1000件など大きすぎる。
+    大量データ時にパフォーマンス問題を引き起こす可能性。
+  status: open
+  priority: low
+  category: performance
+  affected_files:
+    - impl-repo/src/backend/routes/*.py
+  solution: |
+    デフォルトlimitを20〜50に変更。
+    最大値も100程度に制限。
+
+- id: ISSUE-024
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: ユーザー操作ログの未実装
+  description: |
+    誰がいつ何を操作したかの監査ログが未実装。
+    試合結果の改ざん等を追跡できない。
+  status: open
+  priority: medium
+  category: audit
+  affected_files:
+    - impl-repo/src/backend/models/ (新規: audit_log.py)
+    - impl-repo/src/backend/routes/*.py
+  solution: |
+    1. AuditLogモデルを追加
+    2. 重要な操作（スコア入力、承認等）時にログを記録
+    3. 管理者向けログ閲覧画面を追加
+
+- id: ISSUE-025
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: Nullableなチーム情報の表示ロジック
+  description: |
+    試合データでhome_team/away_teamがnullの場合の
+    フロントエンド表示ロジックが不完全。
+    「TBD」等のプレースホルダー表示が必要。
+  status: open
+  priority: low
+  category: ux
+  affected_files:
+    - impl-repo/src/frontend/src/pages/MatchSchedule.tsx
+    - impl-repo/src/frontend/src/pages/MatchResult.tsx
+  solution: |
+    home_team ?? "TBD" のようなフォールバック表示を追加。
+
+- id: ISSUE-026
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: API応答のエラーメッセージ形式不統一
+  description: |
+    エラーレスポンスの形式がエンドポイントによって異なる。
+    フロントエンドでのエラーハンドリングが複雑化。
+  status: open
+  priority: low
+  category: api-design
+  affected_files:
+    - impl-repo/src/backend/routes/*.py
+  solution: |
+    1. エラーレスポンススキーマを統一
+    2. カスタム例外ハンドラを追加
+    3. 形式: {"error": {"code": "...", "message": "...", "details": {...}}}
+
+- id: ISSUE-027
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: datetime.utcnow()の使用（非推奨API）
+  description: |
+    Python 3.12+で非推奨となったdatetime.utcnow()を使用。
+    将来のPythonバージョンで警告が出る可能性。
+  status: open
+  priority: low
+  category: deprecation
+  affected_files:
+    - impl-repo/src/backend/routes/*.py
+    - impl-repo/src/backend/services/*.py
+  solution: |
+    datetime.now(timezone.utc)に置き換え。
+
+- id: ISSUE-028
+  created_at: '2026-01-05T16:00:00'
+  label: 調査済み
+  title: バッチ削除時の依存関係チェック不足
+  description: |
+    チーム削除時に関連する選手、試合、得点データの
+    依存関係チェックが不十分。
+    外部キー制約エラーが発生する可能性。
+  status: open
+  priority: low
+  category: data-integrity
+  affected_files:
+    - impl-repo/src/backend/routes/teams.py
+    - impl-repo/src/backend/routes/players.py
+  solution: |
+    1. 削除前に依存データの存在をチェック
+    2. 依存データがある場合は確認プロンプトを表示
+    3. カスケード削除または削除拒否の選択肢を提供
+
+summary:
+  last_updated: '2026-01-06T06:00:00'
+  total_issues: 59
+
+  # ラベル別集計
+  label_counts:
+    解決済み: 19       # ISSUE-001~013, 016, 020, 029, 030, 043, 044
+    調査済み: 40       # investigated（解決策は判明しているが未実装）
+    調査中: 0          # investigating
+
+  # 解決済み (resolved) - 15件
+  resolved_issues:
+    - id: ISSUE-001
+      title: 曖昧性AMB-006由来
+      resolution: ISSUE-002と重複、クローズ
+    - id: ISSUE-002
+      title: 抽選ロジックのハッシュアルゴリズム差異
+      resolution: 両実装ともSHA256使用、差異なし
+    - id: ISSUE-003
+      title: rank_reasonフィールドの実装
+      resolution: 両方で実装済み
+    - id: ISSUE-004
+      title: FinalDayServiceの実装
+      resolution: impl-repoで完全実装済み
+    - id: ISSUE-005
+      title: 最終日日付の取得方法
+      resolution: tournament.end_dateから動的取得
+    - id: ISSUE-006
+      title: 対応グループ数の仕様
+      resolution: 4グループ固定で問題なし
+    - id: ISSUE-007
+      title: 研修試合の組み合わせロジック
+      resolution: 警告のみの仕様で確定
+    - id: ISSUE-008
+      title: フロントエンド画面の不足
+      resolution: 全13画面実装済み
+    - id: ISSUE-009
+      title: 結果承認フローAPI
+      resolution: approve/reject/resubmit実装済み
+    - id: ISSUE-010
+      title: Goals API
+      resolution: ScoreInputにgoals統合済み
+    - id: ISSUE-011
+      title: 公開画面API
+      resolution: GETエンドポイントは認証不要で公開アクセス可能
+    - id: ISSUE-016
+      title: デフォルトシークレットキー
+      resolution: 本番環境で必須チェック実装済み
+    - id: ISSUE-020
+      title: スコア入力バリデーション
+      resolution: 範囲制約、PK整合性チェック実装済み
+    - id: ISSUE-012
+      title: WebSocketリアルタイム更新
+      resolution: バックエンド・フロントエンド両方で実装完了
+    - id: ISSUE-013
+      title: PWA/オフライン対応
+      resolution: vite-plugin-pwa、Dexie.js、同期サービス実装完了
+
+  # 調査済み (investigated) - 13件
+  investigated_issues:
+    high_priority: []
+
+    medium_priority:
+      - id: ISSUE-014
+        title: デバッグコード混入
+        finding: traceback.print_exc()が2箇所に残存
+        solution: loggingモジュールに置き換え
+      - id: ISSUE-015
+        title: ハードコードされたフォントパス
+        finding: PDF生成時のフォントパスが環境依存
+        solution: 環境変数FONT_PATHまたはフォールバック
+      - id: ISSUE-017
+        title: CORS設定が開発環境用のみ
+        finding: allow_origins=["*"]、allow_methods=["*"]
+        solution: 本番環境用オリジンを環境変数で設定
+      - id: ISSUE-021
+        title: 試合ステータス状態遷移管理
+        finding: 任意のステータス変更が可能
+        solution: ALLOWED_STATUS_TRANSITIONS定義、バリデーション追加
+      - id: ISSUE-022
+        title: PDF生成未実装
+        finding: reports/がTODOコメントのみ
+        solution: 参照実装から移植（ReportLab使用）
+      - id: ISSUE-024
+        title: ユーザー操作ログ未実装
+        finding: AuditLogモデルなし
+        solution: AuditLogモデル追加、ミドルウェア実装
+
+    low_priority:
+      - id: ISSUE-018
+        title: alert()の過度な使用
+        finding: フロントエンドでalert()多用
+        solution: react-hot-toast等に置き換え
+      - id: ISSUE-019
+        title: 未実装ユーティリティモジュール
+        finding: utils/__init__.pyがTODOのみ
+        solution: 必要な機能をリスト化して実装
+      - id: ISSUE-023
+        title: Paginationデフォルト値
+        finding: デフォルトlimitが大きすぎる
+        solution: デフォルト20〜50、最大100に制限
+      - id: ISSUE-025
+        title: Nullableチーム情報の表示
+        finding: home_team/away_teamがnull時の表示不完全
+        solution: "TBD"等のフォールバック表示追加
+      - id: ISSUE-026
+        title: エラーメッセージ形式不統一
+        finding: エンドポイントごとに形式が異なる
+        solution: 統一エラースキーマ、カスタム例外ハンドラ
+      - id: ISSUE-027
+        title: datetime.utcnow()非推奨
+        finding: Python 3.12+で非推奨API使用
+        solution: datetime.now(timezone.utc)に置き換え
+      - id: ISSUE-028
+        title: バッチ削除時の依存関係チェック
+        finding: 外部キー制約エラーの可能性
+        solution: 削除前の依存チェック、確認プロンプト
+
+  # カテゴリ別（調査済み未解決）
+  by_category:
+    security: [ISSUE-017]
+    code_quality: [ISSUE-014, ISSUE-019]
+    ux: [ISSUE-018, ISSUE-025, ISSUE-034, ISSUE-046, ISSUE-048, ISSUE-049]
+    feature: [ISSUE-022, ISSUE-033, ISSUE-035, ISSUE-042]
+    performance: [ISSUE-023]
+    api_design: [ISSUE-026, ISSUE-036, ISSUE-037]
+    business_logic: [ISSUE-021, ISSUE-052]
+    audit: [ISSUE-024]
+    data_integrity: [ISSUE-028, ISSUE-038, ISSUE-041]
+    deprecation: [ISSUE-027]
+    portability: [ISSUE-015]
+    core_alignment: [ISSUE-029, ISSUE-030, ISSUE-032, ISSUE-043, ISSUE-044]
+    test: [ISSUE-031]
+    frontend: [ISSUE-039, ISSUE-040, ISSUE-051]
+    validation: [ISSUE-047, ISSUE-050]
+    bug: [ISSUE-045]
+
+  # coreロジック比較で発見（ISSUE-029〜032）- 4件
+  core_alignment_issues:
+    high_priority:
+      - id: ISSUE-029
+        title: コアのDailyReportGenerator未移植
+        finding: core/generate_daily_report_pdf.pyの422行がimpl-repoに未移植
+        impact: PDF出力品質の大幅な差異
+      - id: ISSUE-030
+        title: コアのFinalResultPDFGenerator未移植
+        finding: core/generate_final_result_pdf.pyが未移植
+        impact: 最終結果報告書が出力不可
+      - id: ISSUE-031
+        title: テストフィクスチャのGroup初期化不足
+        finding: test_final_day.pyの8件失敗（外部キー制約違反）
+        impact: テスト実行不可
+
+    medium_priority:
+      - id: ISSUE-032
+        title: report_service.pyとcoreの実装方式差異
+        finding: canvas方式 vs Platypus方式
+        impact: 保守性・出力品質の差異
+
+  test_results:
+    impl_repo: テストなし（tests/ディレクトリ空）
+    urawacup_new: 10件中2件成功、8件失敗（外部キー制約エラー）
+
+  # 6サイクル分析で発見（ISSUE-033〜052）- 20件
+  six_cycle_analysis:
+    cycle_1_2:
+      - id: ISSUE-033
+        title: チーム削除機能UI未実装
+        finding: バックエンドは実装済み、フロントエンドに削除ボタンなし
+      - id: ISSUE-034
+        title: 日程生成ボタン条件表示
+        finding: 試合存在時は非表示の仕様
+    cycle_3:
+      - id: ISSUE-035
+        title: 最終日API不完全実装
+        finding: GET/PUTが未実装
+      - id: ISSUE-036
+        title: HTTPメソッド要件不一致
+        finding: PUT vs PATCH、POST vs DELETE
+      - id: ISSUE-037
+        title: レポートAPIパス不一致
+        finding: パス命名規則が要件と異なる
+      - id: ISSUE-038
+        title: match_locksテーブル統合
+        finding: matchesテーブルに統合実装
+      - id: ISSUE-039
+        title: 公開画面tournamentIdハードコード
+        finding: tournamentId = 1 固定
+      - id: ISSUE-040
+        title: Reports日付マッピングハードコード
+        finding: 日付が固定値
+      - id: ISSUE-041
+        title: tournament_awardsテーブル分割
+        finding: 2テーブルに分割実装
+      - id: ISSUE-042
+        title: 参加申込書インポート不明
+        finding: 実装状況要確認
+    cycle_4_5:
+      - id: ISSUE-043
+        title: PDF生成フォント管理
+        finding: 環境依存パス使用
+      - id: ISSUE-044
+        title: PDFレイアウトエンジン差異
+        finding: core=Platypus, services=Canvas
+      - id: ISSUE-045
+        title: 最終結果報告書日付バグ
+        finding: start_dateを参照（end_dateが正解）
+      - id: ISSUE-046
+        title: エラーメッセージ詳細化不足
+        finding: 一般的すぎるエラー表示
+      - id: ISSUE-047
+        title: スコア整合性チェック不足
+        finding: 前半+後半≠合計を検出不可
+      - id: ISSUE-048
+        title: 承認待ち自動更新なし
+        finding: 初回取得のみ
+      - id: ISSUE-049
+        title: D&D失敗時復帰なし
+        finding: UI不整合発生
+      - id: ISSUE-050
+        title: 背番号重複チェックなし
+        finding: 同一チーム内重複可能
+      - id: ISSUE-051
+        title: Layout.tsx tournamentIdハードコード
+        finding: ID=1 固定
+      - id: ISSUE-052
+        title: 決勝T生成前提チェック不足
+        finding: 予選完了チェック不十分
+
+# coreロジック比較で発見した差異（ISSUE-029〜032）
+
+- id: ISSUE-029
+  created_at: '2026-01-05T19:00:00'
+  resolved_at: '2026-01-06T04:00:00'
+  label: 解決済み
+  title: コアのDailyReportGenerator未移植
+  description: |
+    D:\UrawaCup2\core\generate_daily_report_pdf.py (422行) に実装されている
+    DailyReportGeneratorクラスがimpl-repoに移植されていない。
+
+    coreの実装:
+    - SimpleDocTemplate + Platypus使用
+    - 詳細なテーブルスタイル（罫線、背景色、フォント）
+    - 会場ごとのページ分割
+    - ヘッダー/フッターテンプレート
+    - 得点経過の詳細表示
+
+    impl-repoの現状 (report_service.py):
+    - canvas + drawString方式（簡易実装）
+    - テーブル構造なし
+    - 基本的なテキスト配置のみ
+  status: open
+  priority: high
+  category: core-alignment
+  affected_files:
+    - core: D:\UrawaCup2\core\generate_daily_report_pdf.py
+    - impl: D:\UrawaCup2\impl-repo\src\backend\services\report_service.py
+  solution: |
+    coreのDailyReportGeneratorをimpl-repo/src/backend/reports/daily_report.pyに移植。
+    主要機能:
+    1. SimpleDocTemplate + Platypusによるテーブル生成
+    2. 会場別ページ分割
+    3. 詳細な得点経過表示
+    4. プロフェッショナルな帳票レイアウト
+
+- id: ISSUE-030
+  created_at: '2026-01-05T19:00:00'
+  resolved_at: '2026-01-06T04:00:00'
+  label: 解決済み
+  title: コアのFinalResultPDFGenerator未移植
+  description: |
+    D:\UrawaCup2\core\generate_final_result_pdf.py に実装されている
+    最終結果報告書PDF生成クラスがimpl-repoに移植されていない。
+
+    coreの実装:
+    - 大会最終結果の公式帳票
+    - グループ別順位表
+    - 決勝トーナメント結果
+    - 表彰チーム一覧
+    - 得点ランキング
+
+    impl-repoの現状:
+    - reports/__init__.pyは"TODO: 実装"のみ
+    - report_service.pyは日次報告書のみ対応
+  status: open
+  priority: high
+  category: core-alignment
+  affected_files:
+    - core: D:\UrawaCup2\core\generate_final_result_pdf.py
+    - impl: D:\UrawaCup2\impl-repo\src\backend\reports/__init__.py
+  solution: |
+    coreのFinalResultPDFGeneratorをimpl-repo/src/backend/reports/final_result.pyに移植。
+    主要機能:
+    1. 大会概要セクション
+    2. グループ別最終順位
+    3. 決勝トーナメント結果図
+    4. 表彰情報
+    5. 得点ランキング
+
+- id: ISSUE-031
+  created_at: '2026-01-05T19:00:00'
+  label: 調査済み
+  title: テストフィクスチャのGroup初期化不足
+  description: |
+    UrawaCup/new/src/backend/tests/test_final_day.pyの8件のテストが
+    外部キー制約違反で失敗している。
+
+    原因:
+    - create_test_teams()関数がGroupテーブル初期化なしでチーム作成
+    - teams.group_idが参照するgroupsテーブルにデータがない
+
+    エラー例:
+    sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) FOREIGN KEY constraint failed
+  status: open
+  priority: high
+  category: test
+  affected_files:
+    - D:\UrawaCup2\UrawaCup\new\src\backend\tests\conftest.py
+    - D:\UrawaCup2\UrawaCup\new\src\backend\tests\test_final_day.py
+  solution: |
+    conftest.pyに以下を追加:
+    1. create_test_groups()フィクスチャを追加（グループA,B,C,D作成）
+    2. create_test_teams()の依存関係にcreate_test_groupsを追加
+    3. 正しい実行順序: tournament → groups → teams → matches
+
+- id: ISSUE-032
+  created_at: '2026-01-05T19:00:00'
+  title: report_service.pyとcoreの実装方式差異
+  label: 調査済み
+  description: |
+    impl-repo/src/backend/services/report_service.pyはcoreのPDF生成と
+    異なる実装方式を採用している。
+
+    core (generate_daily_report_pdf.py):
+    - SimpleDocTemplate + Platypus (Table, Paragraph, Spacer)
+    - 構造化されたドキュメント生成
+    - スタイルシート管理
+    - フロー型レイアウト
+
+    impl-repo (report_service.py):
+    - canvas + drawString 方式
+    - 座標指定による手動配置
+    - テーブル構造なし
+
+    影響:
+    - 出力品質の差異（core > impl）
+    - 保守性の差異（Platypusの方が変更しやすい）
+    - 日本語フォント処理の差異
+  status: investigated
+  priority: medium
+  category: core-alignment
+  affected_files:
+    - core: D:\UrawaCup2\core\generate_daily_report_pdf.py
+    - impl: D:\UrawaCup2\impl-repo\src\backend\services\report_service.py
+  solution: |
+    report_service.pyをcoreの方式に統一:
+    1. SimpleDocTemplate + Platypusに移行
+    2. coreのスタイル定義を流用
+    3. 既存のcanvas実装をフォールバックとして残す（ReportLabが利用不可時）
+
+# 管理画面調査で発見したイシュー（ISSUE-033〜034）
+
+- id: ISSUE-033
+  created_at: '2026-01-06T00:00:00'
+  investigated_at: '2026-01-06T00:00:00'
+  title: チーム削除機能のUI未実装
+  label: 調査済み
+  description: |
+    TeamManagement.tsxでチーム削除機能のUIが実装されていない。
+
+    【現状】
+    バックエンド:
+    - DELETE /teams/{team_id} エンドポイントは完全実装済み
+    - 管理者認証チェックあり（Depends(require_admin)）
+    - routes/teams.py L185-202
+
+    フロントエンド:
+    - useDeleteTeam()フックはhooks.tsに定義済み（L55-64）
+    - TeamManagement.tsxでは削除ボタンが存在しない
+    - 編集モーダルに削除ボタンなし
+    - 削除確認ダイアログなし
+
+    【比較】PlayerManagement.tsxでは完全実装済み:
+    - confirmDelete()関数（L131-134）
+    - handleDelete()関数（L137-147）
+    - useDeletePlayer()カスタムhook使用
+    - 削除確認ダイアログ（L416-444）
+    - テーブル各行に「削除」ボタン（L264-268）
+  status: investigated
+  priority: high
+  category: feature
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/TeamManagement.tsx
+    - UrawaCup/new/src/frontend/src/features/teams/hooks.ts
+  solution: |
+    PlayerManagement.tsxの削除機能と同等の実装を追加:
+    1. confirmDelete()関数を追加
+    2. handleDelete()関数を追加（useDeleteTeam使用）
+    3. 削除確認モーダルをJSXに追加
+    4. テーブル行に「削除」ボタンを追加（編集ボタン横）
+
+- id: ISSUE-034
+  created_at: '2026-01-06T00:00:00'
+  investigated_at: '2026-01-06T00:00:00'
+  title: 日程生成ボタンの条件付き表示ロジック
+  label: 調査済み
+  description: |
+    MatchSchedule.tsxで日程生成ボタンが表示されない問題。
+
+    【原因】
+    ボタン表示は以下の条件で制御されている（renderGenerateButtons関数 L361-407）:
+
+    予選リーグ日程生成ボタン:
+    - 表示条件: activeTab === 'day1' || 'day2' かつ hasPreliminaryMatches === false
+    - 非表示理由: 既に予選試合が存在する場合
+
+    決勝トーナメント生成ボタン:
+    - 表示条件: activeTab === 'day3' かつ hasPreliminaryMatches === true かつ hasFinalsMatches === false
+    - 非表示理由: 予選試合がない、または既に決勝試合が存在する場合
+
+    研修試合生成ボタン:
+    - 表示条件: activeTab === 'day3' かつ hasPreliminaryMatches === true かつ hasTrainingMatches === false
+    - 非表示理由: 予選試合がない、または既に研修試合が存在する場合
+
+    【判定ロジック】（L146-161）
+    - hasPreliminaryMatches: allMatches.some(m => m.stage === 'preliminary')
+    - hasFinalsMatches: allMatches.some(m => m.stage in ['semifinal', 'third_place', 'final'])
+    - hasTrainingMatches: allMatches.some(m => m.stage === 'training')
+
+    【確認事項】
+    1. currentTournamentが設定されているか
+    2. APIからallMatchesが取得できているか
+    3. 適切なタブ（day1/day2/day3）が選択されているか
+  status: investigated
+  priority: medium
+  category: ux
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/MatchSchedule.tsx
+  solution: |
+    現状の実装は正しい。ユーザーへの改善提案:
+    1. ボタンが非表示の理由を説明するメッセージを追加
+    2. 例: 「予選試合が既に生成されています。再生成するには既存の試合を削除してください」
+    3. 既存試合の一括削除機能の追加を検討
+
+# サイクル1-3分析で発見したイシュー（ISSUE-035〜042）
+
+- id: ISSUE-035
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T01:00:00'
+  title: 最終日API不完全実装（GET/PUT未実装）
+  label: 調査済み
+  description: |
+    要件定義書6.5節で定義されている最終日APIの一部が未実装。
+
+    【未実装エンドポイント】
+    - GET /api/tournaments/{id}/final-day-schedule（日程取得）
+    - PUT /api/tournaments/{id}/final-day-schedule（一括保存）
+    - PATCH /api/tournaments/{id}/final-day-venues/{venueId}（会場担当更新）
+
+    【実装済み】
+    - POST /api/tournaments/{id}/final-day-schedule/generate（自動生成）
+    - POST /api/final-day-matches/swap（チーム入れ替え）
+  status: investigated
+  priority: medium
+  category: api
+  requirement_ref: 6.5
+  affected_files:
+    - UrawaCup/new/src/backend/routes/final_day.py
+  solution: |
+    final_day.pyに以下のエンドポイントを追加:
+    1. GET /api/tournaments/{id}/final-day-schedule
+    2. PUT /api/tournaments/{id}/final-day-schedule
+    3. PATCH /api/tournaments/{id}/final-day-venues/{venueId}
+
+- id: ISSUE-036
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T01:00:00'
+  title: HTTPメソッドの要件不一致
+  label: 調査済み
+  description: |
+    いくつかのエンドポイントでHTTPメソッドが要件と異なる。
+
+    【差異一覧】
+    1. 大会更新:
+       - 要件: PATCH /api/tournaments/{id}
+       - 実装: PUT /api/tournaments/{id}
+
+    2. マッチロック解除:
+       - 要件: DELETE /api/matches/{id}/lock
+       - 実装: POST /api/matches/{id}/unlock
+
+    【影響】
+    - REST原則との不一致
+    - フロントエンドでは問題なく動作
+  status: investigated
+  priority: low
+  category: api-design
+  requirement_ref: 6.2, 6.4
+  solution: |
+    以下のいずれかで対応:
+    1. PATCHエンドポイントを追加（PUTと並列）
+    2. DELETE /api/matches/{id}/lockエンドポイントを追加
+    3. 要件定義書を実装に合わせて更新
+
+- id: ISSUE-037
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T01:00:00'
+  title: レポートAPIパス不一致
+  label: 調査済み
+  description: |
+    レポートAPIのパスが要件定義書と異なる。
+
+    【差異】
+    - 日次報告書:
+      要件: GET /api/reports/daily
+      実装: POST /api/reports/tournaments/{id}/daily
+
+    - 順位表PDF:
+      要件: GET /api/reports/standings
+      実装: GET /api/reports/export/group-standings
+
+    【機能的影響】
+    - 機能自体は実装されている
+    - パス命名規則が異なるのみ
+  status: investigated
+  priority: low
+  category: api-design
+  requirement_ref: 6.7
+  solution: |
+    対応オプション:
+    1. エイリアスルートを追加して両方のパスで動作させる
+    2. 要件定義書を実装仕様に更新
+
+- id: ISSUE-038
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T01:00:00'
+  title: match_locksテーブル未実装（matchesに統合）
+  label: 調査済み
+  description: |
+    要件定義書5.17で定義されているmatch_locksテーブルが独立テーブルとして存在しない。
+
+    【要件】
+    match_locks テーブル:
+    - id, match_id, user_id, locked_at, expires_at
+
+    【実装】
+    matchesテーブル内にロック機能を統合:
+    - is_locked (BOOLEAN)
+    - locked_by (FK -> users.id)
+    - locked_at (DateTime)
+
+    【評価】
+    - 機能的には同等
+    - 単一試合の同時編集防止には十分
+    - ロック履歴管理には不向き
+  status: investigated
+  priority: low
+  category: data-model
+  requirement_ref: 5.17
+  solution: |
+    現状の実装で問題なし。
+    将来的にロック履歴管理が必要になった場合のみ独立テーブル化を検討。
+
+- id: ISSUE-039
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T06:00:00'
+  title: 公開画面のtournamentIdハードコード
+  label: 調査済み
+  description: |
+    PublicStandings.tsx、PublicMatchList.tsxでtournamentIdが
+    ハードコード（= 1）されている。
+
+    【影響】
+    - 複数大会運用時に対応不可
+    - 大会切り替えができない
+
+    【該当箇所】
+    - PublicStandings.tsx: tournamentId = 1
+    - PublicMatchList.tsx: tournamentId = 1
+  status: investigated
+  priority: medium
+  category: frontend
+  requirement_ref: 4.2
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/public/PublicStandings.tsx
+    - UrawaCup/new/src/frontend/src/pages/public/PublicMatchList.tsx
+  investigation_result: |
+    【再調査完了 2026-01-06】未修正、ハードコードのまま
+
+    PublicStandings.tsx L17:
+      // Hardcoded tournament ID
+      const data = await standingApi.getStandingsByGroup(1);
+
+    PublicMatchList.tsx L14-15:
+      // Hardcoded for now, same as other pages
+      const tournamentId = 1;
+
+    コメントにも明示的に "Hardcoded" と記載されており、
+    意図的な暫定実装であることが確認できる。
+  solution: |
+    useAppStoreから現在の大会IDを取得するよう変更:
+    const { currentTournament } = useAppStore()
+    const tournamentId = currentTournament?.id || 1
+
+- id: ISSUE-040
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T01:00:00'
+  title: Reports画面の日付マッピングハードコード
+  label: 調査済み
+  description: |
+    Reports.tsxで日付マッピングがハードコードされている。
+
+    【該当コード】
+    const dateMap = {
+      day1: '2026-03-25',
+      day2: '2026-03-26',
+      day3: '2026-03-27'
+    }
+
+    【影響】
+    - 大会日程が変わると修正が必要
+    - 動的な日付取得ができない
+  status: investigated
+  priority: medium
+  category: frontend
+  requirement_ref: 3.9
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/Reports.tsx
+  solution: |
+    currentTournament.start_date/end_dateから動的に計算:
+    const dateMap = useMemo(() => {
+      const start = new Date(currentTournament.start_date)
+      return {
+        day1: formatDate(start),
+        day2: formatDate(addDays(start, 1)),
+        day3: formatDate(addDays(start, 2))
+      }
+    }, [currentTournament])
+
+- id: ISSUE-041
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T01:00:00'
+  title: tournament_awardsテーブルの分割実装
+  label: 調査済み
+  description: |
+    要件定義書5.14で定義されているtournament_awardsテーブルが
+    2つのテーブルに分割されている。
+
+    【要件】
+    tournament_awards:
+    - id, tournament_id, award_type, player_id, team_id, description
+
+    【実装】
+    1. TournamentFinalRanking（大会最終順位）
+       - id, tournament_id, rank, team_id
+
+    2. OutstandingPlayer（優秀選手）
+       - id, tournament_id, award_type, player_name, team_id, player_id
+
+    【評価】
+    - 業務ニーズに基づく合理的な分割
+    - 機能的には問題なし
+  status: investigated
+  priority: low
+  category: data-model
+  requirement_ref: 5.14
+  solution: |
+    現状の実装で問題なし。
+    要件定義書のテーブル定義を実装に合わせて更新することを推奨。
+
+- id: ISSUE-042
+  created_at: '2026-01-06T01:00:00'
+  investigated_at: '2026-01-06T06:00:00'
+  title: 参加申込書インポート機能（F-22）完全未実装
+  label: 調査済み
+  description: |
+    要件F-22「参加申込書インポート（参加申込書形式・2列構成）」が完全未実装。
+
+    【要件】
+    - 参加申込書形式（2列構成）のインポート
+    - 優先度: 中
+  status: investigated
+  priority: medium
+  category: feature
+  requirement_ref: F-22
+  affected_files:
+    - impl-repo/src/backend/routes/players.py
+    - impl-repo/src/frontend/src/pages/PlayerManagement.tsx
+  investigation_result: |
+    【詳細調査完了 2026-01-06】完全未実装
+
+    ■ 参加申込書の2列構成フォーマット（PlayerManagement_Module_Spec.md L422-486）
+
+    浦和カップ参加申込書のExcelレイアウト:
+    ┌──────────────────────────────────────────────────────────────────┐
+    │ 【登録メンバー】                                                  │
+    │ （左列）                           （右列）                       │
+    │ Pos│氏名    │前所属T  │身長│学年   背番号│氏名    │前所属T  │身長│学年│
+    │ FW │秋山 州斗│北本東   │170 │3年     2   │渡邉 陽希│朝霞第三 │170 │3年 │
+    │ MF │植木 彪  │伊奈南   │173 │3年    16   │菊池 颯  │川口西   │167 │3年 │
+    └──────────────────────────────────────────────────────────────────┘
+
+    ■ 2列構成の意味
+    - 1行に2人の選手が横並び（左列と右列）
+    - 左列: Pos | 氏名 | 前所属チーム | 身長 | 学年
+    - 右列: 背番号 | 氏名 | 前所属チーム | 身長 | 学年
+
+    ■ 現状のimpl-repo実装 (players.py L189-232)
+    - CSVのみ対応（.xlsx未対応）
+    - 1行1選手の単純形式のみ
+    - フィールド: number, name, name_kana, grade, position, is_captain
+
+    ■ 要件との差異
+    | 項目 | 要件（参加申込書） | 現状実装 |
+    |------|-------------------|----------|
+    | ファイル形式 | Excel (.xlsx) | CSV/TXTのみ |
+    | レイアウト | 2列構成（左右に選手） | 1行1選手 |
+    | セクション検出 | 【登録メンバー】等 | なし |
+    | フィールド | Pos,氏名,前所属,身長,学年 | number,name等 |
+  solution: |
+    PlayerManagement_Module_Spec.md に詳細な実装仕様あり:
+
+    1. openpyxlによるExcel読み込み
+    2. セクション検出（【登録メンバー】キーワード）
+    3. 2列パーサー実装:
+       - _parse_player_row_left(): 左列抽出
+       - _parse_player_row_right(): 右列抽出
+    4. ExcelFormatDetector: フォーマット自動検出
+    5. ユニフォーム情報/スタッフ情報の同時取り込み（オプション）
+
+    参照: UrawaCup/new/Requirement/PlayerManagement_Module_Spec.md L500-950
+
+# サイクル4-5分析で発見したイシュー（ISSUE-043〜052）
+
+- id: ISSUE-043
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  resolved_at: '2026-01-06T04:00:00'
+  title: PDF生成のフォント管理問題
+  label: 解決済み
+  description: |
+    services/reports/のPDF生成で環境依存性の高いフォント管理が使用されている。
+
+    【問題】
+    1. TTFont外部ファイル依存（Windows C:ドライブ絶対パス）
+    2. フォント登録の重複リスク（毎回 __init__ で登録）
+    3. Docker環境での動作未テスト
+
+    【core版との差異】
+    - core: UnicodeCIDFont('HeiseiKakuGo-W5') - 組み込みフォント
+    - services: TTFont('Gothic', 'C:/Windows/Fonts/msgothic.ttc') - 外部ファイル
+  status: investigated
+  priority: high
+  category: pdf-generation
+  affected_files:
+    - UrawaCup/new/src/backend/services/reports/base.py
+  solution: |
+    1. フォント登録の重複防止チェック追加
+    2. UnicodeCIDFont（組み込み）への移行検討
+    3. 環境変数FONT_PATHによる設定対応
+
+- id: ISSUE-044
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  resolved_at: '2026-01-06T04:00:00'
+  title: PDF生成のレイアウトエンジン統一
+  label: 解決済み
+  description: |
+    coreとservices/reportsでPDF生成方式が異なり、品質差異が発生。
+
+    【差異】
+    - core: Platypus（高レベルAPI）- Table, Paragraph, 自動改ページ
+    - services: Canvas（低レベルAPI）- drawString, 手動レイアウト
+
+    【影響】
+    - テーブルレイアウトの品質差
+    - 改ページ処理の複雑さ
+    - セル結合機能の欠如
+  status: investigated
+  priority: medium
+  category: pdf-generation
+  affected_files:
+    - UrawaCup/new/src/backend/services/reports/daily_report.py
+    - core/generate_daily_report_pdf.py
+  solution: |
+    coreのPlatypus実装をservices/reportsに統合:
+    1. BaseReportGeneratorにPlatypus対応を追加
+    2. daily_report.pyをPlatypus方式に移行
+    3. 既存Canvas実装はフォールバックとして保持
+
+- id: ISSUE-045
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: 最終結果報告書の日付取得エラー
+  label: 調査済み
+  description: |
+    final_result_report.pyで最終日日付が開始日を参照している。
+
+    【問題コード】
+    final_date = data.tournament.start_date  # 最終日ではなく開始日
+
+    【影響】
+    - 報告書の日付が誤って表示される
+    - Day3の試合日が正しく取得されない
+  status: investigated
+  priority: high
+  category: bug
+  affected_files:
+    - UrawaCup/new/src/backend/services/reports/final_result_report.py
+  solution: |
+    tournament.end_dateを使用するよう修正:
+    final_date = data.tournament.end_date or (data.tournament.start_date + timedelta(days=2))
+
+- id: ISSUE-046
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: エラーメッセージの詳細化不足
+  label: 調査済み
+  description: |
+    フロントエンド全体でエラーメッセージが一般的すぎる。
+
+    【問題箇所】
+    - CSVインポート: 何行目で失敗したか不明
+    - スコア入力: バリデーションエラーの詳細不明
+    - 日程生成: どのグループ/チームが問題か不明
+
+    【影響】
+    - ユーザーが問題を特定できない
+    - サポート問い合わせの増加
+  status: investigated
+  priority: high
+  category: ux
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/TeamManagement.tsx
+    - UrawaCup/new/src/frontend/src/pages/MatchResult.tsx
+    - UrawaCup/new/src/frontend/src/pages/MatchSchedule.tsx
+  solution: |
+    1. バックエンドからの詳細エラー情報を保持
+    2. フィールドレベルのエラー表示実装
+    3. エラーコード別のメッセージ辞書作成
+
+- id: ISSUE-047
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: スコア入力の整合性チェック不足
+  label: 調査済み
+  description: |
+    前半・後半スコアと合計の整合性チェックがない。
+
+    【問題】
+    - 前半2-1、後半1-0を入力し、合計を3-2と手入力可能
+    - 矛盾を検出できない
+
+    【影響】
+    - データの整合性が保証されない
+    - 順位表計算に誤りが発生する可能性
+  status: investigated
+  priority: high
+  category: validation
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/MatchResult.tsx
+    - UrawaCup/new/src/backend/schemas/match.py
+  solution: |
+    1. フロントエンド: 合計を自動計算し、手入力不可に
+    2. バックエンド: スキーマバリデータで整合性チェック追加
+    3. PK戦スコアの入力条件チェック（同点終了時のみ）
+
+- id: ISSUE-048
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: 承認待ち一覧の自動更新なし
+  label: 調査済み
+  description: |
+    MatchApproval.tsxで承認待ち一覧が自動更新されない。
+
+    【問題】
+    - fetchPendingMatches()は初回のみ呼び出し
+    - 他の管理者が承認した試合が表示されたまま
+    - 手動更新ボタンもない
+
+    【影響】
+    - 複数管理者環境で混乱
+    - 二重承認の可能性
+  status: investigated
+  priority: medium
+  category: ux
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/MatchApproval.tsx
+  solution: |
+    1. React QueryのrefetchInterval追加（10秒程度）
+    2. WebSocket通知との連携
+    3. 承認/却下後にqueryClient.invalidateQueries実行
+
+- id: ISSUE-049
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: ドラッグ&ドロップ失敗時の復帰処理なし
+  label: 調査済み
+  description: |
+    MatchSchedule.tsxでチーム入れ替えが失敗した場合、UIが不整合状態に。
+
+    【問題】
+    - API エラーでチーム入れ替え失敗時
+    - UIは変更されたまま
+    - ユーザーに失敗が伝わらない
+
+    【影響】
+    - データとUIの不整合
+    - ユーザーの混乱
+  status: investigated
+  priority: medium
+  category: ux
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/MatchSchedule.tsx
+  solution: |
+    1. オプティミスティック更新のロールバック実装
+    2. 失敗時に元の状態に復帰
+    3. エラートースト表示
+
+- id: ISSUE-050
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: 背番号重複チェックなし
+  label: 調査済み
+  description: |
+    PlayerManagement.tsxで同一チーム内の背番号重複チェックがない。
+
+    【問題】
+    - 背番号inputに1-99の制約のみ
+    - 同じチーム内での背番号重複を検出できない
+
+    【影響】
+    - データ品質の低下
+    - 得点者サジェストで混乱
+  status: investigated
+  priority: medium
+  category: validation
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/PlayerManagement.tsx
+    - UrawaCup/new/src/backend/routes/players.py
+  solution: |
+    1. フロントエンド: 保存前に重複チェック
+    2. バックエンド: ユニーク制約またはバリデーション追加
+    3. 重複時のエラーメッセージ表示
+
+- id: ISSUE-051
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: Layout.tsxのtournamentIdハードコード
+  label: 調査済み
+  description: |
+    Layout.tsx L104でtournamentIdが1にハードコードされている。
+
+    【問題】
+    - 複数大会運用時に対応不可
+    - 大会切り替えができない
+
+    【影響】
+    - システム全体で1大会のみの運用に制限
+  status: investigated
+  priority: medium
+  category: frontend
+  affected_files:
+    - UrawaCup/new/src/frontend/src/components/Layout.tsx
+  solution: |
+    useAppStoreから現在の大会IDを取得:
+    const { currentTournament } = useAppStore()
+    const tournamentId = currentTournament?.id || 1
+
+- id: ISSUE-052
+  created_at: '2026-01-06T02:00:00'
+  investigated_at: '2026-01-06T02:00:00'
+  title: 決勝トーナメント生成の前提チェック不足
+  label: 調査済み
+  description: |
+    決勝トーナメント生成時に予選リーグ完了チェックが不十分。
+
+    【問題】
+    - hasPreliminaryMatchesのみチェック
+    - 全試合が完了しているかは未確認
+    - 順位が確定していなくても生成可能
+
+    【影響】
+    - 不完全な順位での決勝T生成
+    - 結果の信頼性低下
+  status: investigated
+  priority: medium
+  category: business-logic
+  affected_files:
+    - UrawaCup/new/src/frontend/src/pages/MatchSchedule.tsx
+    - UrawaCup/new/src/backend/routes/matches.py
+  solution: |
+    1. 全予選試合のstatus=completedチェック追加
+    2. 未完了試合がある場合は警告表示
+    3. 強制生成オプションの追加（警告付き）
+
+# 実装分析（implementation_analysis.md）で発見したイシュー（ISSUE-053〜058）
+
+- id: ISSUE-053
+  created_at: '2026-01-06T05:00:00'
+  investigated_at: '2026-01-06T05:00:00'
+  title: 選手編集・削除UIがスタブ状態（F-20）
+  label: 調査済み
+  description: |
+    PlayerManagement.tsxで選手の編集・削除機能が不完全。
+
+    【要件】
+    F-20: 選手編集・削除
+    - 優先度: 高
+
+    【現状】
+    impl-repo/src/frontend/src/pages/PlayerManagement.tsx:
+    - 編集ボタンは存在するが、モーダルが簡易実装
+    - 削除ボタンは存在するが確認ダイアログなし
+    - バックエンドAPIは完全実装済み
+
+    【比較】TeamManagement.tsx:
+    - 同様の問題あり（ISSUE-033参照）
+  status: investigated
+  priority: high
+  category: frontend
+  requirement_ref: F-20
+  affected_files:
+    - impl-repo/src/frontend/src/pages/PlayerManagement.tsx
+  solution: |
+    1. 編集モーダルに全フィールド（背番号、氏名、ふりがな、学年、ポジション、キャプテン）を追加
+    2. 削除確認ダイアログを実装
+    3. 入力バリデーション（背番号重複チェック等）を追加
+    4. エラーメッセージの詳細化
+
+- id: ISSUE-054
+  created_at: '2026-01-06T05:00:00'
+  investigated_at: '2026-01-06T05:00:00'
+  title: 最終日組み合わせ表PDF未実装（F-82）
+  label: 調査済み
+  description: |
+    最終日の決勝トーナメント・研修試合組み合わせ表のPDF出力が未実装。
+
+    【要件】
+    F-82: 最終日組み合わせ表PDF出力
+    - 優先度: 高
+
+    【現状】
+    impl-repo/src/backend/reports/:
+    - daily_report.py: 日次報告書のみ
+    - final_result.py: 最終結果報告書のみ
+    - 最終日組み合わせ表のジェネレータなし
+
+    【必要な出力内容】
+    - 決勝トーナメント表（準決勝、3位決定戦、決勝）
+    - 研修試合組み合わせ表
+    - 会場・時間割当表
+  status: investigated
+  priority: high
+  category: feature
+  requirement_ref: F-82
+  affected_files:
+    - impl-repo/src/backend/reports/
+    - impl-repo/src/backend/routes/reports.py
+  solution: |
+    1. reports/final_day_schedule.py を新規作成
+    2. FinalDayScheduleGenerator クラスを実装
+    3. 決勝トーナメント表のレイアウト（ブラケット形式）
+    4. 研修試合のテーブル形式出力
+    5. GET /api/reports/final-day-schedule/pdf エンドポイント追加
+
+- id: ISSUE-055
+  created_at: '2026-01-06T05:00:00'
+  investigated_at: '2026-01-06T05:00:00'
+  title: Excelインポート機能未実装
+  label: 調査済み
+  description: |
+    選手インポート機能でExcelファイル（.xlsx）がサポートされていない。
+
+    【問題】
+    impl-repo/src/backend/routes/players.py (L202-206):
+    - ファイル拡張子チェックで.csv/.txtのみ許可
+    - .xlsxは明示的に拒否される
+    - docstringには"CSV/Excel"と記載（不整合）
+
+    【影響】
+    - Excel形式の選手名簿を直接インポートできない
+    - ユーザーはCSVに変換する手間が必要
+  status: investigated
+  priority: medium
+  category: feature
+  affected_files:
+    - impl-repo/src/backend/routes/players.py
+  solution: |
+    1. openpyxlライブラリをrequirements.txtに追加
+    2. ファイル拡張子チェックに.xlsxを追加
+    3. Excelファイル読み込み処理を追加
+    4. ヘッダー行の自動検出ロジック実装
+
+- id: ISSUE-056
+  created_at: '2026-01-06T05:00:00'
+  investigated_at: '2026-01-06T05:00:00'
+  title: 実装完了率74%、残り26%の機能一覧
+  label: 調査済み
+  description: |
+    implementation_analysis.mdの分析結果に基づく未実装機能の一覧。
+
+    【完全実装済み（74%）】
+    - 大会管理（F-01〜04）
+    - チーム管理（F-10〜14）
+    - 選手CRUD（F-20,21,23,24）
+    - スタッフ管理（F-30〜31）
+    - 会場管理（F-40〜42）
+    - 日程管理（F-50〜55）
+    - 試合結果入力（F-60〜65）
+    - 順位表・得点ランキング（F-70〜72）
+    - 日次報告書（F-80）
+    - 公開画面（F-90〜92）
+
+    【部分実装（18%）】
+    - 選手編集・削除UI（F-20）→ ISSUE-053
+    - 参加申込書インポート（F-22）→ ISSUE-042
+    - 最終結果報告書（F-81）→ API実装済み、UI未テスト
+    - グループ順位表PDF（F-83）→ 基本実装済み
+
+    【未実装（8%）】
+    - 最終日組み合わせ表PDF（F-82）→ ISSUE-054
+    - PWA/オフライン（F-100〜103）→ ISSUE-013で一部対応
+  status: investigated
+  priority: medium
+  category: summary
+  solution: |
+    優先実装順序:
+    1. F-20 選手編集・削除UI（高優先度）
+    2. F-82 最終日組み合わせ表PDF（高優先度）
+    3. F-22 参加申込書インポート（中優先度）
+    4. F-100〜103 PWA/オフライン（低優先度）
+
+- id: ISSUE-057
+  created_at: '2026-01-06T05:00:00'
+  investigated_at: '2026-01-06T05:00:00'
+  title: チーム削除UI未実装（F-10）
+  label: 調査済み
+  description: |
+    TeamManagement.tsxでチーム削除機能のUIが未実装。
+
+    【要件】
+    F-10: チーム削除
+    - 優先度: 中
+
+    【現状】
+    impl-repo/src/frontend/src/pages/TeamManagement.tsx:
+    - 削除ボタンなし
+    - useDeleteTeam()フックは定義済みだが未使用
+    - バックエンド DELETE /api/teams/{id} は実装済み
+
+    【関連】
+    ISSUE-033（UrawaCup/newでの同様の問題）と同一
+  status: investigated
+  priority: medium
+  category: frontend
+  requirement_ref: F-10
+  affected_files:
+    - impl-repo/src/frontend/src/pages/TeamManagement.tsx
+    - impl-repo/src/frontend/src/features/teams/hooks.ts
+  solution: |
+    PlayerManagement.tsxの削除機能をコピーして適用:
+    1. confirmDelete()関数追加
+    2. handleDelete()関数追加
+    3. 削除確認モーダルJSX追加
+    4. テーブル行に「削除」ボタン追加
+
+- id: ISSUE-059
+  created_at: '2026-01-06T05:30:00'
+  investigated_at: '2026-01-06T05:30:00'
+  title: テスト認証ヘッダーがAPI検証で無効（401エラー）
+  label: 調査済み
+  description: |
+    test_final_day.py の test_generate_finals_requires_standings テストが
+    期待する400ではなく401（Unauthorized）を返す。
+
+    【テストコード】(L278-297)
+    def test_generate_finals_requires_standings(...):
+        user = create_test_user(test_session)
+        ...
+        response = client.post(
+            f"/api/matches/generate-finals/{tournament.id}",
+            headers=get_auth_headers(user),  # ← 認証ヘッダー付き
+        )
+        assert response.status_code == 400  # ← 実際は401
+
+    【get_auth_headers関数】(L122-125)
+    def get_auth_headers(user: User) -> dict:
+        token = create_access_token({"sub": str(user.id)})
+        return {"Authorization": f"Bearer {token}"}
+
+    【原因推測】
+    1. テスト用DBセッションとAPI側DBセッションが分離
+    2. create_test_user()で作成したユーザーがAPI側から参照不可
+    3. トークンは有効だがユーザーが見つからず401
+
+    【影響】
+    - 認証が必要なすべてのテストで同様の問題が発生する可能性
+  status: investigated
+  priority: high
+  category: test
+  affected_files:
+    - UrawaCup/new/src/backend/tests/test_final_day.py
+    - UrawaCup/new/src/backend/tests/conftest.py
+  solution: |
+    1. conftest.pyのclientフィクスチャでDBセッションが正しくオーバーライドされているか確認
+    2. get_db依存性のオーバーライドがテストセッションを返すよう修正
+    3. テスト内でユーザー作成後にセッションをコミット/フラッシュ確認
+
+- id: ISSUE-058
+  created_at: '2026-01-06T05:00:00'
+  investigated_at: '2026-01-06T05:00:00'
+  title: impl-repoテストファイル不足
+  label: 調査済み
+  description: |
+    impl-repoにはテストファイルが存在しない。
+
+    【現状】
+    impl-repo/src/backend/tests/:
+    - ディレクトリが空、または最小限のファイルのみ
+
+    UrawaCup/new/src/backend/tests/:
+    - test_final_day.py等が存在
+    - ただし8件中8件が失敗（ISSUE-031）
+
+    【影響】
+    - リグレッションテストなし
+    - リファクタリング時の安全性担保なし
+    - CI/CD構築不可
+  status: investigated
+  priority: high
+  category: test
+  affected_files:
+    - impl-repo/src/backend/tests/
+  solution: |
+    1. テスト基盤の構築（pytest, pytest-asyncio）
+    2. 最低限のテストケース作成:
+       - 認証APIテスト
+       - 試合スコア入力テスト
+       - 順位計算テスト
+       - PDF生成テスト
+    3. GitHub Actions CI設定

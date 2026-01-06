@@ -1,0 +1,68 @@
+{
+  "test_date": "2026-01-04T19:09:52.481698",
+  "summary": {
+    "success": 2,
+    "errors": 2,
+    "warnings": 5
+  },
+  "successes": [
+    {
+      "endpoint": "/health",
+      "message": "サーバー稼働中",
+      "timestamp": "2026-01-04T19:09:51.428894"
+    },
+    {
+      "endpoint": "/tournaments/1",
+      "message": "startDate=2027-03-20 (camelCase OK)",
+      "timestamp": "2026-01-04T19:09:52.101402"
+    }
+  ],
+  "errors": [
+    {
+      "endpoint": "/tournaments",
+      "type": "HTTP Error",
+      "message": "Status: 307",
+      "details": null,
+      "timestamp": "2026-01-04T19:09:52.034303"
+    },
+    {
+      "endpoint": "/teams",
+      "type": "HTTP Error",
+      "message": "Status: 307",
+      "details": null,
+      "timestamp": "2026-01-04T19:09:52.113976"
+    }
+  ],
+  "warnings": [
+    {
+      "endpoint": "/auth/login",
+      "message": "ログイン失敗 (Status: 401) - 管理者未作成の可能性",
+      "details": null,
+      "timestamp": "2026-01-04T19:09:52.018408"
+    },
+    {
+      "endpoint": "/venues",
+      "message": "Status: 307",
+      "details": null,
+      "timestamp": "2026-01-04T19:09:52.157618"
+    },
+    {
+      "endpoint": "/matches",
+      "message": "Status: 307",
+      "details": null,
+      "timestamp": "2026-01-04T19:09:52.192411"
+    },
+    {
+      "endpoint": "/standings/1",
+      "message": "順位データが存在しない",
+      "details": null,
+      "timestamp": "2026-01-04T19:09:52.391137"
+    },
+    {
+      "endpoint": "/standings/1/top-scorers",
+      "message": "データなし",
+      "details": null,
+      "timestamp": "2026-01-04T19:09:52.400584"
+    }
+  ]
+}

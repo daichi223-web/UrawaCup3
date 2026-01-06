@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python agent_check.py:*)",
+      "Bash(git push)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
