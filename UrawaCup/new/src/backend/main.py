@@ -162,7 +162,7 @@ app.add_middleware(
         "http://127.0.0.1:5174",
         "http://localhost:5175",
         "http://127.0.0.1:5175",
-        "https://frontend-two-teal-26.vercel.app",  # Vercel本番
+        "https://urawa-cup2.vercel.app",  # Vercel本番
         *cors_origins,  # 環境変数から追加
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",  # 全てのVercelプレビューURL
