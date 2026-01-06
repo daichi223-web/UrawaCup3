@@ -160,14 +160,17 @@ function TeamManagement() {
             onChange={handleCsvImport}
             className="hidden"
           />
-          <button 
-            className="btn-secondary" 
+          <button
+            className="btn-secondary"
             onClick={() => csvFileInputRef.current?.click()}
             disabled={importCsvMutation.isPending}
           >
             {importCsvMutation.isPending ? 'インポート中...' : 'CSVインポート'}
           </button>
           <button className="btn-primary" onClick={() => setShowAddModal(true)}>チーム追加</button>
+          <Link to="/players" className="btn-secondary bg-green-600 text-white hover:bg-green-700">
+            選手管理
+          </Link>
         </div>
       </div>
 
@@ -256,18 +259,20 @@ function TeamManagement() {
                       ) : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      <button
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                        onClick={() => openEditModal(team)}
-                      >
-                        編集
-                      </button>
-                      <Link
-                        to={`/players?team=${team.id}`}
-                        className="text-green-600 hover:text-green-900"
-                      >
-                        選手管理
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="px-3 py-1 text-sm text-blue-600 border border-blue-600 rounded hover:bg-blue-50"
+                          onClick={() => openEditModal(team)}
+                        >
+                          編集
+                        </button>
+                        <Link
+                          to={`/players?team=${team.id}`}
+                          className="px-3 py-1 text-sm text-white bg-green-600 rounded hover:bg-green-700"
+                        >
+                          選手登録
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))
