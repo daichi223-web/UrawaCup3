@@ -16,7 +16,9 @@ services:
       - key: DATABASE_URL
         value: sqlite:///./data/urawacup.db
       - key: ALLOWED_ORIGINS
-        value: https://urawacup.onrender.com
+        value: "*"
+      - key: ADMIN_PASSWORD
+        value: admin123
     disk:
       name: data
       mountPath: /app/data

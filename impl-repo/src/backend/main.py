@@ -53,21 +53,22 @@ app = FastAPI(
     redoc_url="/api/redoc" if ENV != "production" else None,
 )
 
-# CORS middleware（本番環境では許可オリジンを限定）
-if ENV == "production":
+# CORS middleware
+# ALLOWED_ORIGINS が "*" の場合は全オリジン許可
+if ALLOWED_ORIGINS == ["*"] or "*" in ALLOWED_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=ALLOWED_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_origins=["*"],
+        allow_credentials=False,  # allow_origins=["*"] の場合は False にする必要がある
+        allow_methods=["*"],
         allow_headers=["*"],
     )
 else:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=ALLOWED_ORIGINS,
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
 
