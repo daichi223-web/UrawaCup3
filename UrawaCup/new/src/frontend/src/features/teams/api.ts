@@ -51,10 +51,9 @@ export const teamApi = {
   importCsv: async (tournamentId: number, file: File): Promise<{ imported: number }> => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('tournamentId', String(tournamentId));
 
     const response = await httpClient.post<{ imported: number }>(
-      '/teams/import-csv',
+      `/teams/import-csv?tournament_id=${tournamentId}`,
       formData,
       {
         headers: { 'Content-Type': 'multipart/form-data' },
