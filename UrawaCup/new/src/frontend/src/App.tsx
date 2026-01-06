@@ -162,6 +162,7 @@ function App() {
             <Route index element={<Navigate to="matches" replace />} />
             <Route path="matches" element={<PublicMatchList />} />
             <Route path="standings" element={<PublicStandings />} />
+            <Route path="scorers" element={<ScorerRanking />} />
           </Route>
 
           {/* 404リダイレクト */}
