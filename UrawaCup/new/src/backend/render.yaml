@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: urawacup-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://frontend-two-teal-26.vercel.app
+    healthCheckPath: /health
