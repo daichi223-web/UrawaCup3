@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { reportApi } from '@/features/reports';
 import { useSenderSettings, useUpdateSenderSettings } from '@/features/reports/hooks';
-import { httpClient } from '@/core/http';
+import { matchesApi, venuesApi } from '@/lib/api';
 import { FileText, Download, Trophy, Calendar, Table, Eye, X, Clock, Edit2, Save } from 'lucide-react'
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/stores/appStore';
@@ -146,17 +146,41 @@ function Reports() {
     try {
       setPreviewLoading(true);
       const targetDate = dateMap[date];
-      const venue = venueId ? parseInt(venueId) : undefined;
+      const venueIdNum = venueId ? parseInt(venueId) : undefined;
 
-      const response = await httpClient.get<ReportPreviewData>('/reports/data', {
-        params: {
-          tournament_id: tournamentId,
-          target_date: targetDate,
-          venue_id: venue,
-        }
+      // Supabase APIを使用してプレビューデータを取得
+      const { matches } = await matchesApi.getAll(tournamentId);
+
+      // 日付とオプションの会場でフィルタリング
+      const filteredMatches = matches.filter((m: any) => {
+        const matchDate = m.match_date === targetDate;
+        const matchVenue = venueIdNum ? m.venue_id === venueIdNum : true;
+        return matchDate && matchVenue;
       });
 
-      setPreviewData(response.data);
+      // 会場情報を取得
+      let venueInfo = null;
+      if (venueIdNum) {
+        const venues = await venuesApi.getAll(tournamentId);
+        venueInfo = venues.find((v: any) => v.id === venueIdNum) || null;
+      }
+
+      // プレビュー形式に変換
+      const previewMatches: MatchPreview[] = filteredMatches.map((m: any) => ({
+        id: m.id,
+        match_time: m.match_time,
+        home_team: m.home_team || { name: '未定' },
+        away_team: m.away_team || { name: '未定' },
+        home_score: m.home_score_total,
+        away_score: m.away_score_total,
+        status: m.status,
+      }));
+
+      setPreviewData({
+        date: targetDate,
+        venue: venueInfo ? { id: venueInfo.id, name: venueInfo.name } : null,
+        matches: previewMatches,
+      });
       setShowPreview(true);
     } catch (err: unknown) {
       console.error(err);

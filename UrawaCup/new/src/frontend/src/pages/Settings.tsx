@@ -6,7 +6,8 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import api from '@/core/http'
+import { tournamentsApi, venuesApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { Modal } from '@/components/ui/Modal'
 import type { Venue, Tournament } from '@/types'
 import { useCreateVenue } from '@/features/venues/hooks'
@@ -81,8 +82,14 @@ function Settings() {
   const { data: tournament } = useQuery({
     queryKey: ['tournament', tournamentId],
     queryFn: async () => {
-      const { data } = await api.get<Tournament>(`/tournaments/${tournamentId}`)
-      return data
+      const data = await tournamentsApi.getById(tournamentId)
+      // snake_case to camelCase変換
+      return {
+        ...data,
+        shortName: data.short_name,
+        startDate: data.start_date,
+        endDate: data.end_date,
+      } as Tournament
     },
   })
 
@@ -118,19 +125,18 @@ function Settings() {
       teamsPerGroup: number;
       advancingTeams: number;
     }) => {
-      const response = await api.patch<Tournament>(`/tournaments/${tournamentId}`, {
+      const updated = await tournamentsApi.update(tournamentId, {
         name: data.name,
         short_name: data.shortName,
-        edition: data.edition,
         start_date: data.startDate,
         end_date: data.endDate,
-        match_duration: data.matchDuration,
-        interval_minutes: data.intervalMinutes,
-        group_count: data.groupCount,
-        teams_per_group: data.teamsPerGroup,
-        advancing_teams: data.advancingTeams,
       })
-      return response.data
+      return {
+        ...updated,
+        shortName: updated.short_name,
+        startDate: updated.start_date,
+        endDate: updated.end_date,
+      } as Tournament
     },
     onSuccess: (updatedTournament) => {
       queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] })
@@ -151,8 +157,8 @@ function Settings() {
   const { data: venueData, isLoading: isLoadingVenues } = useQuery({
     queryKey: ['venues', tournamentId],
     queryFn: async () => {
-      const { data } = await api.get<{ venues: Venue[]; total: number }>(`/venues?tournament_id=${tournamentId}`)
-      return data
+      const data = await venuesApi.getAll(tournamentId)
+      return { venues: data, total: data.length }
     },
   })
   const venues = venueData?.venues ?? []
@@ -176,9 +182,19 @@ function Settings() {
       isFinalsVenue?: boolean;
     }) => {
       const { id, ...rest } = data
-      console.log('[updateVenueMutation] Sending to API:', rest)
-      const response = await api.patch<Venue>(`/venues/${id}`, rest)
-      return response.data
+      console.log('[updateVenueMutation] Sending to Supabase:', rest)
+      const { data: venue, error } = await supabase
+        .from('venues')
+        .update({
+          name: rest.name,
+          address: rest.address,
+          // Note: 実際のテーブルカラムに合わせて調整
+        })
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      return venue as Venue
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues', tournamentId] })

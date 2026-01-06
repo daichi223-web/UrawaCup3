@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { exclusionApi } from '@/features/exclusions';
+import { teamsApi } from '@/lib/api';
 import { GroupExclusions, Team } from '@shared/types';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { Trash2, Info } from 'lucide-react';
@@ -156,8 +157,6 @@ function ExclusionSettings() {
 }
 
 // マトリクスコンポーネント（チーム取得ロジック含む）
-import api from '@/core/http'; // Use core http client to fetch teams
-
 function ExclusionMatrix({ groupData, tournamentId, onToggle }: {
     groupData: GroupExclusions,
     tournamentId: number,
@@ -168,9 +167,16 @@ function ExclusionMatrix({ groupData, tournamentId, onToggle }: {
 
     useEffect(() => {
         const fetchTeams = async () => {
-            const res = await api.get<{ teams: Team[]; total: number }>(`/teams/?tournament_id=${tournamentId}&group_id=${groupData.groupId}`);
-            setTeams(res.data.teams);
-            setLoading(false);
+            try {
+                const { teams: allTeams } = await teamsApi.getAll(tournamentId);
+                // グループIDでフィルタリング
+                const filteredTeams = allTeams.filter((t: any) => t.group_id === groupData.groupId);
+                setTeams(filteredTeams as Team[]);
+            } catch (err) {
+                console.error('Failed to fetch teams:', err);
+            } finally {
+                setLoading(false);
+            }
         };
         fetchTeams();
     }, [groupData.groupId, tournamentId]);
