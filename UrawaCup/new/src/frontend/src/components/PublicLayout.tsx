@@ -1,8 +1,35 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Trophy, Calendar, List } from 'lucide-react';
+import { useAppStore } from '@/stores/appStore';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import api from '@/core/http';
+import type { Tournament } from '@shared/types';
 
 function PublicLayout() {
     const location = useLocation();
+    const { currentTournament, setCurrentTournament } = useAppStore();
+
+    // 大会情報を取得（まだストアにない場合）
+    const { data: tournament } = useQuery({
+        queryKey: ['tournament', 1],
+        queryFn: async () => {
+            const { data } = await api.get<Tournament>('/tournaments/1');
+            return data;
+        },
+        enabled: !currentTournament, // ストアにない場合のみ取得
+    });
+
+    // ストアに保存
+    useEffect(() => {
+        if (tournament && !currentTournament) {
+            setCurrentTournament(tournament);
+        }
+    }, [tournament, currentTournament, setCurrentTournament]);
+
+    // 大会名を取得（設定されていなければデフォルト）
+    const activeTournament = currentTournament || tournament;
+    const tournamentName = activeTournament?.shortName || activeTournament?.name || '浦和カップ';
 
     return (
         <div className="min-h-screen bg-gray-50 pb-20">
@@ -12,8 +39,10 @@ function PublicLayout() {
                     <div className="flex items-center gap-2">
                         <Trophy className="w-6 h-6 text-yellow-400" />
                         <div>
-                            <h1 className="font-bold text-lg leading-tight">浦和カップ</h1>
-                            <p className="text-[10px] text-red-100 opacity-90">高校サッカーフェスティバル</p>
+                            <h1 className="font-bold text-lg leading-tight">{tournamentName}</h1>
+                            <p className="text-[10px] text-red-100 opacity-90">
+                                {activeTournament?.year ? `${activeTournament.year}年度` : '高校サッカーフェスティバル'}
+                            </p>
                         </div>
                     </div>
                     {/* Link to Admin */}

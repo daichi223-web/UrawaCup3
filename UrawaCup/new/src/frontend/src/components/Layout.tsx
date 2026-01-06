@@ -155,7 +155,9 @@ function Layout({ children }: LayoutProps) {
             <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
               <Trophy className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-lg text-gray-900">浦和カップ</span>
+            <span className="font-bold text-lg text-gray-900 truncate max-w-[160px]" title={tournament?.name || '浦和カップ'}>
+              {tournament?.shortName || tournament?.name || '浦和カップ'}
+            </span>
           </Link>
         </div>
 
@@ -240,11 +242,11 @@ function Layout({ children }: LayoutProps) {
 
         {/* フッター情報 */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
-          <p className="text-xs text-gray-500 text-center">
-            浦和カップ トーナメント管理システム
+          <p className="text-xs text-gray-500 text-center truncate">
+            {tournament?.name || '浦和カップ'} 管理システム
           </p>
           <p className="text-xs text-gray-400 text-center mt-1">
-            Version 1.0.0
+            {tournament?.year ? `${tournament.year}年度` : 'Version 1.0.0'}
           </p>
         </div>
       </aside>

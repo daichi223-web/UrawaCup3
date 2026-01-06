@@ -168,12 +168,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="flex-shrink-0 p-4 border-t border-gray-200">
           <div className="flex items-center gap-3 px-4 py-2">
             <div className="w-2 h-2 rounded-full bg-green-500" />
-            <p className="text-xs text-gray-500">
-              浦和カップ トーナメント管理システム
+            <p className="text-xs text-gray-500 truncate">
+              {currentTournament?.name || '浦和カップ'} 管理システム
             </p>
           </div>
           <p className="text-xs text-gray-400 text-center mt-1">
-            Version 1.0.0
+            {currentTournament?.year ? `${currentTournament.year}年度` : 'Version 1.0.0'}
           </p>
         </div>
       </aside>
