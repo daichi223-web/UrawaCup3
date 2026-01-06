@@ -60,6 +60,7 @@ app = FastAPI(
     description="さいたま市招待高校サッカーフェスティバル浦和カップの運営管理API",
     version="1.0.0",
     lifespan=lifespan,
+    redirect_slashes=False,  # スラッシュリダイレクトを無効化（CORS問題回避）
 )
 
 # CORS設定
@@ -78,9 +79,11 @@ app.add_middleware(
         "https://frontend-two-teal-26.vercel.app",  # Vercel本番
         *cors_origins,  # 環境変数から追加
     ],
+    allow_origin_regex=r"https://.*\.vercel\.app",  # 全てのVercelプレビューURL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # APIルーターを登録
