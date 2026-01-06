@@ -29,10 +29,10 @@ class Tournament(Base, TimestampMixin):
     half_duration = Column(Integer, nullable=False, default=25, comment="ハーフタイム（分）")
     interval_minutes = Column(Integer, nullable=False, default=15, comment="試合間インターバル（分）")
 
-    # チーム構成設定
-    group_count = Column(Integer, nullable=False, default=4, comment="グループ数（2/4/8）")
-    teams_per_group = Column(Integer, nullable=False, default=4, comment="グループ内チーム数（3-6）")
-    advancing_teams = Column(Integer, nullable=False, default=1, comment="決勝T進出チーム数（1-2）")
+    # チーム構成設定（既存DBへの後方互換のためnullable=True）
+    group_count = Column(Integer, nullable=True, default=4, comment="グループ数（2/4/8）")
+    teams_per_group = Column(Integer, nullable=True, default=4, comment="グループ内チーム数（3-6）")
+    advancing_teams = Column(Integer, nullable=True, default=1, comment="決勝T進出チーム数（1-2）")
 
     # 報告書発信元情報
     sender_organization = Column(String(100), nullable=True, comment="発信元所属（例：県立浦和高校）")
