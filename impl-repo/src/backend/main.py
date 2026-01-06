@@ -1,137 +1,152 @@
 """
-浦和カップ トーナメント管理システム - FastAPI アプリケーション
+UrawaCup Tournament Management System - FastAPI Application
 """
 
 import os
+import logging
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 
-from .database import init_db
-from .schemas.error import ErrorResponse, ErrorDetail
-from .utils.websocket import manager
+from .database import engine, Base
 
-# CORS設定（環境変数から取得、デフォルトは開発環境用）
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173,http://localhost:3000"
-).split(",")
+# ロギング設定
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# 環境変数
+ENV = os.getenv("ENV", "development")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """アプリケーション起動時にDBを初期化"""
-    init_db()
+    """アプリケーションライフサイクル"""
+    # 起動時
+    logger.info(f"Starting UrawaCup API in {ENV} mode")
+    Base.metadata.create_all(bind=engine)
     yield
+    # 終了時
+    logger.info("Shutting down UrawaCup API")
 
 
 app = FastAPI(
-    lifespan=lifespan,
-    title="浦和カップ API",
+    title="UrawaCup Tournament Management System",
     description="浦和カップ トーナメント管理システム API",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/api/docs" if ENV != "production" else None,
+    redoc_url="/api/redoc" if ENV != "production" else None,
 )
 
-# CORS設定（本番環境では ALLOWED_ORIGINS 環境変数を設定）
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
-)
-
-
-# 例外ハンドラ - 統一されたエラーレスポンス形式
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """HTTPExceptionを統一形式で返す"""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content=ErrorResponse(
-            error=ErrorDetail(
-                code=f"HTTP_{exc.status_code}",
-                message=exc.detail if isinstance(exc.detail, str) else str(exc.detail),
-                details=None
-            )
-        ).model_dump()
+# CORS middleware（本番環境では許可オリジンを限定）
+if ENV == "production":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALLOWED_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
 
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """ValidationErrorを統一形式で返す"""
+# ルーターをインポート・登録
+from .routes import (
+    auth,
+    tournaments,
+    teams,
+    players,
+    staff,
+    venues,
+    matches,
+    standings,
+    final_day,
+    reports,
+    reports_excel,
+    exclusions,
+)
+
+app.include_router(auth.router, prefix="/api/auth", tags=["認証"])
+app.include_router(tournaments.router, prefix="/api/tournaments", tags=["大会"])
+app.include_router(teams.router, prefix="/api/teams", tags=["チーム"])
+app.include_router(players.router, prefix="/api/players", tags=["選手"])
+app.include_router(staff.router, prefix="/api/staff", tags=["スタッフ"])
+app.include_router(venues.router, prefix="/api/venues", tags=["会場"])
+app.include_router(matches.router, prefix="/api/matches", tags=["試合"])
+app.include_router(standings.router, prefix="/api/standings", tags=["順位表"])
+app.include_router(final_day.router, prefix="/api/final-day", tags=["最終日"])
+app.include_router(reports.router, prefix="/api/reports", tags=["レポート"])
+app.include_router(reports_excel.router, prefix="/api/reports/excel", tags=["Excel出力"])
+app.include_router(exclusions.router, prefix="/api/exclusions", tags=["対戦除外"])
+
+
+# グローバルエラーハンドラー
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """グローバル例外ハンドラー"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
-        status_code=422,
-        content=ErrorResponse(
-            error=ErrorDetail(
-                code="VALIDATION_ERROR",
-                message="リクエストのバリデーションに失敗しました",
-                details=exc.errors()
-            )
-        ).model_dump()
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_SERVER_ERROR",
+                "message": "内部サーバーエラーが発生しました" if ENV == "production" else str(exc)
+            }
+        }
     )
 
 
 @app.get("/")
-async def root():
-    return {"message": "浦和カップ API", "version": "1.0.0"}
+def root():
+    """ルートエンドポイント"""
+    return {
+        "message": "UrawaCup Tournament Management System API",
+        "version": "1.0.0",
+        "docs": "/api/docs" if ENV != "production" else None
+    }
 
 
 @app.get("/api/health")
-async def health_check():
-    return {"status": "healthy"}
-
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, tournament_id: int = 0):
+def health_check():
     """
-    WebSocket接続エンドポイント
-    - リアルタイム更新通知を受信
-    - tournament_idで購読する大会を指定
-    """
-    # tournament_idが0の場合は全大会を購読（デフォルト）
-    if tournament_id == 0:
-        tournament_id = 1  # デフォルト大会
+    ヘルスチェックエンドポイント
 
-    await manager.connect(websocket, tournament_id)
+    監視システムからのポーリング用。
+    データベース接続も確認する。
+    """
+    from .database import SessionLocal
+
     try:
-        while True:
-            # クライアントからのメッセージを待機（ハートビート用）
-            data = await websocket.receive_text()
-            if data == "ping":
-                await websocket.send_text("pong")
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        db = SessionLocal()
+        db.execute("SELECT 1")
+        db.close()
+        db_status = "connected"
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "disconnected"
+
+    return {
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "database": db_status,
+        "environment": ENV
+    }
 
 
-# ルーター登録
-from .routes import (
-    tournaments_router,
-    teams_router,
-    matches_router,
-    standings_router,
-    players_router,
-    venues_router,
-    staff_router,
-    auth_router,
-    exclusions_router,
-    final_day_router,
-    reports_router,
-    reports_excel_router,
-)
-
-app.include_router(auth_router, prefix="/api/auth", tags=["認証"])
-app.include_router(tournaments_router, prefix="/api/tournaments", tags=["大会"])
-app.include_router(teams_router, prefix="/api/teams", tags=["チーム"])
-app.include_router(players_router, prefix="/api/players", tags=["選手"])
-app.include_router(matches_router, prefix="/api/matches", tags=["試合"])
-app.include_router(standings_router, prefix="/api/standings", tags=["順位表"])
-app.include_router(venues_router, prefix="/api/venues", tags=["会場"])
-app.include_router(staff_router, prefix="/api/staff", tags=["スタッフ"])
-app.include_router(exclusions_router, prefix="/api/exclusions", tags=["対戦除外設定"])
-app.include_router(final_day_router, prefix="/api", tags=["最終日"])
-app.include_router(reports_router, prefix="/api/reports", tags=["レポート"])
-app.include_router(reports_excel_router, prefix="/api/reports", tags=["レポートExcel"])
+# 公開API（認証不要）
+from .routes import public
+app.include_router(public.router, prefix="/api/public", tags=["公開"])

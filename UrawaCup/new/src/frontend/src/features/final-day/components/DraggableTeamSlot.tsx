@@ -14,8 +14,8 @@ interface DraggableTeamSlotProps {
 }
 
 export function DraggableTeamSlot({
-  matchId,
-  side,
+  matchId: _matchId,
+  side: _side,
   team,
   disabled = false,
   onClick,
