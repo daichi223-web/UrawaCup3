@@ -6,22 +6,51 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =====================================================
--- ENUM Types
+-- ENUM Types (skip if already exists)
 -- =====================================================
 
-CREATE TYPE team_type AS ENUM ('local', 'invited');
-CREATE TYPE match_stage AS ENUM ('preliminary', 'semifinal', 'third_place', 'final', 'training');
-CREATE TYPE match_status AS ENUM ('scheduled', 'in_progress', 'completed', 'cancelled');
-CREATE TYPE match_result AS ENUM ('home_win', 'away_win', 'draw');
-CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
-CREATE TYPE user_role AS ENUM ('admin', 'venue_staff', 'viewer');
+DO $$ BEGIN
+    CREATE TYPE team_type AS ENUM ('local', 'invited');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE match_stage AS ENUM ('preliminary', 'semifinal', 'third_place', 'final', 'training');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE match_status AS ENUM ('scheduled', 'in_progress', 'completed', 'cancelled');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE match_result AS ENUM ('home_win', 'away_win', 'draw');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE user_role AS ENUM ('admin', 'venue_staff', 'viewer');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- =====================================================
 -- Tables
 -- =====================================================
 
 -- 大会テーブル
-CREATE TABLE tournaments (
+CREATE TABLE IF NOT EXISTS tournaments (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
     short_name VARCHAR(100),

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { teamsApi } from '@/lib/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -149,11 +149,6 @@ function TeamManagement() {
     }
   };
 
-  // CSVインポート処理（Supabaseでは未サポート - 一括登録を使用）
-  const handleCsvImport = async (_event: React.ChangeEvent<HTMLInputElement>) => {
-    toast.error('CSVインポートは現在サポートされていません。一括登録を使用してください。');
-  };
-
   // 一括登録処理
   const handleBulkAdd = async () => {
     const lines = bulkText.split('\n').map(line => line.trim()).filter(line => line);
@@ -221,22 +216,8 @@ function TeamManagement() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <input
-            ref={csvFileInputRef}
-            type="file"
-            accept=".csv"
-            onChange={handleCsvImport}
-            className="hidden"
-          />
           <button
-            className="btn-secondary"
-            onClick={() => csvFileInputRef.current?.click()}
-            disabled={importCsvMutation.isPending}
-          >
-            {importCsvMutation.isPending ? 'インポート中...' : 'CSVインポート'}
-          </button>
-          <button
-            className="btn-secondary bg-purple-600 text-white hover:bg-purple-700"
+            className="btn-primary bg-purple-600 hover:bg-purple-700"
             onClick={() => setShowBulkModal(true)}
           >
             一括登録
