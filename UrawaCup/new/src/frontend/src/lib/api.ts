@@ -270,12 +270,11 @@ export const matchesApi = {
     const home_total = (score.home_score_half1 ?? 0) + (score.home_score_half2 ?? 0)
     const away_total = (score.away_score_half1 ?? 0) + (score.away_score_half2 ?? 0)
 
-    let result: 'home_win' | 'away_win' | 'draw' | null = null
-    if (score.status === 'completed') {
-      if (home_total > away_total) result = 'home_win'
-      else if (home_total < away_total) result = 'away_win'
-      else result = 'draw'
-    }
+    // スコアが入力されたら常に結果を計算（status に関係なく）
+    let result: 'home_win' | 'away_win' | 'draw'
+    if (home_total > away_total) result = 'home_win'
+    else if (home_total < away_total) result = 'away_win'
+    else result = 'draw'
 
     const { data, error } = await supabase
       .from('matches')
@@ -443,17 +442,26 @@ export const standingsApi = {
       const awayStats = stats.get(match.away_team_id)
       if (!homeStats || !awayStats) continue
 
+      const homeScore = match.home_score_total ?? 0
+      const awayScore = match.away_score_total ?? 0
+
       homeStats.played++
       awayStats.played++
-      homeStats.goals_for += match.home_score_total || 0
-      homeStats.goals_against += match.away_score_total || 0
-      awayStats.goals_for += match.away_score_total || 0
-      awayStats.goals_against += match.home_score_total || 0
+      homeStats.goals_for += homeScore
+      homeStats.goals_against += awayScore
+      awayStats.goals_for += awayScore
+      awayStats.goals_against += homeScore
 
-      if (match.result === 'home_win') {
+      // resultフィールドがない場合はスコアから勝敗を判定
+      const result = match.result || (
+        homeScore > awayScore ? 'home_win' :
+        homeScore < awayScore ? 'away_win' : 'draw'
+      )
+
+      if (result === 'home_win') {
         homeStats.won++
         awayStats.lost++
-      } else if (match.result === 'away_win') {
+      } else if (result === 'away_win') {
         awayStats.won++
         homeStats.lost++
       } else {
