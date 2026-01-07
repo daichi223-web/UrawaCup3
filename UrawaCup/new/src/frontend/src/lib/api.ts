@@ -15,6 +15,21 @@ import {
   normalizeJerseyNumber,
 } from '@/utils/normalize'
 import { getErrorMessage } from '@/utils/errorHandler'
+import {
+  validateId,
+  validateRequired,
+  validateTeamInput,
+  validatePlayerInput,
+  validateMatchUpdate,
+  validateGoalInput,
+  validateVenueInput,
+  ValidationError,
+} from '@/utils/validation'
+import {
+  ensureValidSession,
+  withRateLimitProtection,
+  checkExists,
+} from '@/utils/apiGuard'
 
 /**
  * Supabaseエラーを日本語メッセージ付きエラーに変換
@@ -22,6 +37,16 @@ import { getErrorMessage } from '@/utils/errorHandler'
 function handleSupabaseError(error: unknown): never {
   const message = getErrorMessage(error)
   throw new Error(message)
+}
+
+/**
+ * ValidationErrorを適切なメッセージでスロー
+ */
+function handleValidationError(error: unknown): never {
+  if (error instanceof ValidationError) {
+    throw error
+  }
+  throw error
 }
 
 // ============================================
@@ -66,6 +91,9 @@ export const tournamentsApi = {
 
 export const teamsApi = {
   async getAll(tournamentId: number) {
+    // 400対策: IDバリデーション
+    validateId(tournamentId, '大会ID')
+
     const { data, error } = await supabase
       .from('teams')
       .select('*')
@@ -77,6 +105,9 @@ export const teamsApi = {
   },
 
   async getById(id: number) {
+    // 400対策: IDバリデーション
+    validateId(id, 'チームID')
+
     const { data, error } = await supabase
       .from('teams')
       .select('*')
@@ -87,22 +118,48 @@ export const teamsApi = {
   },
 
   async create(team: Omit<Team, 'id' | 'created_at' | 'updated_at'>) {
+    // 401対策: セッション確認
+    await ensureValidSession()
+
+    // 400対策: 入力バリデーション
+    validateTeamInput({
+      name: team.name,
+      tournament_id: team.tournament_id,
+      team_type: team.team_type,
+    })
+
     // 全角半角正規化
     const normalizedTeam = {
       ...team,
       name: team.name ? normalizeTeamName(team.name) : team.name,
       short_name: team.short_name ? normalizeTeamName(team.short_name) : team.short_name,
     }
-    const { data, error } = await supabase
-      .from('teams')
-      .insert(normalizedTeam)
-      .select()
-      .single()
-    if (error) handleSupabaseError(error)
-    return data
+
+    // 402対策: レート制限付き実行
+    return withRateLimitProtection(async () => {
+      const { data, error } = await supabase
+        .from('teams')
+        .insert(normalizedTeam)
+        .select()
+        .single()
+      if (error) handleSupabaseError(error)
+      return data
+    })
   },
 
   async update(id: number, updates: Partial<Team>) {
+    // 401対策: セッション確認
+    await ensureValidSession()
+
+    // 400対策: IDバリデーション
+    validateId(id, 'チームID')
+
+    // 404対策: 存在確認
+    const exists = await checkExists('teams', id, 'チーム')
+    if (!exists) {
+      throw new Error('指定されたチームが見つかりません。')
+    }
+
     // 全角半角正規化
     const normalizedUpdates = { ...updates }
     if (normalizedUpdates.name) {
@@ -111,17 +168,33 @@ export const teamsApi = {
     if (normalizedUpdates.short_name) {
       normalizedUpdates.short_name = normalizeTeamName(normalizedUpdates.short_name)
     }
-    const { data, error } = await supabase
-      .from('teams')
-      .update(normalizedUpdates)
-      .eq('id', id)
-      .select()
-      .single()
-    if (error) handleSupabaseError(error)
-    return data
+
+    // 402対策: レート制限付き実行
+    return withRateLimitProtection(async () => {
+      const { data, error } = await supabase
+        .from('teams')
+        .update(normalizedUpdates)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) handleSupabaseError(error)
+      return data
+    })
   },
 
   async delete(id: number) {
+    // 401対策: セッション確認
+    await ensureValidSession()
+
+    // 400対策: IDバリデーション
+    validateId(id, 'チームID')
+
+    // 404対策: 存在確認
+    const exists = await checkExists('teams', id, 'チーム')
+    if (!exists) {
+      throw new Error('指定されたチームが見つかりません。')
+    }
+
     const { error } = await supabase
       .from('teams')
       .delete()
