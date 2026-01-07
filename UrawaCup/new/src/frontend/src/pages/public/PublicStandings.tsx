@@ -36,18 +36,25 @@ export default function PublicStandings() {
                 setError(null);
 
                 // 順位表データを取得（APIがチームへのフォールバックを含む）
+                console.log('[PublicStandings] Fetching standings for tournament 1...');
                 const data = await standingsApi.getByGroup(1);
+                console.log('[PublicStandings] API response:', JSON.stringify(data, null, 2));
 
                 // Transform Array to Map for easier access by tab
                 const standingsMap: Record<string, StandingData[]> = {};
                 if (Array.isArray(data)) {
+                    console.log('[PublicStandings] Data is array with', data.length, 'groups');
                     data.forEach((groupData: GroupStandingsData) => {
+                        console.log('[PublicStandings] Group:', groupData.groupId, 'has', groupData.standings?.length, 'teams');
                         if (groupData.groupId) {
                             standingsMap[groupData.groupId] = groupData.standings;
                         }
                     });
+                } else {
+                    console.log('[PublicStandings] Data is NOT an array:', typeof data);
                 }
 
+                console.log('[PublicStandings] Final standingsMap keys:', Object.keys(standingsMap));
                 setStandings(standingsMap);
             } catch (err) {
                 console.error("Failed to load standings", err);
@@ -71,9 +78,26 @@ export default function PublicStandings() {
 
     const currentGroupStandings = standings[activeTab] || [];
 
+    // デバッグ情報を表示
+    const showDebug = true; // TODO: 本番前にfalseにする
+
     return (
         <div className="space-y-4 pb-20">
             <h1 className="text-xl font-bold text-gray-800 px-1">予選リーグ順位表</h1>
+
+            {/* デバッグ情報（問題解決後に削除） */}
+            {showDebug && (
+                <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-xs space-y-1">
+                    <div className="font-bold text-yellow-800">🔍 デバッグ情報</div>
+                    <div>standings keys: [{Object.keys(standings).map(k => `"${k}"`).join(', ')}]</div>
+                    <div>activeTab: "{activeTab}"</div>
+                    <div>standings[activeTab]: {standings[activeTab] ? `${standings[activeTab].length}件` : 'undefined'}</div>
+                    <div>currentGroupStandings: {currentGroupStandings.length}件</div>
+                    {Object.entries(standings).map(([key, value]) => (
+                        <div key={key}>Group {key}: {value?.length || 0}チーム</div>
+                    ))}
+                </div>
+            )}
 
             {/* Tabs */}
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
