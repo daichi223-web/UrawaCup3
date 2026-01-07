@@ -98,24 +98,72 @@ export const matchApi = {
 
   // スコア入力
   updateScore: async (id: number, data: MatchScoreInput): Promise<Match> => {
+    // スコアを入力したら自動的に'completed'に設定
+    const status = data.status || 'completed';
+
     const match = await matchesApi.updateScore(id, {
       home_score_half1: data.homeScoreHalf1,
       home_score_half2: data.homeScoreHalf2,
       away_score_half1: data.awayScoreHalf1,
       away_score_half2: data.awayScoreHalf2,
-      status: data.status,
+      status: status,
     });
 
-    // スコア更新後に順位表を再計算
-    if (data.status === 'completed') {
-      const { data: matchData } = await supabase
-        .from('matches')
-        .select('tournament_id, group_id, stage')
-        .eq('id', id)
-        .single();
+    // 得点者を保存（既存の得点を削除して再登録）
+    if (data.goals && data.goals.length > 0) {
+      try {
+        // 既存の得点を削除
+        await supabase
+          .from('goals')
+          .delete()
+          .eq('match_id', id);
 
-      if (matchData?.stage === 'preliminary' && matchData.group_id) {
-        await standingsApi.recalculate(matchData.tournament_id, matchData.group_id);
+        // 新しい得点を登録
+        const goalsToInsert = data.goals.map(g => ({
+          match_id: id,
+          team_id: g.teamId,
+          player_id: g.playerId,
+          player_name: g.scorerName,
+          minute: g.minute,
+          half: g.half,
+          is_own_goal: g.isOwnGoal || false,
+        }));
+
+        const { error: goalsError } = await supabase
+          .from('goals')
+          .insert(goalsToInsert);
+
+        if (goalsError) {
+          console.error('[Goals] Failed to save goals:', goalsError);
+        }
+      } catch (err) {
+        console.error('[Goals] Error saving goals:', err);
+      }
+    } else {
+      // 得点者が空の場合は既存の得点を削除
+      await supabase
+        .from('goals')
+        .delete()
+        .eq('match_id', id);
+    }
+
+    // スコア更新後に順位表を再計算（予選リーグの場合）
+    if (status === 'completed') {
+      try {
+        const { data: matchData } = await supabase
+          .from('matches')
+          .select('tournament_id, group_id, stage')
+          .eq('id', id)
+          .single();
+
+        if (matchData?.stage === 'preliminary' && matchData.group_id) {
+          console.log('[Standings] Recalculating standings for group:', matchData.group_id);
+          await standingsApi.recalculate(matchData.tournament_id, matchData.group_id);
+          console.log('[Standings] Standings recalculated successfully');
+        }
+      } catch (err) {
+        console.error('[Standings] Failed to recalculate standings:', err);
+        // 順位表の再計算に失敗しても試合結果は保存済みなのでエラーは投げない
       }
     }
 

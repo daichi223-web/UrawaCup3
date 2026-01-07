@@ -74,6 +74,7 @@ export interface MatchScoreInput {
   homePk?: number;
   awayPk?: number;
   hasPenaltyShootout?: boolean;
+  status?: MatchStatus;
   goals?: Omit<Goal, 'id' | 'matchId'>[];
 }
 
