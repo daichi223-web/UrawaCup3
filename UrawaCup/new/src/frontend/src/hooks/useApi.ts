@@ -1,5 +1,13 @@
+/**
+ * ⚠️ DEPRECATED: このファイルは旧FastAPI用のカスタムフックです
+ * Supabase移行後は features/*/hooks.ts を使用してください。
+ *
+ * 例:
+ * - useTournaments → features/tournaments/hooks.ts
+ * - useTeams → features/teams/hooks.ts
+ * - useMatches → features/matches/hooks.ts
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import api from '@/core/http'
 import type {
   Tournament,
   Team,
@@ -7,6 +15,17 @@ import type {
   Standing,
   ApiResponse,
 } from '@shared/types'
+
+console.warn('[DEPRECATED] useApi.ts hooks are deprecated. Use features/*/hooks.ts instead.')
+
+// Deprecated API stub
+const api = {
+  get: async () => { throw new Error('[DEPRECATED] useApi.ts is not available. Use features/*/hooks.ts'); },
+  post: async () => { throw new Error('[DEPRECATED] useApi.ts is not available. Use features/*/hooks.ts'); },
+  put: async () => { throw new Error('[DEPRECATED] useApi.ts is not available. Use features/*/hooks.ts'); },
+  patch: async () => { throw new Error('[DEPRECATED] useApi.ts is not available. Use features/*/hooks.ts'); },
+  delete: async () => { throw new Error('[DEPRECATED] useApi.ts is not available. Use features/*/hooks.ts'); },
+} as Record<string, (...args: unknown[]) => Promise<{ data: unknown }>>
 
 /**
  * 大会一覧取得

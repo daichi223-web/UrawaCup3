@@ -1,7 +1,20 @@
+/**
+ * ⚠️ DEPRECATED: このファイルは旧FastAPI用のストアです
+ * Supabase移行後は features/teams/hooks.ts を使用してください。
+ */
 import { create } from 'zustand'
 import type { Team, TeamWithDetails, TeamCreate, TeamUpdate, Player, PlayerCreate } from '@shared/types'
-import api from '@/core/http'
 import toast from 'react-hot-toast'
+
+console.warn('[DEPRECATED] teamStore.ts is deprecated. Use features/teams/hooks.ts instead.')
+
+// Deprecated API stub
+const api = {
+  get: async () => { throw new Error('[DEPRECATED] teamStore is not available. Use features/teams/hooks.ts'); },
+  post: async () => { throw new Error('[DEPRECATED] teamStore is not available. Use features/teams/hooks.ts'); },
+  patch: async () => { throw new Error('[DEPRECATED] teamStore is not available. Use features/teams/hooks.ts'); },
+  delete: async () => { throw new Error('[DEPRECATED] teamStore is not available. Use features/teams/hooks.ts'); },
+} as Record<string, (...args: unknown[]) => Promise<{ data: unknown }>>
 
 /**
  * チーム管理状態

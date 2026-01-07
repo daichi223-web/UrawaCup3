@@ -9,7 +9,8 @@ import type {
   MatchApprovalResponse,
   PendingMatchesResponse
 } from '@shared/types'
-import api from '@/core/http'
+import { matchesApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 
 /**
@@ -82,15 +83,18 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
   fetchMatches: async (tournamentId, options) => {
     set({ isLoading: true, error: null })
     try {
-      const params = new URLSearchParams()
-      if (options?.date) params.append('date', options.date)
-      if (options?.venueId) params.append('venue_id', options.venueId.toString())
-      if (options?.approvalStatus) params.append('approval_status', options.approvalStatus)
-
-      const { data } = await api.get<MatchWithDetails[]>(
-        `/tournaments/${tournamentId}/matches?${params}`
-      )
-      set({ matches: data, isLoading: false })
+      const { matches } = await matchesApi.getAll(tournamentId, {
+        status: options?.approvalStatus
+      })
+      // フィルタリング
+      let filtered = matches as MatchWithDetails[]
+      if (options?.date) {
+        filtered = filtered.filter(m => m.match_date === options.date)
+      }
+      if (options?.venueId) {
+        filtered = filtered.filter(m => m.venue_id === options.venueId)
+      }
+      set({ matches: filtered, isLoading: false })
     } catch (error) {
       const message = error instanceof Error ? error.message : '試合データの取得に失敗しました'
       set({ error: message, isLoading: false })
@@ -111,7 +115,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
   updateMatchScore: async (matchId, score) => {
     set({ isLoading: true, error: null })
     try {
-      const { data } = await api.put<Match>(`/matches/${matchId}/score`, score)
+      const data = await matchesApi.updateScore(matchId, {
+        home_score_half1: score.homeScoreHalf1,
+        home_score_half2: score.homeScoreHalf2,
+        away_score_half1: score.awayScoreHalf1,
+        away_score_half2: score.awayScoreHalf2,
+        status: 'completed'
+      })
 
       // 一覧を更新
       set((state) => ({
@@ -141,7 +151,7 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
    */
   updateMatchStatus: async (matchId, status) => {
     try {
-      await api.patch(`/matches/${matchId}/status`, { status })
+      await matchesApi.update(matchId, { status })
 
       set((state) => ({
         matches: state.matches.map((m) =>
@@ -203,7 +213,7 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
    */
   lockMatch: async (matchId) => {
     try {
-      await api.post(`/matches/${matchId}/lock`)
+      await matchesApi.update(matchId, { is_locked: true })
 
       set((state) => ({
         matches: state.matches.map((m) =>
@@ -227,7 +237,7 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
    */
   unlockMatch: async (matchId) => {
     try {
-      await api.delete(`/matches/${matchId}/lock`)
+      await matchesApi.update(matchId, { is_locked: false })
 
       set((state) => ({
         matches: state.matches.map((m) =>
@@ -252,16 +262,25 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
   fetchPendingApprovalMatches: async (tournamentId, venueId) => {
     set({ isLoading: true, error: null })
     try {
-      const params = new URLSearchParams()
-      if (tournamentId) params.append('tournament_id', tournamentId.toString())
-      if (venueId) params.append('venue_id', venueId.toString())
+      let query = supabase
+        .from('matches')
+        .select(`
+          *,
+          home_team:teams!matches_home_team_id_fkey(name, short_name),
+          away_team:teams!matches_away_team_id_fkey(name, short_name),
+          venue:venues(name)
+        `)
+        .eq('approval_status', 'pending')
 
-      const { data } = await api.get<PendingMatchesResponse>(
-        `/matches/pending?${params}`
-      )
+      if (tournamentId) query = query.eq('tournament_id', tournamentId)
+      if (venueId) query = query.eq('venue_id', venueId)
+
+      const { data, error } = await query.order('match_date').order('match_time')
+      if (error) throw error
+
       set({
-        pendingApprovalMatches: data.matches,
-        pendingApprovalCount: data.total,
+        pendingApprovalMatches: (data || []) as MatchWithDetails[],
+        pendingApprovalCount: data?.length || 0,
         isLoading: false
       })
     } catch (error) {
@@ -274,13 +293,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
   /**
    * 試合結果を承認
    */
-  approveMatch: async (matchId, userId) => {
+  approveMatch: async (matchId, _userId) => {
     set({ isLoading: true, error: null })
     try {
-      const { data } = await api.post<MatchApprovalResponse>(
-        `/matches/${matchId}/approve`,
-        { user_id: userId }
-      )
+      await matchesApi.update(matchId, {
+        approval_status: 'approved',
+        approved_at: new Date().toISOString()
+      })
 
       // 承認待ち一覧から削除
       set((state) => ({
@@ -296,7 +315,7 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
         isLoading: false,
       }))
 
-      toast.success(data.message)
+      toast.success('試合結果を承認しました')
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : '試合の承認に失敗しました'
@@ -309,13 +328,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
   /**
    * 試合結果を却下
    */
-  rejectMatch: async (matchId, userId, reason) => {
+  rejectMatch: async (matchId, _userId, reason) => {
     set({ isLoading: true, error: null })
     try {
-      const { data } = await api.post<MatchApprovalResponse>(
-        `/matches/${matchId}/reject`,
-        { user_id: userId, reason }
-      )
+      await matchesApi.update(matchId, {
+        approval_status: 'rejected',
+        rejection_reason: reason
+      })
 
       // 承認待ち一覧から削除
       set((state) => ({
@@ -331,7 +350,7 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
         isLoading: false,
       }))
 
-      toast.success(data.message)
+      toast.success('試合結果を却下しました')
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : '試合の却下に失敗しました'
@@ -344,12 +363,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
   /**
    * 却下された試合結果を再提出
    */
-  resubmitMatch: async (matchId, userId) => {
+  resubmitMatch: async (matchId, _userId) => {
     set({ isLoading: true, error: null })
     try {
-      const { data } = await api.post<MatchApprovalResponse>(
-        `/matches/${matchId}/resubmit?user_id=${userId}`
-      )
+      await matchesApi.update(matchId, {
+        approval_status: 'pending',
+        rejection_reason: null
+      })
 
       // 一覧を更新
       set((state) => ({
@@ -362,7 +382,7 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
         isLoading: false,
       }))
 
-      toast.success(data.message)
+      toast.success('試合結果を再提出しました')
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : '試合の再提出に失敗しました'

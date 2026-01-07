@@ -22,6 +22,7 @@ const PublicLayout = lazy(() => import('./components/PublicLayout'))
 const PublicMatchList = lazy(() => import('./pages/public/PublicMatchList'))
 const PublicStandings = lazy(() => import('./pages/public/PublicStandings'))
 const PublicScorerRanking = lazy(() => import('./pages/public/PublicScorerRanking'))
+// SupabaseTest は開発環境のみで使用
 const SupabaseTest = lazy(() => import('./pages/public/SupabaseTest'))
 const MatchApproval = lazy(() => import('./pages/MatchApproval'))
 const ExclusionSettings = lazy(() => import('./pages/ExclusionSettings'))
@@ -188,8 +189,10 @@ function App() {
             <Route path="scorers" element={<PublicScorerRanking />} />
           </Route>
 
-          {/* Supabase接続テスト */}
-          <Route path="/test" element={<SupabaseTest />} />
+          {/* Supabase接続テスト（開発環境のみ） */}
+          {import.meta.env.DEV && (
+            <Route path="/test" element={<SupabaseTest />} />
+          )}
 
           {/* 404リダイレクト → 公開ページへ */}
           <Route path="*" element={<Navigate to="/public/matches" replace />} />

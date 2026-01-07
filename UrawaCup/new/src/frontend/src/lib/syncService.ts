@@ -54,7 +54,7 @@ export function getSyncState(): SyncState {
  */
 export async function syncAll(): Promise<void> {
   // Supabaseはリアルタイム同期を提供するため、手動同期は不要
-  console.log('[SyncService] Supabase版では自動同期されます');
+  if (import.meta.env.DEV) console.log('[SyncService] Supabase版では自動同期されます');
 }
 
 // ============================================
@@ -65,14 +65,14 @@ export async function syncAll(): Promise<void> {
  * オンラインイベントハンドラ
  */
 export function handleOnline(): void {
-  console.log('[SyncService] オンラインになりました');
+  if (import.meta.env.DEV) console.log('[SyncService] オンラインになりました');
 }
 
 /**
  * オフラインイベントハンドラ
  */
 export function handleOffline(): void {
-  console.log('[SyncService] オフラインになりました');
+  if (import.meta.env.DEV) console.log('[SyncService] オフラインになりました');
 }
 
 // ============================================
@@ -92,7 +92,7 @@ export function initSyncService(): void {
   window.addEventListener('offline', handleOffline);
 
   isInitialized = true;
-  console.log('[SyncService] 初期化完了（Supabase版）');
+  if (import.meta.env.DEV) console.log('[SyncService] 初期化完了（Supabase版）');
 }
 
 /**
@@ -116,7 +116,7 @@ export async function saveMatchResultOffline(
   matchId: number,
   data: unknown
 ): Promise<void> {
-  console.log('[SyncService] Supabase版では直接API経由で保存されます', matchId, data);
+  if (import.meta.env.DEV) console.log('[SyncService] Supabase版では直接API経由で保存されます', matchId, data);
 }
 
 /**
@@ -126,6 +126,6 @@ export async function saveGoalOffline(
   matchId: number,
   goalData: unknown
 ): Promise<number> {
-  console.log('[SyncService] Supabase版では直接API経由で保存されます', matchId, goalData);
+  if (import.meta.env.DEV) console.log('[SyncService] Supabase版では直接API経由で保存されます', matchId, goalData);
   return Date.now();
 }

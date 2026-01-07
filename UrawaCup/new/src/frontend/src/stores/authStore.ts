@@ -44,13 +44,13 @@ export const useAuthStore = create<AuthState>()(
       error: null,
 
       /**
-       * ログイン処理 - Supabase Auth（開発用バイパスあり）
+       * ログイン処理 - Supabase Auth
        */
       login: async (credentials: LoginRequest): Promise<boolean> => {
         set({ isLoading: true, error: null })
         try {
-          // 開発用バイパス: admin/admin123 でログイン可能
-          if (credentials.username === 'admin' && credentials.password === 'admin123') {
+          // 開発環境のみ: admin/admin123 でログイン可能
+          if (import.meta.env.DEV && credentials.username === 'admin' && credentials.password === 'admin123') {
             const devUser: User = {
               id: 1 as any,
               username: 'admin',
@@ -66,6 +66,7 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
               error: null,
             })
+            console.warn('[DEV] 開発用バイパスでログインしました')
             return true
           }
 

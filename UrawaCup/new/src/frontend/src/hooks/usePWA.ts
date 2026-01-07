@@ -38,14 +38,14 @@ export function useServiceWorker(): UseServiceWorkerResult {
       immediate: true,
       onNeedRefresh() {
         setNeedRefresh(true);
-        console.log('[PWA] 新しいバージョンが利用可能です');
+        if (import.meta.env.DEV) console.log('[PWA] 新しいバージョンが利用可能です');
       },
       onOfflineReady() {
         setOfflineReady(true);
-        console.log('[PWA] オフラインで使用できます');
+        if (import.meta.env.DEV) console.log('[PWA] オフラインで使用できます');
       },
       onRegisteredSW(swUrl, registration) {
-        console.log('[PWA] Service Worker登録完了:', swUrl);
+        if (import.meta.env.DEV) console.log('[PWA] Service Worker登録完了:', swUrl);
         // 定期的に更新をチェック（1時間ごと）
         if (registration) {
           setInterval(() => {
@@ -93,12 +93,12 @@ export function useOnlineStatus(): boolean {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      console.log('[PWA] オンラインになりました');
+      if (import.meta.env.DEV) console.log('[PWA] オンラインになりました');
     };
 
     const handleOffline = () => {
       setIsOnline(false);
-      console.log('[PWA] オフラインになりました');
+      if (import.meta.env.DEV) console.log('[PWA] オフラインになりました');
     };
 
     window.addEventListener('online', handleOnline);
@@ -152,14 +152,14 @@ export function useInstallPrompt(): UseInstallPromptResult {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      console.log('[PWA] インストール可能です');
+      if (import.meta.env.DEV) console.log('[PWA] インストール可能です');
     };
 
     // インストール完了イベント
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
       setIsInstalled(true);
-      console.log('[PWA] アプリがインストールされました');
+      if (import.meta.env.DEV) console.log('[PWA] アプリがインストールされました');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -179,7 +179,7 @@ export function useInstallPrompt(): UseInstallPromptResult {
     try {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      console.log('[PWA] インストール選択:', outcome);
+      if (import.meta.env.DEV) console.log('[PWA] インストール選択:', outcome);
 
       if (outcome === 'accepted') {
         setDeferredPrompt(null);

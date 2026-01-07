@@ -1,1 +1,26 @@
+# Vercel
 .vercel
+
+# Environment files with secrets
+.env.production
+.env.local
+.env.*.local
+
+# Dependency directories
+node_modules/
+
+# Build output
+dist/
+dev-dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db

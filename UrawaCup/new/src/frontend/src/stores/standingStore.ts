@@ -1,7 +1,18 @@
+/**
+ * ⚠️ DEPRECATED: このファイルは旧FastAPI用のストアです
+ * Supabase移行後は features/standings/hooks.ts を使用してください。
+ */
 import { create } from 'zustand'
 import type { GroupStanding, Standing, StandingWithTeam } from '@shared/types'
-import api from '@/core/http'
 import toast from 'react-hot-toast'
+
+console.warn('[DEPRECATED] standingStore.ts is deprecated. Use features/standings/hooks.ts instead.')
+
+// Deprecated API stub
+const api = {
+  get: async () => { throw new Error('[DEPRECATED] standingStore is not available. Use features/standings/hooks.ts'); },
+  post: async () => { throw new Error('[DEPRECATED] standingStore is not available. Use features/standings/hooks.ts'); },
+} as Record<string, (...args: unknown[]) => Promise<{ data: unknown }>>
 
 /**
  * 順位表管理状態

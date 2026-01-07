@@ -182,7 +182,7 @@ function Settings() {
       isFinalsVenue?: boolean;
     }) => {
       const { id, ...rest } = data
-      console.log('[updateVenueMutation] Sending to Supabase:', rest)
+      if (import.meta.env.DEV) console.log('[updateVenueMutation] Sending to Supabase:', rest)
       const { data: venue, error } = await supabase
         .from('venues')
         .update({
@@ -234,7 +234,7 @@ function Settings() {
       forFinalDay: venueForm.forFinalDay,      // false も明示的に送信
       isFinalsVenue: venueForm.isFinalsVenue,  // false も明示的に送信
     }
-    console.log('[handleSaveVenue] Sending payload:', payload)
+    if (import.meta.env.DEV) console.log('[handleSaveVenue] Sending payload:', payload)
 
     updateVenueMutation.mutate(payload)
   }

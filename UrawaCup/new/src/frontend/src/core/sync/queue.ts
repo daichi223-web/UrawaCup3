@@ -1,8 +1,19 @@
 // src/core/sync/queue.ts
 // SyncQueue - オフライン同期キュー管理
-import { httpClient } from '@/core/http';
+//
+// ⚠️ DEPRECATED: このモジュールは旧FastAPI用です
+// Supabase移行後は使用されていません。
+// オフライン同期が必要な場合は Supabase の offline-first 機能を検討してください。
+
 import { syncStorage } from './storage';
 import type { SyncQueueItem, SyncResult, ConflictData } from './types';
+
+// Deprecated httpClient stub
+const httpClient = {
+  post: async () => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
+  put: async () => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
+  delete: async () => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
+};
 
 const MAX_RETRIES = 3;
 
