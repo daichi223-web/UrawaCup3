@@ -34,7 +34,8 @@ export default function PublicStandings() {
             try {
                 setLoading(true);
                 setError(null);
-                // lib/api.tsのstandingsApiを直接使用
+
+                // 順位表データを取得（APIがチームへのフォールバックを含む）
                 const data = await standingsApi.getByGroup(1);
 
                 // Transform Array to Map for easier access by tab
@@ -46,6 +47,7 @@ export default function PublicStandings() {
                         }
                     });
                 }
+
                 setStandings(standingsMap);
             } catch (err) {
                 console.error("Failed to load standings", err);

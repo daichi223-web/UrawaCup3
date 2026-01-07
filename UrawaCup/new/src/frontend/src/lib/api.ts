@@ -351,11 +351,42 @@ export const standingsApi = {
         .order('rank')
 
       if (error) handleSupabaseError(error)
-      result.push({
-        groupId: group.id,
-        groupName: group.name,
-        standings: standings || []
-      })
+
+      // 順位表が空の場合はチームテーブルから取得
+      if (!standings || standings.length === 0) {
+        const { data: teams } = await supabase
+          .from('teams')
+          .select('*')
+          .eq('tournament_id', tournamentId)
+          .eq('group_id', group.id)
+          .order('group_order')
+
+        const fallbackStandings = (teams || []).map((team, index) => ({
+          team_id: team.id,
+          played: 0,
+          won: 0,
+          drawn: 0,
+          lost: 0,
+          goals_for: 0,
+          goals_against: 0,
+          goal_difference: 0,
+          points: 0,
+          rank: index + 1,
+          team: { id: team.id, name: team.name },
+        }))
+
+        result.push({
+          groupId: group.id,
+          groupName: group.name,
+          standings: fallbackStandings
+        })
+      } else {
+        result.push({
+          groupId: group.id,
+          groupName: group.name,
+          standings: standings
+        })
+      }
     }
     return result
   },
