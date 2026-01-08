@@ -262,7 +262,11 @@ async def generate_preliminary_schedule(request: PreliminaryScheduleRequest):
 
         # 会場と時間を割り当て
         venues = request.venues
-        kickoff_times = ["09:30", "10:35", "11:40", "12:45", "13:50", "14:55"]
+        # 1日あたり最大8試合分のキックオフ時刻（試合時間15分 + 休憩5分 = 20分間隔）
+        kickoff_times = [
+            "09:00", "09:25", "09:50", "10:15", "10:40", "11:05", "11:30", "11:55",
+            "12:20", "12:45", "13:10", "13:35", "14:00", "14:25", "14:50", "15:15"
+        ]
         venue_slot_count = {v["id"]: 0 for v in venues}
 
         scheduled_matches = []
@@ -271,7 +275,18 @@ async def generate_preliminary_schedule(request: PreliminaryScheduleRequest):
             venue = venues[venue_idx]
             slot_idx = venue_slot_count[venue["id"]]
 
-            kickoff = kickoff_times[slot_idx] if slot_idx < len(kickoff_times) else f"{14 + slot_idx}:00"
+            # 時刻が配列を超えた場合は最後の時刻+25分を繰り返す（ただし23:59まで）
+            if slot_idx < len(kickoff_times):
+                kickoff = kickoff_times[slot_idx]
+            else:
+                extra_slots = slot_idx - len(kickoff_times) + 1
+                hour = 15 + (extra_slots * 25) // 60
+                minute = 40 + (extra_slots * 25) % 60
+                if minute >= 60:
+                    hour += 1
+                    minute -= 60
+                hour = min(hour, 23)  # 23時を超えないように
+                kickoff = f"{hour:02d}:{minute:02d}"
             venue_slot_count[venue["id"]] += 1
 
             scheduled_matches.append({
