@@ -1,82 +1,32 @@
 /**
- * 浦和カップ トーナメント管理システム - PWAフック
+ * 浦和カップ トーナメント管理システム - PWAフック（無効化版）
  *
- * PWA機能を利用するためのカスタムフック
- * - Service Worker登録
- * - オンライン/オフライン状態管理
- * - インストールプロンプト
+ * PWA機能は一時的に無効化されています。
+ * スタブ実装を提供してビルドエラーを防止します。
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { registerSW } from 'virtual:pwa-register';
 
 // ============================================
-// Service Worker登録フック
+// Service Worker登録フック（スタブ）
 // ============================================
 
 interface UseServiceWorkerResult {
-  /** 更新が利用可能か */
   needRefresh: boolean;
-  /** オフラインで使用可能か */
   offlineReady: boolean;
-  /** 更新を適用 */
   updateServiceWorker: () => Promise<void>;
-  /** 更新をスキップ */
   skipWaiting: () => void;
 }
 
 /**
- * Service Workerの登録と更新を管理するフック
+ * Service Workerの登録と更新を管理するフック（無効化版）
  */
 export function useServiceWorker(): UseServiceWorkerResult {
-  const [needRefresh, setNeedRefresh] = useState(false);
-  const [offlineReady, setOfflineReady] = useState(false);
-  const [updateSW, setUpdateSW] = useState<(() => Promise<void>) | undefined>();
-
-  useEffect(() => {
-    const registrationPromise = registerSW({
-      immediate: true,
-      onNeedRefresh() {
-        setNeedRefresh(true);
-        if (import.meta.env.DEV) console.log('[PWA] 新しいバージョンが利用可能です');
-      },
-      onOfflineReady() {
-        setOfflineReady(true);
-        if (import.meta.env.DEV) console.log('[PWA] オフラインで使用できます');
-      },
-      onRegisteredSW(swUrl, registration) {
-        if (import.meta.env.DEV) console.log('[PWA] Service Worker登録完了:', swUrl);
-        // 定期的に更新をチェック（1時間ごと）
-        if (registration) {
-          setInterval(() => {
-            registration.update();
-          }, 60 * 60 * 1000);
-        }
-      },
-      onRegisterError(error) {
-        console.error('[PWA] Service Worker登録エラー:', error);
-      },
-    });
-
-    setUpdateSW(() => registrationPromise);
-  }, []);
-
-  const updateServiceWorker = useCallback(async () => {
-    if (updateSW) {
-      await updateSW();
-      setNeedRefresh(false);
-    }
-  }, [updateSW]);
-
-  const skipWaiting = useCallback(() => {
-    setNeedRefresh(false);
-  }, []);
-
   return {
-    needRefresh,
-    offlineReady,
-    updateServiceWorker,
-    skipWaiting,
+    needRefresh: false,
+    offlineReady: false,
+    updateServiceWorker: async () => {},
+    skipWaiting: () => {},
   };
 }
 
@@ -88,18 +38,13 @@ export function useServiceWorker(): UseServiceWorkerResult {
  * オンライン/オフライン状態を監視するフック
  */
 export function useOnlineStatus(): boolean {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      if (import.meta.env.DEV) console.log('[PWA] オンラインになりました');
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-      if (import.meta.env.DEV) console.log('[PWA] オフラインになりました');
-    };
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -114,96 +59,29 @@ export function useOnlineStatus(): boolean {
 }
 
 // ============================================
-// インストールプロンプトフック
+// インストールプロンプトフック（スタブ）
 // ============================================
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
-}
-
 interface UseInstallPromptResult {
-  /** インストール可能か */
   canInstall: boolean;
-  /** インストール済みか */
   isInstalled: boolean;
-  /** インストールを促す */
   promptInstall: () => Promise<boolean>;
 }
 
 /**
- * PWAインストールプロンプトを管理するフック
+ * PWAインストールプロンプトを管理するフック（無効化版）
  */
 export function useInstallPrompt(): UseInstallPromptResult {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
-
-  useEffect(() => {
-    // すでにインストール済みかチェック
-    const checkInstalled = () => {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      const isInWebApp = (window.navigator as { standalone?: boolean }).standalone === true;
-      setIsInstalled(isStandalone || isInWebApp);
-    };
-
-    checkInstalled();
-
-    // インストールプロンプトイベントをキャッチ
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      if (import.meta.env.DEV) console.log('[PWA] インストール可能です');
-    };
-
-    // インストール完了イベント
-    const handleAppInstalled = () => {
-      setDeferredPrompt(null);
-      setIsInstalled(true);
-      if (import.meta.env.DEV) console.log('[PWA] アプリがインストールされました');
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
-  const promptInstall = useCallback(async (): Promise<boolean> => {
-    if (!deferredPrompt) {
-      return false;
-    }
-
-    try {
-      await deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (import.meta.env.DEV) console.log('[PWA] インストール選択:', outcome);
-
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('[PWA] インストールエラー:', error);
-      return false;
-    }
-  }, [deferredPrompt]);
-
   return {
-    canInstall: deferredPrompt !== null && !isInstalled,
-    isInstalled,
-    promptInstall,
+    canInstall: false,
+    isInstalled: false,
+    promptInstall: async () => false,
   };
 }
 
 // ============================================
-// 同期状態フック
+// 同期状態フック（スタブ）
 // ============================================
-
-import { subscribeSyncState, getSyncState, syncAll } from '@/lib/syncService';
 
 interface SyncState {
   isSyncing: boolean;
@@ -214,31 +92,20 @@ interface SyncState {
 }
 
 interface UseSyncStateResult extends SyncState {
-  /** 手動で同期を実行 */
   sync: () => Promise<void>;
 }
 
 /**
- * オフライン同期状態を監視するフック
+ * オフライン同期状態を監視するフック（無効化版）
  */
 export function useSyncState(): UseSyncStateResult {
-  const [state, setState] = useState<SyncState>(getSyncState());
-
-  useEffect(() => {
-    const unsubscribe = subscribeSyncState((newState) => {
-      setState(newState);
-    });
-
-    return unsubscribe;
-  }, []);
-
-  const sync = useCallback(async () => {
-    await syncAll();
-  }, []);
-
   return {
-    ...state,
-    sync,
+    isSyncing: false,
+    lastSyncAt: null,
+    pendingCount: 0,
+    conflictCount: 0,
+    error: null,
+    sync: async () => {},
   };
 }
 
@@ -254,58 +121,10 @@ interface NetworkInfo {
   saveData?: boolean;
 }
 
-interface NavigatorConnection extends EventTarget {
-  effectiveType?: string;
-  downlink?: number;
-  rtt?: number;
-  saveData?: boolean;
-}
-
-declare global {
-  interface Navigator {
-    connection?: NavigatorConnection;
-    mozConnection?: NavigatorConnection;
-    webkitConnection?: NavigatorConnection;
-  }
-}
-
 /**
  * ネットワーク情報を取得するフック
  */
 export function useNetworkInfo(): NetworkInfo {
   const isOnline = useOnlineStatus();
-  const [networkInfo, setNetworkInfo] = useState<NetworkInfo>({
-    isOnline,
-  });
-
-  useEffect(() => {
-    const connection =
-      navigator.connection ||
-      navigator.mozConnection ||
-      navigator.webkitConnection;
-
-    if (!connection) {
-      setNetworkInfo({ isOnline });
-      return;
-    }
-
-    const updateNetworkInfo = () => {
-      setNetworkInfo({
-        isOnline,
-        effectiveType: connection.effectiveType,
-        downlink: connection.downlink,
-        rtt: connection.rtt,
-        saveData: connection.saveData,
-      });
-    };
-
-    updateNetworkInfo();
-    connection.addEventListener('change', updateNetworkInfo);
-
-    return () => {
-      connection.removeEventListener('change', updateNetworkInfo);
-    };
-  }, [isOnline]);
-
-  return networkInfo;
+  return { isOnline };
 }
