@@ -198,7 +198,8 @@ function MatchSchedule() {
       }
 
       // チーム一覧を取得
-      const teams = await teamsApi.getAll(tournamentId)
+      const teamsResult = await teamsApi.getAll(tournamentId)
+      const teams = teamsResult.teams || []
       const localTeams = teams.filter((t: any) => t.team_type === 'local' && t.group_id)
       if (localTeams.length === 0) {
         throw new Error('チームが登録されていません')

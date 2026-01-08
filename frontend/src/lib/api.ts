@@ -101,7 +101,7 @@ export const teamsApi = {
       .order('group_id')
       .order('group_order')
     if (error) handleSupabaseError(error)
-    return { teams: data, total: data.length }
+    return { teams: data || [], total: data?.length || 0 }
   },
 
   async getById(id: number) {
@@ -218,7 +218,7 @@ export const matchesApi = {
 
     const { data, error } = await query
     if (error) handleSupabaseError(error)
-    return { matches: data, total: data.length }
+    return { matches: data || [], total: data?.length || 0 }
   },
 
   async getById(id: number) {
