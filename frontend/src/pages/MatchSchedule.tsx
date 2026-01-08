@@ -76,6 +76,8 @@ function MatchSchedule() {
   const [selectedMatch, setSelectedMatch] = useState<MatchWithDetails | null>(null)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateType, setGenerateType] = useState<'preliminary' | 'finals' | 'training' | null>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteType, setDeleteType] = useState<'preliminary' | 'finals' | 'training' | 'all' | null>(null)
   const [editingMatch, setEditingMatch] = useState<MatchWithDetails | null>(null)
   const [editForm, setEditForm] = useState<{
     matchDate: string
@@ -465,6 +467,43 @@ function MatchSchedule() {
     },
   })
 
+  // 日程削除
+  const deleteMatchesMutation = useMutation({
+    mutationFn: async (stage: 'preliminary' | 'finals' | 'training' | 'all') => {
+      let deleteQuery = supabase
+        .from('matches')
+        .delete()
+        .eq('tournament_id', tournamentId)
+
+      if (stage === 'preliminary') {
+        deleteQuery = deleteQuery.eq('stage', 'preliminary')
+      } else if (stage === 'finals') {
+        deleteQuery = deleteQuery.in('stage', ['semifinal', 'third_place', 'final'])
+      } else if (stage === 'training') {
+        deleteQuery = deleteQuery.eq('stage', 'training')
+      }
+      // 'all' の場合は全試合を削除
+
+      const { error, count } = await deleteQuery
+
+      if (error) throw error
+      return { deleted: count || 0, stage }
+    },
+    onSuccess: (data) => {
+      const stageLabel =
+        data.stage === 'preliminary' ? '予選リーグ' :
+        data.stage === 'finals' ? '決勝トーナメント' :
+        data.stage === 'training' ? '研修試合' : '全試合'
+      toast.success(`${stageLabel}の日程を削除しました`)
+      queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
+      setShowDeleteModal(false)
+      setDeleteType(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.message || '削除に失敗しました')
+    },
+  })
+
   // 決勝トーナメント組み合わせ更新（Supabase版では未サポート）
   const updateBracketMutation = useMutation({
     mutationFn: async () => {
@@ -562,6 +601,19 @@ function MatchSchedule() {
     setShowGenerateModal(true)
   }
 
+  // 削除確認モーダルを開く
+  const openDeleteModal = (type: 'preliminary' | 'finals' | 'training' | 'all') => {
+    setDeleteType(type)
+    setShowDeleteModal(true)
+  }
+
+  // 削除を実行
+  const handleDelete = () => {
+    if (deleteType) {
+      deleteMatchesMutation.mutate(deleteType)
+    }
+  }
+
   // 日程生成を実行
   const handleGenerate = () => {
     switch (generateType) {
@@ -588,42 +640,79 @@ function MatchSchedule() {
     const buttons = []
 
     if (activeTab === 'day1' || activeTab === 'day2') {
-      // 予選リーグタブ
-      if (!hasPreliminaryMatches) {
+      // 予選リーグタブ - 生成ボタン（常に表示）
+      buttons.push(
+        <button
+          key="preliminary-generate"
+          className="btn-primary"
+          onClick={() => openGenerateModal('preliminary')}
+          disabled={isGenerating || isDeleting}
+        >
+          予選リーグ日程を生成
+        </button>
+      )
+      // 削除ボタン（試合がある場合のみ）
+      if (hasPreliminaryMatches) {
         buttons.push(
           <button
-            key="preliminary"
-            className="btn-primary"
-            onClick={() => openGenerateModal('preliminary')}
-            disabled={isGenerating}
+            key="preliminary-delete"
+            className="btn-danger"
+            onClick={() => openDeleteModal('preliminary')}
+            disabled={isGenerating || isDeleting}
           >
-            予選リーグ日程を生成
+            予選リーグ日程を削除
           </button>
         )
       }
     } else if (activeTab === 'day3') {
-      // Day3タブ
-      if (hasPreliminaryMatches && !hasFinalsMatches) {
+      // Day3タブ - 決勝トーナメント生成ボタン
+      buttons.push(
+        <button
+          key="finals-generate"
+          className="btn-primary"
+          onClick={() => openGenerateModal('finals')}
+          disabled={isGenerating || isDeleting || !hasPreliminaryMatches}
+          title={!hasPreliminaryMatches ? '予選リーグを先に生成してください' : ''}
+        >
+          決勝トーナメント生成
+        </button>
+      )
+      // 決勝トーナメント削除ボタン
+      if (hasFinalsMatches) {
         buttons.push(
           <button
-            key="finals"
-            className="btn-primary"
-            onClick={() => openGenerateModal('finals')}
-            disabled={isGenerating}
+            key="finals-delete"
+            className="btn-danger"
+            onClick={() => openDeleteModal('finals')}
+            disabled={isGenerating || isDeleting}
           >
-            決勝トーナメント生成
+            決勝T削除
           </button>
         )
       }
-      if (hasPreliminaryMatches && !hasTrainingMatches) {
+
+      // 研修試合生成ボタン
+      buttons.push(
+        <button
+          key="training-generate"
+          className="btn-secondary"
+          onClick={() => openGenerateModal('training')}
+          disabled={isGenerating || isDeleting || !hasPreliminaryMatches}
+          title={!hasPreliminaryMatches ? '予選リーグを先に生成してください' : ''}
+        >
+          研修試合生成
+        </button>
+      )
+      // 研修試合削除ボタン
+      if (hasTrainingMatches) {
         buttons.push(
           <button
-            key="training"
-            className="btn-secondary"
-            onClick={() => openGenerateModal('training')}
-            disabled={isGenerating}
+            key="training-delete"
+            className="btn-danger"
+            onClick={() => openDeleteModal('training')}
+            disabled={isGenerating || isDeleting}
           >
-            研修試合生成
+            研修試合削除
           </button>
         )
       }
@@ -635,6 +724,8 @@ function MatchSchedule() {
   const isGenerating = generatePreliminaryMutation.isPending ||
                        generateFinalsMutation.isPending ||
                        generateTrainingMutation.isPending
+
+  const isDeleting = deleteMatchesMutation.isPending
 
   if (isLoadingTournament || isLoadingMatches) {
     return <LoadingSpinner />
@@ -740,8 +831,9 @@ function MatchSchedule() {
               )}
             </div>
           ) : (
-            // 通常の試合一覧（会場別カード表示）
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            // 通常の試合一覧（会場別カード表示 + ドラッグ&ドロップ対応）
+            <div className="space-y-6">
+              {/* グループ（会場）ごとに表示 */}
               {venues.map(venue => {
                 const venueMatches = filteredMatches.filter(m => m.venueId === venue.id)
                 if (venueMatches.length === 0) return null
@@ -765,31 +857,21 @@ function MatchSchedule() {
                       {venue.groupId && <span className="text-xs opacity-75">({venue.groupId}組)</span>}
                       <span className="ml-auto text-xs font-normal opacity-75">{venueMatches.length}試合</span>
                     </div>
-                    {/* 試合リスト */}
-                    <div className="p-2 space-y-1">
-                      {venueMatches.map(match => (
-                        <div
-                          key={match.id}
-                          className="p-2 bg-white rounded border border-gray-200 hover:shadow-md cursor-pointer transition-shadow"
-                          onClick={() => setSelectedMatch(match)}
-                        >
-                          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                            <span>#{match.matchOrder} {match.matchTime}</span>
-                            <StatusBadge status={match.status} />
-                          </div>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium truncate flex-1">{match.homeTeam?.name}</span>
-                            <span className="mx-2 font-bold text-gray-700">
-                              {match.homeScoreTotal ?? '-'} - {match.awayScoreTotal ?? '-'}
-                            </span>
-                            <span className="font-medium truncate flex-1 text-right">{match.awayTeam?.name}</span>
-                          </div>
-                        </div>
-                      ))}
+                    {/* 試合リスト（ドラッグ&ドロップ対応） */}
+                    <div className="p-3">
+                      <DraggableMatchList
+                        matches={venueMatches}
+                        onSwapTeams={handleSwapTeams}
+                        title=""
+                        emptyMessage="試合がありません"
+                      />
                     </div>
                   </div>
                 )
               })}
+              <div className="text-xs text-gray-500 text-center">
+                ※ チームをドラッグして組み合わせを変更できます
+              </div>
             </div>
           )}
         </div>
@@ -848,6 +930,80 @@ function MatchSchedule() {
               disabled={isGenerating}
             >
               {isGenerating ? '生成中...' : '生成する'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 日程削除確認モーダル */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false)
+          setDeleteType(null)
+        }}
+        title={
+          deleteType === 'preliminary' ? '予選リーグ日程削除' :
+          deleteType === 'finals' ? '決勝トーナメント削除' :
+          deleteType === 'training' ? '研修試合削除' :
+          '全日程削除'
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            {deleteType === 'preliminary' && (
+              <>
+                <span className="text-red-600 font-semibold">予選リーグの全試合を削除します。</span>
+                <br />
+                <span className="text-sm text-gray-500">
+                  ※ この操作は取り消せません。関連する順位表データも影響を受ける可能性があります。
+                </span>
+              </>
+            )}
+            {deleteType === 'finals' && (
+              <>
+                <span className="text-red-600 font-semibold">決勝トーナメントの全試合を削除します。</span>
+                <br />
+                <span className="text-sm text-gray-500">
+                  ※ 準決勝・3位決定戦・決勝の試合が削除されます。
+                </span>
+              </>
+            )}
+            {deleteType === 'training' && (
+              <>
+                <span className="text-red-600 font-semibold">研修試合を全て削除します。</span>
+                <br />
+                <span className="text-sm text-gray-500">
+                  ※ この操作は取り消せません。
+                </span>
+              </>
+            )}
+            {deleteType === 'all' && (
+              <>
+                <span className="text-red-600 font-semibold">全ての試合日程を削除します。</span>
+                <br />
+                <span className="text-sm text-gray-500">
+                  ※ 予選リーグ・決勝トーナメント・研修試合の全てが削除されます。
+                </span>
+              </>
+            )}
+          </p>
+          <div className="flex justify-end gap-3 pt-4">
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setShowDeleteModal(false)
+                setDeleteType(null)
+              }}
+            >
+              キャンセル
+            </button>
+            <button
+              className="btn-danger"
+              onClick={handleDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? '削除中...' : '削除する'}
             </button>
           </div>
         </div>
