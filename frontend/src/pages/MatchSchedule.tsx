@@ -200,9 +200,10 @@ function MatchSchedule() {
       // チーム一覧を取得
       const teamsResult = await teamsApi.getAll(tournamentId)
       const teams = teamsResult.teams || []
-      const localTeams = teams.filter((t: any) => t.team_type === 'local' && t.group_id)
-      if (localTeams.length === 0) {
-        throw new Error('チームが登録されていません')
+      // group_idが設定されているチームを予選リーグ対象とする（localもinvitedも含む）
+      const groupTeams = teams.filter((t: any) => t.group_id)
+      if (groupTeams.length === 0) {
+        throw new Error('グループに所属するチームが登録されていません')
       }
 
       // 試合日を取得
@@ -210,7 +211,7 @@ function MatchSchedule() {
 
       // Core API を呼び出して日程を生成
       const result = await generatePreliminarySchedule(
-        localTeams.map((t: any) => ({
+        groupTeams.map((t: any) => ({
           id: t.id,
           name: t.name,
           group: t.group_id,
