@@ -9,27 +9,22 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // 開発環境でもService Workerを有効化
+      // Service Workerを一時的に無効化
+      selfDestroying: true,
       devOptions: {
-        enabled: true,
+        enabled: false,
         type: 'module',
       },
-      // manifestは public/manifest.json を使用
       manifest: false,
-      // インクルードするアセット
       includeAssets: [
         'favicon.svg',
         'icons/*.svg',
         'icons/*.png',
       ],
       workbox: {
-        // キャッシュするファイルパターン
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-        // ナビゲーションプリロード
         navigationPreload: true,
-        // ランタイムキャッシュ設定
         runtimeCaching: [
-          // Google Fonts
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
@@ -37,7 +32,7 @@ export default defineConfig({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1年
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
               cacheableResponse: {
                 statuses: [0, 200],
@@ -51,14 +46,13 @@ export default defineConfig({
               cacheName: 'gstatic-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // 1年
+                maxAgeSeconds: 60 * 60 * 24 * 365,
               },
               cacheableResponse: {
                 statuses: [0, 200],
               },
             },
           },
-          // API リクエスト - Network First 戦略（オフライン時はキャッシュを使用）
           {
             urlPattern: /^\/api\/.*/i,
             handler: 'NetworkFirst',
@@ -66,7 +60,7 @@ export default defineConfig({
               cacheName: 'api-cache',
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24, // 1日
+                maxAgeSeconds: 60 * 60 * 24,
               },
               networkTimeoutSeconds: 10,
               cacheableResponse: {
@@ -75,12 +69,11 @@ export default defineConfig({
               backgroundSync: {
                 name: 'api-queue',
                 options: {
-                  maxRetentionTime: 24 * 60, // 24時間
+                  maxRetentionTime: 24 * 60,
                 },
               },
             },
           },
-          // 画像ファイル - Cache First
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
             handler: 'CacheFirst',
@@ -88,7 +81,7 @@ export default defineConfig({
               cacheName: 'images-cache',
               expiration: {
                 maxEntries: 60,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30日
+                maxAgeSeconds: 60 * 60 * 24 * 30,
               },
             },
           },
@@ -105,12 +98,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // バックエンドAPIへのプロキシ設定
       '/api': {
         target: 'http://localhost:8100',
         changeOrigin: true,
       },
-      // WebSocketプロキシ設定
       '/ws': {
         target: 'ws://localhost:8100',
         ws: true,
