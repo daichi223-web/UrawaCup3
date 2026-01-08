@@ -191,6 +191,11 @@ function MatchSchedule() {
   // 予選リーグ日程生成
   const generatePreliminaryMutation = useMutation({
     mutationFn: async () => {
+      // 大会データの確認
+      if (!tournament?.startDate) {
+        throw new Error('大会の開始日が設定されていません。大会設定を確認してください。')
+      }
+
       // Core API の接続確認
       const isHealthy = await checkCoreApiHealth()
       if (!isHealthy) {
@@ -206,10 +211,15 @@ function MatchSchedule() {
         throw new Error('グループに所属するチームが登録されていません')
       }
 
-      // 試合日を取得
-      const matchDate = tournament?.startDate || new Date().toISOString().split('T')[0]
+      // 大会日程を取得（Day1 = start_date, Day2 = start_date + 1日）
+      const day1Date = tournament.startDate
+      const day2DateObj = new Date(day1Date)
+      day2DateObj.setDate(day2DateObj.getDate() + 1)
+      const day2Date = day2DateObj.toISOString().split('T')[0]
 
-      // Core API を呼び出して日程を生成
+      console.log('[Schedule] Day1:', day1Date, 'Day2:', day2Date)
+
+      // Core API を呼び出して日程を生成（Day1用）
       const result = await generatePreliminarySchedule(
         groupTeams.map((t: any) => ({
           id: t.id,
@@ -218,8 +228,8 @@ function MatchSchedule() {
           rank: 0,
         })),
         venues.map(v => ({ id: v.id, name: v.name })),
-        matchDate,
-        '09:30'
+        day1Date,
+        '09:00'
       )
 
       if (!result.success || !result.matches) {
@@ -233,19 +243,47 @@ function MatchSchedule() {
         .eq('tournament_id', tournamentId)
         .eq('stage', 'preliminary')
 
-      // 生成された試合を Supabase に保存
-      const matchesToInsert = result.matches.map((m, index) => ({
-        tournament_id: tournamentId,
-        group_id: m.groupId,
-        home_team_id: m.homeTeamId,
-        away_team_id: m.awayTeamId,
-        venue_id: m.venueId,
-        match_date: m.matchDate,
-        match_time: m.matchTime,
-        match_order: index + 1,
-        stage: 'preliminary',
-        status: 'scheduled',
-      }))
+      // 試合を Day1 と Day2 に分割（前半をDay1、後半をDay2）
+      const totalMatches = result.matches.length
+      const halfPoint = Math.ceil(totalMatches / 2)
+
+      // キックオフ時刻のリスト（20分間隔）
+      const kickoffTimes = [
+        '09:00', '09:25', '09:50', '10:15', '10:40', '11:05', '11:30', '11:55',
+        '12:20', '12:45', '13:10', '13:35', '14:00', '14:25', '14:50', '15:15',
+      ]
+
+      // Day2用に会場ごとのスロットインデックスをリセット
+      const day2VenueSlots: Record<number, number> = {}
+
+      const matchesToInsert = result.matches.map((m, index) => {
+        const isDay1 = index < halfPoint
+        let matchTime = m.matchTime
+
+        // Day2の場合は時刻をリセット（会場ごとに09:00から開始）
+        if (!isDay1) {
+          const venueId = m.venueId
+          if (day2VenueSlots[venueId] === undefined) {
+            day2VenueSlots[venueId] = 0
+          }
+          const slotIdx = day2VenueSlots[venueId]
+          matchTime = kickoffTimes[slotIdx] || kickoffTimes[kickoffTimes.length - 1]
+          day2VenueSlots[venueId]++
+        }
+
+        return {
+          tournament_id: tournamentId,
+          group_id: m.groupId,
+          home_team_id: m.homeTeamId,
+          away_team_id: m.awayTeamId,
+          venue_id: m.venueId,
+          match_date: isDay1 ? day1Date : day2Date,
+          match_time: matchTime,
+          match_order: index + 1,
+          stage: 'preliminary',
+          status: 'scheduled',
+        }
+      })
 
       const { error } = await supabase.from('matches').insert(matchesToInsert)
       if (error) throw error
