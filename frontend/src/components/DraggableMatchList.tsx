@@ -1,95 +1,59 @@
 /**
- * ドラッグ&ドロップで組み合わせ変更可能な試合リスト
- * 研修試合・決勝トーナメントで使用
+ * クリック選択で組み合わせ変更可能な試合リスト
+ * 予選リーグ・研修試合・決勝トーナメントで使用
  */
-import { useState, useCallback } from 'react'
-import { createPortal } from 'react-dom'
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core'
-import { restrictToWindowEdges } from '@dnd-kit/modifiers'
-import {
-  useSortable,
-  SortableContext,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, ArrowLeftRight } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeftRight, Check } from 'lucide-react'
 import type { MatchWithDetails } from '@/types'
 
-// ドラッグ可能なチームスロットのID生成
-function getSlotId(matchId: number, position: 'home' | 'away') {
-  return `${matchId}-${position}`
-}
-
-// スロットIDからmatchIdとpositionを取得
-function parseSlotId(slotId: string): { matchId: number; position: 'home' | 'away' } {
-  const [matchIdStr, position] = slotId.split('-')
-  return {
-    matchId: parseInt(matchIdStr),
-    position: position as 'home' | 'away',
-  }
+// 選択状態の型
+interface SelectedTeam {
+  matchId: number
+  position: 'home' | 'away'
+  teamId: number
+  teamName: string
 }
 
 interface TeamSlotProps {
   match: MatchWithDetails
   position: 'home' | 'away'
-  isDragging?: boolean
+  isSelected: boolean
+  isSwapTarget: boolean
+  onClick: () => void
+  disabled: boolean
 }
 
 /**
- * ドラッグ可能なチームスロット
+ * クリック可能なチームスロット
  */
-function DraggableTeamSlot({ match, position, isDragging }: TeamSlotProps) {
-  const slotId = getSlotId(match.id, position)
+function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled }: TeamSlotProps) {
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging: isCurrentlyDragging,
-  } = useSortable({ id: slotId })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isCurrentlyDragging ? 0.5 : 1,
-  }
-
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
+    <button
+      onClick={onClick}
+      disabled={disabled}
       className={`
-        flex items-center gap-2 p-2 rounded border-2
-        ${isCurrentlyDragging ? 'border-primary-500 bg-primary-50' : 'border-gray-200 bg-white'}
-        ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}
-        hover:border-primary-300 transition-colors
+        flex items-center gap-2 p-2 rounded border-2 w-full text-left transition-all
+        ${isSelected
+          ? 'border-primary-500 bg-primary-100 ring-2 ring-primary-300'
+          : isSwapTarget
+            ? 'border-green-400 bg-green-50 hover:bg-green-100'
+            : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-gray-50'
+        }
+        ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
-      {...attributes}
-      {...listeners}
     >
-      <GripVertical className="w-4 h-4 text-gray-400" />
+      {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
       <span className="font-medium truncate flex-1">
         {team?.shortName || team?.name || `チームID: ${teamId}`}
       </span>
-    </div>
+    </button>
   )
 }
 
-interface DraggableMatchCardProps {
+interface MatchCardWithSwapProps {
   match: MatchWithDetails
   onSwapTeams?: (matchId: number, homeTeamId: number, awayTeamId: number) => void
 }
@@ -97,7 +61,7 @@ interface DraggableMatchCardProps {
 /**
  * 試合カード（チーム入れ替えボタン付き）
  */
-function MatchCardWithSwap({ match, onSwapTeams }: DraggableMatchCardProps) {
+function MatchCardWithSwap({ match, onSwapTeams }: MatchCardWithSwapProps) {
   const handleSwap = () => {
     if (onSwapTeams && match.homeTeamId && match.awayTeamId) {
       // ホームとアウェイを入れ替え
@@ -174,101 +138,86 @@ function MatchCardWithSwap({ match, onSwapTeams }: DraggableMatchCardProps) {
   )
 }
 
-interface DraggableMatchListProps {
+interface ClickableMatchListProps {
   matches: MatchWithDetails[]
   onSwapTeams: (matchId: number, homeTeamId: number, awayTeamId: number) => void
-  onSwapMatches?: (match1Id: number, match2Id: number) => void
   title?: string
   emptyMessage?: string
 }
 
 /**
- * ドラッグ&ドロップ対応試合リスト
+ * クリック選択対応試合リスト
  *
  * 機能:
- * - 試合内のホーム/アウェイチーム入れ替え（ボタンクリック）
- * - 試合間でのチーム交換（ドラッグ&ドロップ）
+ * - 1回目クリック: チームを選択（ハイライト表示）
+ * - 2回目クリック: 別のチームをクリックすると入れ替え
+ * - 同じチームを再クリック: 選択解除
  */
 export default function DraggableMatchList({
   matches,
   onSwapTeams,
-  onSwapMatches: _onSwapMatches,
   title = '試合一覧',
   emptyMessage = '試合がありません',
-}: DraggableMatchListProps) {
-  const [activeId, setActiveId] = useState<string | null>(null)
+}: ClickableMatchListProps) {
+  const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor)
-  )
+  // チームクリック処理
+  const handleTeamClick = (match: MatchWithDetails, position: 'home' | 'away') => {
+    // 完了済みの試合は操作不可
+    if (match.status === 'completed') return
 
-  // ドラッグ開始
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(event.active.id as string)
-  }, [])
+    const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
+    const team = position === 'home' ? match.homeTeam : match.awayTeam
+    const teamName = team?.shortName || team?.name || `チーム${teamId}`
 
-  // ドラッグ終了
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
-    setActiveId(null)
+    if (!teamId) return
 
-    if (!over || active.id === over.id) return
-
-    const activeSlot = parseSlotId(active.id as string)
-    const overSlot = parseSlotId(over.id as string)
-
-    // 同じ試合内での入れ替え
-    if (activeSlot.matchId === overSlot.matchId) {
-      const match = matches.find(m => m.id === activeSlot.matchId)
-      if (match && match.homeTeamId && match.awayTeamId) {
-        onSwapTeams(match.id, match.awayTeamId, match.homeTeamId)
-      }
+    // 選択中のチームがない場合 → 選択
+    if (!selectedTeam) {
+      setSelectedTeam({ matchId: match.id, position, teamId, teamName })
       return
     }
 
-    // 異なる試合間でのチーム交換
-    const match1 = matches.find(m => m.id === activeSlot.matchId)
-    const match2 = matches.find(m => m.id === overSlot.matchId)
+    // 同じチームをクリック → 選択解除
+    if (selectedTeam.matchId === match.id && selectedTeam.position === position) {
+      setSelectedTeam(null)
+      return
+    }
 
-    if (match1 && match2) {
-      // ドラッグ元のチームID
-      const team1Id = activeSlot.position === 'home' ? match1.homeTeamId : match1.awayTeamId
-      // ドロップ先のチームID
-      const team2Id = overSlot.position === 'home' ? match2.homeTeamId : match2.awayTeamId
+    // 別のチームをクリック → 入れ替え実行
+    const targetTeamId = teamId
 
-      if (team1Id && team2Id) {
-        // match1の指定位置にteam2を設定
-        const newMatch1Home = activeSlot.position === 'home' ? team2Id : match1.homeTeamId
-        const newMatch1Away = activeSlot.position === 'away' ? team2Id : match1.awayTeamId
+    // 同じ試合内での入れ替え
+    if (selectedTeam.matchId === match.id) {
+      onSwapTeams(match.id, match.awayTeamId!, match.homeTeamId!)
+    } else {
+      // 異なる試合間でのチーム交換
+      const selectedMatch = matches.find(m => m.id === selectedTeam.matchId)
+      if (selectedMatch) {
+        // 選択元の試合を更新
+        const newSelectedHome = selectedTeam.position === 'home' ? targetTeamId : selectedMatch.homeTeamId
+        const newSelectedAway = selectedTeam.position === 'away' ? targetTeamId : selectedMatch.awayTeamId
 
-        // match2の指定位置にteam1を設定
-        const newMatch2Home = overSlot.position === 'home' ? team1Id : match2.homeTeamId
-        const newMatch2Away = overSlot.position === 'away' ? team1Id : match2.awayTeamId
+        // 対象の試合を更新
+        const newTargetHome = position === 'home' ? selectedTeam.teamId : match.homeTeamId
+        const newTargetAway = position === 'away' ? selectedTeam.teamId : match.awayTeamId
 
-        // 両方の試合を更新
-        if (newMatch1Home && newMatch1Away) {
-          onSwapTeams(match1.id, newMatch1Home, newMatch1Away)
+        if (newSelectedHome && newSelectedAway) {
+          onSwapTeams(selectedMatch.id, newSelectedHome, newSelectedAway)
         }
-        if (newMatch2Home && newMatch2Away) {
-          onSwapTeams(match2.id, newMatch2Home, newMatch2Away)
+        if (newTargetHome && newTargetAway) {
+          onSwapTeams(match.id, newTargetHome, newTargetAway)
         }
       }
     }
-  }, [matches, onSwapTeams])
 
-  // ドラッグ中のアイテムを取得
-  const getActiveItem = () => {
-    if (!activeId) return null
-    const slot = parseSlotId(activeId)
-    const match = matches.find(m => m.id === slot.matchId)
-    if (!match) return null
-    const team = slot.position === 'home' ? match.homeTeam : match.awayTeam
-    return team?.shortName || team?.name || 'チーム'
+    // 選択解除
+    setSelectedTeam(null)
+  }
+
+  // 選択解除
+  const clearSelection = () => {
+    setSelectedTeam(null)
   }
 
   if (matches.length === 0) {
@@ -279,87 +228,97 @@ export default function DraggableMatchList({
     )
   }
 
-  // ソート可能なIDリストを生成
-  const sortableIds = matches.flatMap(m => [
-    getSlotId(m.id, 'home'),
-    getSlotId(m.id, 'away'),
-  ])
-
   return (
     <div className="space-y-4">
       {title && (
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-900">{title}</h3>
-          <div className="text-sm text-gray-500">
-            チームをクリックして入れ替え可能
-          </div>
+          {selectedTeam ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-primary-600 font-medium">
+                「{selectedTeam.teamName}」を選択中
+              </span>
+              <button
+                onClick={clearSelection}
+                className="text-xs text-gray-500 hover:text-gray-700 underline"
+              >
+                解除
+              </button>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">
+              チームをクリックして選択
+            </div>
+          )}
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        modifiers={[restrictToWindowEdges]}
-      >
-        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-          <div className="grid gap-4 md:grid-cols-2">
-            {matches.map((match) => (
-              <div key={match.id} className="bg-white rounded-lg border-2 border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-sm text-gray-500">
-                    #{match.matchOrder} {match.matchTime?.substring(0, 5)}
-                  </div>
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    match.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    match.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {match.status === 'completed' ? '終了' :
-                     match.status === 'in_progress' ? '試合中' : '予定'}
-                  </span>
+      <div className="grid gap-4 md:grid-cols-2">
+        {matches.map((match) => {
+          const isHomeSelected = selectedTeam?.matchId === match.id && selectedTeam.position === 'home'
+          const isAwaySelected = selectedTeam?.matchId === match.id && selectedTeam.position === 'away'
+          const isDisabled = match.status === 'completed'
+          // 選択中のチームがあり、この試合の別のチームである場合はスワップターゲット
+          const isHomeSwapTarget = selectedTeam !== null && !isHomeSelected && !isDisabled
+          const isAwaySwapTarget = selectedTeam !== null && !isAwaySelected && !isDisabled
+
+          return (
+            <div key={match.id} className="bg-white rounded-lg border-2 border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-gray-500">
+                  #{match.matchOrder} {match.matchTime?.substring(0, 5)}
+                </div>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  match.status === 'completed' ? 'bg-green-100 text-green-800' :
+                  match.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {match.status === 'completed' ? '終了' :
+                   match.status === 'in_progress' ? '試合中' : '予定'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* ホームチーム（クリック可能） */}
+                <div className="flex-1">
+                  <ClickableTeamSlot
+                    match={match}
+                    position="home"
+                    isSelected={isHomeSelected}
+                    isSwapTarget={isHomeSwapTarget}
+                    onClick={() => handleTeamClick(match, 'home')}
+                    disabled={isDisabled}
+                  />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* ホームチーム（ドラッグ可能） */}
-                  <div className="flex-1">
-                    <DraggableTeamSlot match={match} position="home" />
-                  </div>
+                <div className="text-gray-400 font-bold">vs</div>
 
-                  <div className="text-gray-400 font-bold">vs</div>
-
-                  {/* アウェイチーム（ドラッグ可能） */}
-                  <div className="flex-1">
-                    <DraggableTeamSlot match={match} position="away" />
-                  </div>
+                {/* アウェイチーム（クリック可能） */}
+                <div className="flex-1">
+                  <ClickableTeamSlot
+                    match={match}
+                    position="away"
+                    isSelected={isAwaySelected}
+                    isSwapTarget={isAwaySwapTarget}
+                    onClick={() => handleTeamClick(match, 'away')}
+                    disabled={isDisabled}
+                  />
                 </div>
-
-                {/* スコア表示（完了時） */}
-                {match.status === 'completed' && (
-                  <div className="mt-3 text-center text-lg font-bold">
-                    {match.homeScoreTotal} - {match.awayScoreTotal}
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
-        </SortableContext>
 
-        {createPortal(
-          <DragOverlay dropAnimation={null}>
-            {activeId && (
-              <div className="bg-primary-100 border-2 border-primary-500 rounded p-3 shadow-lg cursor-grabbing">
-                <span className="font-medium">{getActiveItem()}</span>
-              </div>
-            )}
-          </DragOverlay>,
-          document.body
-        )}
-      </DndContext>
+              {/* スコア表示（完了時） */}
+              {match.status === 'completed' && (
+                <div className="mt-3 text-center text-lg font-bold">
+                  {match.homeScoreTotal} - {match.awayScoreTotal}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
 
       <div className="text-xs text-gray-400 text-center mt-4">
-        ※ チームをクリックして選択後、別のチームをクリックすると入れ替わります
+        ※ チームをクリックして選択後、入れ替えたいチームをクリックしてください
       </div>
     </div>
   )
