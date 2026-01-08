@@ -20,7 +20,13 @@ app = FastAPI(title="Urawa Cup Core API", description="PDF Generation & Schedule
 # CORS設定（フロントエンドからのアクセスを許可）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "https://urawa-cup.vercel.app"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://urawa-cup.vercel.app",
+        "https://urawacup3.vercel.app",
+        "https://urawacup3-*.vercel.app",  # Preview deployments
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
