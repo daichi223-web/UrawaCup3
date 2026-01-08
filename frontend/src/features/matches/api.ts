@@ -96,7 +96,7 @@ export const matchApi = {
       ...m,
       matchDate: m.match_date,
       matchTime: m.match_time,
-      matchOrder: m.match_number,
+      matchOrder: m.match_order,
       venueId: m.venue_id,
       homeTeamId: m.home_team_id,
       awayTeamId: m.away_team_id,

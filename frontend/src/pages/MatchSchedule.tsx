@@ -127,7 +127,7 @@ function MatchSchedule() {
       matchDate: m.match_date,
       matchTime: m.match_time,
       venueId: m.venue_id,
-      matchOrder: m.match_number,
+      matchOrder: m.match_order,
       homeTeamId: m.home_team_id,
       awayTeamId: m.away_team_id,
       homeTeam: m.home_team,
@@ -242,7 +242,7 @@ function MatchSchedule() {
         venue_id: m.venueId,
         match_date: m.matchDate,
         match_time: m.matchTime,
-        match_number: index + 1,
+        match_order: index + 1,
         stage: 'preliminary',
         status: 'scheduled',
       }))
@@ -335,11 +335,10 @@ function MatchSchedule() {
           venue_id: finalsVenueId,
           match_date: matchDate,
           match_time: m.kickoff,
-          match_number: 100 + idx + 1,
+          match_order: 100 + idx + 1,
           stage: m.match_type === 'semifinal1' || m.match_type === 'semifinal2' ? 'semifinal' :
                  m.match_type === 'third_place' ? 'third_place' :
                  m.match_type === 'final' ? 'final' : 'finals',
-          round: m.match_type,
           status: 'scheduled',
         }))
 
@@ -444,7 +443,7 @@ function MatchSchedule() {
           venue_id: venueNameToId[m.venue] || venues[idx % venues.length]?.id || 1,
           match_date: matchDate,
           match_time: m.kickoff,
-          match_number: 200 + idx + 1,
+          match_order: 200 + idx + 1,
           stage: 'training',
           status: 'scheduled',
         }))
@@ -521,7 +520,7 @@ function MatchSchedule() {
         match_date: data.matchDate,
         match_time: data.matchTime,
         venue_id: data.venueId,
-        match_number: data.matchOrder,
+        match_order: data.matchOrder,
       })
     },
     onSuccess: () => {
