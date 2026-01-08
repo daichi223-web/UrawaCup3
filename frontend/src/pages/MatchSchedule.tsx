@@ -91,6 +91,8 @@ function MatchSchedule() {
     queryKey: ['tournament', tournamentId],
     queryFn: async () => {
       const data = await tournamentsApi.getById(tournamentId)
+      console.log('[Tournament] Raw data from API:', data)
+      console.log('[Tournament] start_date:', data.start_date, 'end_date:', data.end_date)
       // snake_case to camelCase変換
       return {
         ...data,
