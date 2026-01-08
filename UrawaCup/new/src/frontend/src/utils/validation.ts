@@ -187,14 +187,14 @@ export function validateMatchStatus(value: unknown): MatchStatus {
 /**
  * チームタイプの許可値
  */
-export const TEAM_TYPES = ['regular', 'training'] as const
+export const TEAM_TYPES = ['local', 'invited'] as const
 export type TeamType = typeof TEAM_TYPES[number]
 
 /**
  * チームタイプチェック
  */
 export function validateTeamType(value: unknown): TeamType {
-  return validateEnum(value, TEAM_TYPES, 'チームタイプ')
+  return validateEnum(value, TEAM_TYPES, '選択肢')
 }
 
 /**
