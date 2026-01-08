@@ -24,6 +24,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "https://urawa-cup.vercel.app",
+        "https://urawa-cup3.vercel.app",
         "https://urawacup3.vercel.app",
         "https://urawacup3-*.vercel.app",  # Preview deployments
     ],
