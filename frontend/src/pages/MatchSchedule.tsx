@@ -109,13 +109,15 @@ function MatchSchedule() {
   })
 
   // 会場一覧を取得
-  const { data: venues = [] } = useQuery({
+  const { data: venuesData } = useQuery({
     queryKey: ['venues', tournamentId],
     queryFn: async () => {
-      return await venuesApi.getAll(tournamentId)
+      const data = await venuesApi.getAll(tournamentId)
+      return data || []
     },
     enabled: !!tournamentId,
   })
+  const venues = Array.isArray(venuesData) ? venuesData : []
 
   // 試合一覧を取得
   const { data: matchData, isLoading: isLoadingMatches } = useQuery({
