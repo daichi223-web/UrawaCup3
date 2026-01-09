@@ -155,15 +155,27 @@ function Settings() {
     updateTournamentMutation.mutate(tournamentForm)
   }
 
-  // 会場一覧を取得
+  // 会場一覧を取得（常に最新データを取得）
   const { data: venueData, isLoading: isLoadingVenues } = useQuery({
     queryKey: ['venues', tournamentId],
     queryFn: async () => {
       const data = await venuesApi.getAll(tournamentId)
       return { venues: data, total: data.length }
     },
+    staleTime: 0, // 常に最新データを取得
+    refetchOnMount: true, // マウント時に必ず再取得
   })
   const venues = venueData?.venues ?? []
+
+  // 日付変更時の自動保存
+  const handleDateChange = (field: 'startDate' | 'endDate', value: string) => {
+    setTournamentForm(prev => ({ ...prev, [field]: value }))
+    // 即座に保存
+    if (value) {
+      const updatedForm = { ...tournamentForm, [field]: value }
+      updateTournamentMutation.mutate(updatedForm)
+    }
+  }
 
 
   // 大会作成
@@ -218,6 +230,31 @@ function Settings() {
       toast.error(`更新に失敗しました: ${error.message}`)
     },
   })
+
+  // 会場削除
+  const deleteVenueMutation = useMutation({
+    mutationFn: async (venueId: number) => {
+      const { error } = await supabase
+        .from('venues')
+        .delete()
+        .eq('id', venueId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['venues', tournamentId] })
+      toast.success('会場を削除しました')
+    },
+    onError: (error: Error) => {
+      toast.error(`削除に失敗しました: ${error.message}`)
+    },
+  })
+
+  // 会場削除確認
+  const handleDeleteVenue = (venue: Venue) => {
+    if (window.confirm(`「${venue.name}」を削除しますか？\n※ この操作は取り消せません`)) {
+      deleteVenueMutation.mutate(venue.id)
+    }
+  }
 
   // 会場編集モーダルを開く
   const openVenueModal = (venue: Venue) => {
@@ -389,22 +426,22 @@ function Settings() {
               />
             </div>
             <div>
-              <label className="form-label">開始日</label>
+              <label className="form-label">開始日 <span className="text-xs text-green-600">(自動保存)</span></label>
               <input
                 type="date"
                 className="form-input"
                 value={tournamentForm.startDate}
-                onChange={(e) => setTournamentForm(prev => ({ ...prev, startDate: e.target.value }))}
+                onChange={(e) => handleDateChange('startDate', e.target.value)}
               />
             </div>
             <div>
-              <label className="form-label">終了日</label>
+              <label className="form-label">終了日 <span className="text-xs text-green-600">(自動保存)</span></label>
               <input
                 type="date"
                 className="form-input"
                 value={tournamentForm.endDate}
                 min={tournamentForm.startDate || undefined}
-                onChange={(e) => setTournamentForm(prev => ({ ...prev, endDate: e.target.value }))}
+                onChange={(e) => handleDateChange('endDate', e.target.value)}
               />
             </div>
             <div>
@@ -562,12 +599,21 @@ function Settings() {
                       </td>
                       <td>{venue.maxMatchesPerDay ?? venue.max_matches_per_day}</td>
                       <td>
-                        <button
-                          className="text-primary-600 hover:text-primary-800 text-sm"
-                          onClick={() => openVenueModal(venue)}
-                        >
-                          編集
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            className="text-primary-600 hover:text-primary-800 text-sm"
+                            onClick={() => openVenueModal(venue)}
+                          >
+                            編集
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-sm"
+                            onClick={() => handleDeleteVenue(venue)}
+                            disabled={deleteVenueMutation.isPending}
+                          >
+                            削除
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -921,20 +967,34 @@ function Settings() {
               ※ 決勝トーナメント会場は1つのみ選択してください
             </p>
           </div>
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-between pt-4">
             <button
-              className="btn-secondary"
-              onClick={() => setShowVenueModal(false)}
+              className="text-red-600 hover:text-red-800 text-sm"
+              onClick={() => {
+                if (selectedVenue) {
+                  handleDeleteVenue(selectedVenue)
+                  setShowVenueModal(false)
+                }
+              }}
+              disabled={deleteVenueMutation.isPending}
             >
-              キャンセル
+              この会場を削除
             </button>
-            <button
-              className="btn-primary"
-              onClick={handleSaveVenue}
-              disabled={updateVenueMutation.isPending}
-            >
-              {updateVenueMutation.isPending ? '保存中...' : '保存'}
-            </button>
+            <div className="flex gap-3">
+              <button
+                className="btn-secondary"
+                onClick={() => setShowVenueModal(false)}
+              >
+                キャンセル
+              </button>
+              <button
+                className="btn-primary"
+                onClick={handleSaveVenue}
+                disabled={updateVenueMutation.isPending}
+              >
+                {updateVenueMutation.isPending ? '保存中...' : '保存'}
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
