@@ -84,12 +84,24 @@ function Reports() {
     }
   };
 
-  // 日付のマッピング（実際の大会日程に合わせて設定）
-  const dateMap: Record<string, string> = {
-    'day1': '2027-03-20',
-    'day2': '2027-03-21',
-    'day3': '2027-03-22',
+  // 日付のマッピング（大会日程から動的に生成）
+  const getDateMap = (): Record<string, string> => {
+    if (currentTournament?.startDate) {
+      const start = new Date(currentTournament.startDate);
+      return {
+        'day1': currentTournament.startDate,
+        'day2': new Date(start.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        'day3': new Date(start.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      };
+    }
+    // デフォルト（大会情報がない場合）
+    return {
+      'day1': '2025-03-29',
+      'day2': '2025-03-30',
+      'day3': '2025-03-31',
+    };
   };
+  const dateMap = getDateMap();
 
   const handleDownload = async () => {
     if (!date) {

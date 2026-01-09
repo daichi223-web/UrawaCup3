@@ -594,15 +594,22 @@ export const reportApi = {
 
   // 最終日結果データを取得（印刷ビュー用）
   getFinalResultData: async (tournamentId: number): Promise<FinalResultData> => {
+    console.log('getFinalResultData: Starting for tournament', tournamentId);
+
     // 大会情報を取得
-    const { data: tournament } = await supabase
+    const { data: tournament, error: tournamentError } = await supabase
       .from('tournaments')
       .select('name, end_date')
       .eq('id', tournamentId)
       .single();
 
+    if (tournamentError) {
+      console.error('Failed to fetch tournament:', tournamentError);
+    }
+    console.log('Tournament:', tournament);
+
     // 決勝トーナメントの試合を取得
-    const { data: tournamentMatches } = await supabase
+    const { data: tournamentMatches, error: matchError } = await supabase
       .from('matches')
       .select(`
         *,
@@ -615,8 +622,13 @@ export const reportApi = {
       .in('stage', ['semifinal', 'third_place', 'final'])
       .order('match_time');
 
+    if (matchError) {
+      console.error('Failed to fetch tournament matches:', matchError);
+    }
+    console.log('Tournament matches:', tournamentMatches?.length || 0);
+
     // 研修試合を取得
-    const { data: trainingMatches } = await supabase
+    const { data: trainingMatches, error: trainingError } = await supabase
       .from('matches')
       .select(`
         *,
@@ -630,10 +642,18 @@ export const reportApi = {
       .order('venue_id')
       .order('match_time');
 
+    if (trainingError) {
+      console.error('Failed to fetch training matches:', trainingError);
+    }
+    console.log('Training matches:', trainingMatches?.length || 0);
+
     // 順位を計算
     const ranking: (Team | null)[] = [null, null, null, null];
     const finalMatch = tournamentMatches?.find((m: any) => m.stage === 'final');
     const thirdMatch = tournamentMatches?.find((m: any) => m.stage === 'third_place');
+
+    console.log('Final match:', finalMatch?.id, 'status:', finalMatch?.status);
+    console.log('Third match:', thirdMatch?.id, 'status:', thirdMatch?.status);
 
     if (finalMatch && finalMatch.status === 'completed') {
       const homeTotal = finalMatch.home_score_total ?? 0;
@@ -692,6 +712,8 @@ export const reportApi = {
       ranking[3] = fourth;
     }
 
+    console.log('Ranking:', ranking.map(r => r?.name || 'null'));
+
     // TODO: 優秀選手データを取得（テーブルがあれば）
     const players: Player[] = [];
 
@@ -707,28 +729,45 @@ export const reportApi = {
 
   // 最終日組み合わせデータを取得（印刷ビュー用）
   getFinalScheduleData: async (tournamentId: number, date?: string): Promise<FinalScheduleData> => {
+    console.log('getFinalScheduleData: Starting for tournament', tournamentId);
+
     // 大会情報を取得
-    const { data: tournament } = await supabase
+    const { data: tournament, error: tournamentError } = await supabase
       .from('tournaments')
       .select('name, end_date')
       .eq('id', tournamentId)
       .single();
 
+    if (tournamentError) {
+      console.error('Failed to fetch tournament:', tournamentError);
+    }
+    console.log('Tournament:', tournament);
+
     // グループ順位表を取得
-    const { data: groups } = await supabase
+    const { data: groups, error: groupsError } = await supabase
       .from('groups')
       .select('*')
       .eq('tournament_id', tournamentId)
       .order('id');
 
+    if (groupsError) {
+      console.error('Failed to fetch groups:', groupsError);
+    }
+    console.log('Groups:', groups?.length || 0, groups);
+
     const standings: GroupStanding[] = [];
     for (const group of groups || []) {
-      const { data: groupStandings } = await supabase
+      const { data: groupStandings, error: standingsError } = await supabase
         .from('standings')
         .select('*, team:teams(id, name, short_name, group_id)')
         .eq('tournament_id', tournamentId)
         .eq('group_id', group.id)
         .order('rank');
+
+      if (standingsError) {
+        console.error(`Failed to fetch standings for group ${group.id}:`, standingsError);
+      }
+      console.log(`Group ${group.id} standings:`, groupStandings?.length || 0);
 
       standings.push({
         groupId: group.id,
