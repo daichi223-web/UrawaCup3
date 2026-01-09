@@ -1,5 +1,6 @@
 // src/features/reports/index.ts
 export { reportApi } from './api';
+export type { FinalResultData, FinalScheduleData } from './api';
 export {
   useGenerateReport,
   useReportJobStatus,

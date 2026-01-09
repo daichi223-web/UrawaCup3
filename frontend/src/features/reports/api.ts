@@ -14,6 +14,88 @@ declare module 'jspdf' {
   }
 }
 
+// ================================================
+// 型定義
+// ================================================
+interface Team {
+  id: number
+  name: string
+  short_name?: string
+  group_id?: string
+}
+
+interface Goal {
+  minute: number
+  half: number
+  team_id: number
+  player_name: string
+  is_own_goal?: boolean
+}
+
+interface Match {
+  id: number
+  stage: string
+  match_time?: string
+  venue?: { name: string }
+  home_team?: Team
+  away_team?: Team
+  home_score_half1?: number
+  home_score_half2?: number
+  away_score_half1?: number
+  away_score_half2?: number
+  home_score_total?: number
+  away_score_total?: number
+  home_pk?: number
+  away_pk?: number
+  has_penalty_shootout?: boolean
+  result?: string
+  goals?: Goal[]
+  home_seed?: string
+  away_seed?: string
+}
+
+interface Standing {
+  team_id: number
+  team: Team
+  rank: number
+  points: number
+  goal_difference: number
+  goals_for: number
+  goals_against: number
+  played: number
+  won: number
+  drawn: number
+  lost: number
+}
+
+interface GroupStanding {
+  groupId: string
+  standings: Standing[]
+}
+
+interface Player {
+  type: string
+  name: string
+  team: string
+}
+
+export interface FinalResultData {
+  tournamentName: string
+  date: string
+  ranking: (Team | null)[]
+  tournament: Match[]
+  training: Match[]
+  players: Player[]
+}
+
+export interface FinalScheduleData {
+  tournamentName: string
+  date: string
+  standings: GroupStanding[]
+  tournament: Match[]
+  training: Match[]
+}
+
 export const reportApi = {
   // 報告書生成開始（Supabase Edge Functionが必要）
   generate: async (data: ReportGenerateInput): Promise<{ jobId: string }> => {
@@ -504,5 +586,345 @@ export const reportApi = {
 
     if (error) throw error;
     return settings as SenderSettings;
+  },
+
+  // ================================================
+  // 最終日レポート用データ取得
+  // ================================================
+
+  // 最終日結果データを取得（印刷ビュー用）
+  getFinalResultData: async (tournamentId: number): Promise<FinalResultData> => {
+    // 大会情報を取得
+    const { data: tournament } = await supabase
+      .from('tournaments')
+      .select('name, end_date')
+      .eq('id', tournamentId)
+      .single();
+
+    // 決勝トーナメントの試合を取得
+    const { data: tournamentMatches } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(id, name, short_name, group_id),
+        away_team:teams!matches_away_team_id_fkey(id, name, short_name, group_id),
+        venue:venues(name),
+        goals(*)
+      `)
+      .eq('tournament_id', tournamentId)
+      .in('stage', ['semifinal', 'third_place', 'final'])
+      .order('match_time');
+
+    // 研修試合を取得
+    const { data: trainingMatches } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(id, name, short_name, group_id),
+        away_team:teams!matches_away_team_id_fkey(id, name, short_name, group_id),
+        venue:venues(name),
+        goals(*)
+      `)
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'training')
+      .order('venue_id')
+      .order('match_time');
+
+    // 順位を計算
+    const ranking: (Team | null)[] = [null, null, null, null];
+    const finalMatch = tournamentMatches?.find((m: any) => m.stage === 'final');
+    const thirdMatch = tournamentMatches?.find((m: any) => m.stage === 'third_place');
+
+    if (finalMatch && finalMatch.status === 'completed') {
+      const homeTotal = finalMatch.home_score_total ?? 0;
+      const awayTotal = finalMatch.away_score_total ?? 0;
+      let winner: Team | null = null;
+      let runnerUp: Team | null = null;
+
+      if (homeTotal > awayTotal) {
+        winner = finalMatch.home_team;
+        runnerUp = finalMatch.away_team;
+      } else if (awayTotal > homeTotal) {
+        winner = finalMatch.away_team;
+        runnerUp = finalMatch.home_team;
+      } else if (finalMatch.has_penalty_shootout) {
+        // PK戦
+        const homePK = finalMatch.home_pk ?? 0;
+        const awayPK = finalMatch.away_pk ?? 0;
+        if (homePK > awayPK) {
+          winner = finalMatch.home_team;
+          runnerUp = finalMatch.away_team;
+        } else {
+          winner = finalMatch.away_team;
+          runnerUp = finalMatch.home_team;
+        }
+      }
+
+      ranking[0] = winner;
+      ranking[1] = runnerUp;
+    }
+
+    if (thirdMatch && thirdMatch.status === 'completed') {
+      const homeTotal = thirdMatch.home_score_total ?? 0;
+      const awayTotal = thirdMatch.away_score_total ?? 0;
+      let third: Team | null = null;
+      let fourth: Team | null = null;
+
+      if (homeTotal > awayTotal) {
+        third = thirdMatch.home_team;
+        fourth = thirdMatch.away_team;
+      } else if (awayTotal > homeTotal) {
+        third = thirdMatch.away_team;
+        fourth = thirdMatch.home_team;
+      } else if (thirdMatch.has_penalty_shootout) {
+        const homePK = thirdMatch.home_pk ?? 0;
+        const awayPK = thirdMatch.away_pk ?? 0;
+        if (homePK > awayPK) {
+          third = thirdMatch.home_team;
+          fourth = thirdMatch.away_team;
+        } else {
+          third = thirdMatch.away_team;
+          fourth = thirdMatch.home_team;
+        }
+      }
+
+      ranking[2] = third;
+      ranking[3] = fourth;
+    }
+
+    // TODO: 優秀選手データを取得（テーブルがあれば）
+    const players: Player[] = [];
+
+    return {
+      tournamentName: tournament?.name || '浦和カップ',
+      date: tournament?.end_date || '',
+      ranking,
+      tournament: tournamentMatches || [],
+      training: trainingMatches || [],
+      players,
+    };
+  },
+
+  // 最終日組み合わせデータを取得（印刷ビュー用）
+  getFinalScheduleData: async (tournamentId: number, date?: string): Promise<FinalScheduleData> => {
+    // 大会情報を取得
+    const { data: tournament } = await supabase
+      .from('tournaments')
+      .select('name, end_date')
+      .eq('id', tournamentId)
+      .single();
+
+    // グループ順位表を取得
+    const { data: groups } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .order('id');
+
+    const standings: GroupStanding[] = [];
+    for (const group of groups || []) {
+      const { data: groupStandings } = await supabase
+        .from('standings')
+        .select('*, team:teams(id, name, short_name, group_id)')
+        .eq('tournament_id', tournamentId)
+        .eq('group_id', group.id)
+        .order('rank');
+
+      standings.push({
+        groupId: group.id,
+        standings: groupStandings || [],
+      });
+    }
+
+    // 決勝トーナメントの試合を取得
+    let tournamentQuery = supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(id, name, short_name, group_id),
+        away_team:teams!matches_away_team_id_fkey(id, name, short_name, group_id),
+        venue:venues(name)
+      `)
+      .eq('tournament_id', tournamentId)
+      .in('stage', ['semifinal', 'third_place', 'final'])
+      .order('match_time');
+
+    if (date) {
+      tournamentQuery = tournamentQuery.eq('match_date', date);
+    }
+
+    const { data: tournamentMatches } = await tournamentQuery;
+
+    // 研修試合を取得
+    let trainingQuery = supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(id, name, short_name, group_id),
+        away_team:teams!matches_away_team_id_fkey(id, name, short_name, group_id),
+        venue:venues(name)
+      `)
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'training')
+      .order('venue_id')
+      .order('match_time');
+
+    if (date) {
+      trainingQuery = trainingQuery.eq('match_date', date);
+    }
+
+    const { data: trainingMatches } = await trainingQuery;
+
+    return {
+      tournamentName: tournament?.name || '浦和カップ',
+      date: date || tournament?.end_date || '',
+      standings,
+      tournament: tournamentMatches || [],
+      training: trainingMatches || [],
+    };
+  },
+
+  // 最終日結果Excel出力（リッチデータ）
+  downloadFinalResultExcelRich: async (tournamentId: number): Promise<Blob> => {
+    const data = await reportApi.getFinalResultData(tournamentId);
+
+    const wb = XLSX.utils.book_new();
+
+    // シート1: 最終順位
+    const rankingData = [
+      ['最終順位'],
+      ['順位', 'チーム名'],
+      ['優勝', data.ranking[0]?.name || ''],
+      ['準優勝', data.ranking[1]?.name || ''],
+      ['第3位', data.ranking[2]?.name || ''],
+      ['第4位', data.ranking[3]?.name || ''],
+    ];
+    const wsRanking = XLSX.utils.aoa_to_sheet(rankingData);
+    wsRanking['!cols'] = [{ wch: 10 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsRanking, '最終順位');
+
+    // シート2: 決勝トーナメント
+    const tournamentData: (string | number)[][] = [
+      ['決勝トーナメント結果'],
+      ['種別', '時間', 'ホーム', '前半', '後半', '合計', 'PK', 'アウェイ', '前半', '後半', '合計', 'PK'],
+    ];
+    for (const m of data.tournament) {
+      const stageName = m.stage === 'final' ? '決勝' : m.stage === 'third_place' ? '3位決定戦' : '準決勝';
+      tournamentData.push([
+        stageName,
+        m.match_time?.slice(0, 5) || '',
+        m.home_team?.short_name || m.home_team?.name || '',
+        m.home_score_half1 ?? '',
+        m.home_score_half2 ?? '',
+        m.home_score_total ?? '',
+        m.home_pk ?? '',
+        m.away_team?.short_name || m.away_team?.name || '',
+        m.away_score_half1 ?? '',
+        m.away_score_half2 ?? '',
+        m.away_score_total ?? '',
+        m.away_pk ?? '',
+      ]);
+    }
+    const wsTournament = XLSX.utils.aoa_to_sheet(tournamentData);
+    XLSX.utils.book_append_sheet(wb, wsTournament, '決勝トーナメント');
+
+    // シート3: 研修試合
+    const trainingData: (string | number)[][] = [
+      ['研修試合結果'],
+      ['会場', '時間', 'ホーム', '前半', '後半', '合計', 'アウェイ', '前半', '後半', '合計'],
+    ];
+    for (const m of data.training) {
+      trainingData.push([
+        m.venue?.name || '',
+        m.match_time?.slice(0, 5) || '',
+        m.home_team?.short_name || m.home_team?.name || '',
+        m.home_score_half1 ?? '',
+        m.home_score_half2 ?? '',
+        m.home_score_total ?? '',
+        m.away_team?.short_name || m.away_team?.name || '',
+        m.away_score_half1 ?? '',
+        m.away_score_half2 ?? '',
+        m.away_score_total ?? '',
+      ]);
+    }
+    const wsTraining = XLSX.utils.aoa_to_sheet(trainingData);
+    XLSX.utils.book_append_sheet(wb, wsTraining, '研修試合');
+
+    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  },
+
+  // 最終日組み合わせExcel出力（リッチデータ）
+  downloadFinalScheduleExcelRich: async (tournamentId: number, date?: string): Promise<Blob> => {
+    const data = await reportApi.getFinalScheduleData(tournamentId, date);
+
+    const wb = XLSX.utils.book_new();
+
+    // シート1: 順位表
+    for (const group of data.standings) {
+      const standingsData: (string | number)[][] = [
+        [`グループ${group.groupId} 順位表`],
+        ['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点'],
+      ];
+      for (const s of group.standings) {
+        standingsData.push([
+          s.rank,
+          s.team?.short_name || s.team?.name || '',
+          s.played ?? 0,
+          s.won ?? 0,
+          s.drawn ?? 0,
+          s.lost ?? 0,
+          s.goals_for ?? 0,
+          s.goals_against ?? 0,
+          s.goal_difference ?? 0,
+          s.points ?? 0,
+        ]);
+      }
+      const ws = XLSX.utils.aoa_to_sheet(standingsData);
+      XLSX.utils.book_append_sheet(wb, ws, `グループ${group.groupId}`);
+    }
+
+    // シート: 決勝トーナメント
+    const tournamentData: (string | number)[][] = [
+      ['決勝トーナメント組み合わせ'],
+      ['種別', '時間', '会場', 'ホーム', '', 'アウェイ'],
+    ];
+    for (const m of data.tournament) {
+      const stageName = m.stage === 'final' ? '決勝' : m.stage === 'third_place' ? '3位決定戦' : '準決勝';
+      tournamentData.push([
+        stageName,
+        m.match_time?.slice(0, 5) || '',
+        m.venue?.name || '',
+        m.home_team?.short_name || m.home_team?.name || m.home_seed || '未定',
+        'vs',
+        m.away_team?.short_name || m.away_team?.name || m.away_seed || '未定',
+      ]);
+    }
+    const wsTournament = XLSX.utils.aoa_to_sheet(tournamentData);
+    XLSX.utils.book_append_sheet(wb, wsTournament, '決勝トーナメント');
+
+    // シート: 研修試合
+    const trainingData: (string | number)[][] = [
+      ['研修試合組み合わせ'],
+      ['会場', '時間', 'ホーム', 'シード', '', 'アウェイ', 'シード'],
+    ];
+    for (const m of data.training) {
+      const homeSeed = m.home_team ? `${m.home_team.group_id || ''}` : '';
+      const awaySeed = m.away_team ? `${m.away_team.group_id || ''}` : '';
+      trainingData.push([
+        m.venue?.name || '',
+        m.match_time?.slice(0, 5) || '',
+        m.home_team?.short_name || m.home_team?.name || '未定',
+        homeSeed,
+        'vs',
+        m.away_team?.short_name || m.away_team?.name || '未定',
+        awaySeed,
+      ]);
+    }
+    const wsTraining = XLSX.utils.aoa_to_sheet(trainingData);
+    XLSX.utils.book_append_sheet(wb, wsTraining, '研修試合');
+
+    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 };

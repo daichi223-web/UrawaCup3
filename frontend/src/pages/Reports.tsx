@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { reportApi } from '@/features/reports';
+import { useState, useEffect, useRef } from 'react';
+import { reportApi, type FinalResultData, type FinalScheduleData } from '@/features/reports';
 import { useSenderSettings, useUpdateSenderSettings } from '@/features/reports/hooks';
 import { matchesApi, venuesApi } from '@/lib/api';
-import { FileText, Download, Trophy, Calendar, Table, Eye, X, Clock, Edit2, Save } from 'lucide-react'
+import { FileText, Download, Trophy, Calendar, Table, Eye, X, Clock, Edit2, Save, Printer } from 'lucide-react'
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/stores/appStore';
+import { FinalResultPrintView, FinalSchedulePrintView } from '@/components/reports';
 
 interface MatchPreview {
   id: number;
@@ -43,6 +44,12 @@ function Reports() {
     senderName: '',
     senderContact: '',
   });
+
+  // 印刷プレビュー
+  const [showPrintModal, setShowPrintModal] = useState<'result' | 'schedule' | null>(null);
+  const [printData, setPrintData] = useState<FinalResultData | FinalScheduleData | null>(null);
+  const [printLoading, setPrintLoading] = useState(false);
+  const printRef = useRef<HTMLDivElement>(null);
 
   // appStoreから現在のトーナメントIDを取得
   const { currentTournament } = useAppStore();
@@ -245,6 +252,66 @@ function Reports() {
     }
   };
 
+  // 印刷プレビューを開く
+  const handleOpenPrintPreview = async (type: 'result' | 'schedule') => {
+    try {
+      setPrintLoading(true);
+      if (type === 'result') {
+        const data = await reportApi.getFinalResultData(tournamentId);
+        setPrintData(data);
+      } else {
+        const targetDate = date ? dateMap[date] : undefined;
+        const data = await reportApi.getFinalScheduleData(tournamentId, targetDate);
+        setPrintData(data);
+      }
+      setShowPrintModal(type);
+    } catch (err) {
+      console.error(err);
+      toast.error('データの取得に失敗しました');
+    } finally {
+      setPrintLoading(false);
+    }
+  };
+
+  // 印刷実行
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // リッチExcelダウンロード
+  const handleDownloadRichExcel = async (type: 'result' | 'schedule') => {
+    try {
+      setSpecialReportLoading(`${type}-excel-rich`);
+      let blob: Blob;
+      let filename: string;
+
+      if (type === 'result') {
+        blob = await reportApi.downloadFinalResultExcelRich(tournamentId);
+        filename = `final_result_${tournamentId}.xlsx`;
+      } else {
+        const targetDate = date ? dateMap[date] : undefined;
+        blob = await reportApi.downloadFinalScheduleExcelRich(tournamentId, targetDate);
+        filename = `final_schedule_${targetDate || tournamentId}.xlsx`;
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success('ダウンロードを開始しました');
+    } catch (err) {
+      console.error(err);
+      toast.error('Excelの生成に失敗しました');
+    } finally {
+      setSpecialReportLoading(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* ページヘッダー */}
@@ -412,33 +479,34 @@ function Reports() {
               <Calendar className="w-10 h-10 mb-3 text-green-500" />
               <h4 className="font-medium mb-2">最終日組み合わせ表</h4>
               <p className="text-sm text-gray-500 mb-4">順位リーグ・決勝トーナメントの日程</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleDownloadSpecialReport('finalDaySchedule', 'pdf')}
-                  disabled={!date || specialReportLoading === 'finalDaySchedule-pdf'}
-                  className="btn btn-secondary flex items-center gap-2 text-sm"
-                >
-                  {specialReportLoading === 'finalDaySchedule-pdf' ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                  ) : (
-                    <Download className="w-4 h-4" />
-                  )}
-                  PDF
-                </button>
-                <button
-                  onClick={() => handleDownloadSpecialReport('finalDaySchedule', 'excel')}
-                  disabled={!date || specialReportLoading === 'finalDaySchedule-excel'}
-                  className="btn btn-success flex items-center gap-2 text-sm"
-                >
-                  {specialReportLoading === 'finalDaySchedule-excel' ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                  ) : (
-                    <Download className="w-4 h-4" />
-                  )}
-                  Excel
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => handleOpenPrintPreview('schedule')}
+                    disabled={printLoading}
+                    className="btn btn-primary flex items-center gap-2 text-sm"
+                  >
+                    {printLoading ? (
+                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    ) : (
+                      <Printer className="w-4 h-4" />
+                    )}
+                    印刷
+                  </button>
+                  <button
+                    onClick={() => handleDownloadRichExcel('schedule')}
+                    disabled={specialReportLoading === 'schedule-excel-rich'}
+                    className="btn btn-success flex items-center gap-2 text-sm"
+                  >
+                    {specialReportLoading === 'schedule-excel-rich' ? (
+                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                    Excel
+                  </button>
+                </div>
               </div>
-              {!date && <p className="text-xs text-orange-500 mt-2">※日付を選択してください</p>}
             </div>
 
             {/* 最終結果報告書 */}
@@ -446,31 +514,33 @@ function Reports() {
               <Trophy className="w-10 h-10 mb-3 text-yellow-500" />
               <h4 className="font-medium mb-2">最終結果報告書</h4>
               <p className="text-sm text-gray-500 mb-4">決勝トーナメント結果・最終順位</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleDownloadSpecialReport('finalResult', 'pdf')}
-                  disabled={specialReportLoading === 'finalResult-pdf'}
-                  className="btn btn-secondary flex items-center gap-2 text-sm"
-                >
-                  {specialReportLoading === 'finalResult-pdf' ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                  ) : (
-                    <Download className="w-4 h-4" />
-                  )}
-                  PDF
-                </button>
-                <button
-                  onClick={() => handleDownloadSpecialReport('finalResult', 'excel')}
-                  disabled={specialReportLoading === 'finalResult-excel'}
-                  className="btn btn-success flex items-center gap-2 text-sm"
-                >
-                  {specialReportLoading === 'finalResult-excel' ? (
-                    <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                  ) : (
-                    <Download className="w-4 h-4" />
-                  )}
-                  Excel
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => handleOpenPrintPreview('result')}
+                    disabled={printLoading}
+                    className="btn btn-primary flex items-center gap-2 text-sm"
+                  >
+                    {printLoading ? (
+                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    ) : (
+                      <Printer className="w-4 h-4" />
+                    )}
+                    印刷
+                  </button>
+                  <button
+                    onClick={() => handleDownloadRichExcel('result')}
+                    disabled={specialReportLoading === 'result-excel-rich'}
+                    className="btn btn-success flex items-center gap-2 text-sm"
+                  >
+                    {specialReportLoading === 'result-excel-rich' ? (
+                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                    Excel
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -681,6 +751,65 @@ function Reports() {
           </div>
         </div>
       )}
+
+      {/* 印刷プレビューモーダル */}
+      {showPrintModal && printData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:p-0 print:bg-white">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[95vh] overflow-hidden print:max-w-none print:max-h-none print:shadow-none print:rounded-none">
+            {/* ヘッダー（印刷時非表示） */}
+            <div className="flex items-center justify-between p-4 border-b print:hidden">
+              <h3 className="text-lg font-semibold">
+                {showPrintModal === 'result' ? '最終結果報告書' : '最終日組み合わせ表'} - 印刷プレビュー
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrint}
+                  className="btn btn-primary flex items-center gap-2"
+                >
+                  <Printer className="w-4 h-4" />
+                  印刷 / PDF保存
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPrintModal(null);
+                    setPrintData(null);
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="overflow-y-auto max-h-[calc(95vh-80px)] print:max-h-none print:overflow-visible">
+              {showPrintModal === 'result' ? (
+                <FinalResultPrintView ref={printRef} data={printData as FinalResultData} />
+              ) : (
+                <FinalSchedulePrintView ref={printRef} data={printData as FinalScheduleData} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 印刷時のスタイル */}
+      <style>{`
+        @media print {
+          body > *:not(.fixed) {
+            display: none !important;
+          }
+          .fixed {
+            position: static !important;
+            background: white !important;
+          }
+          .fixed > div {
+            max-width: none !important;
+            max-height: none !important;
+            box-shadow: none !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }
