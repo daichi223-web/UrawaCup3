@@ -6,11 +6,13 @@
 import { useState, useMemo, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { Edit3, Eye } from 'lucide-react'
 import { tournamentsApi, venuesApi, matchesApi, teamsApi, standingsApi } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/stores/appStore'
 import FinalsBracket from '@/components/FinalsBracket'
 import DraggableMatchList from '@/components/DraggableMatchList'
+import MatchScheduleEditor from '@/components/MatchScheduleEditor'
 import { Modal } from '@/components/ui/Modal'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import {
@@ -90,6 +92,7 @@ function MatchSchedule() {
     venueId: number
     matchOrder: number
   } | null>(null)
+  const [isEditMode, setIsEditMode] = useState(false)  // 組み合わせ編集モード
 
   // 大会情報を取得
   const { data: tournament, isLoading: isLoadingTournament } = useQuery({
@@ -118,6 +121,25 @@ function MatchSchedule() {
     enabled: !!tournamentId,
   })
   const venues = Array.isArray(venuesData) ? venuesData : []
+
+  // チーム一覧を取得（組み合わせ編集用）
+  const { data: teamsData } = useQuery({
+    queryKey: ['teams', tournamentId],
+    queryFn: async () => {
+      const data = await teamsApi.getAll(tournamentId)
+      return data?.teams || []
+    },
+    enabled: !!tournamentId,
+  })
+  const allTeams = useMemo(() => {
+    if (!Array.isArray(teamsData)) return []
+    return teamsData.map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      shortName: t.short_name,
+      groupId: t.group_id,
+    }))
+  }, [teamsData])
 
   // 試合一覧を取得
   const { data: matchData, isLoading: isLoadingMatches } = useQuery({
@@ -628,6 +650,33 @@ function MatchSchedule() {
     },
   })
 
+  // 組み合わせ一括更新（編集モード用）
+  const bulkUpdateMatchesMutation = useMutation({
+    mutationFn: async (changes: { matchId: number; homeTeamId: number; awayTeamId: number; refereeTeamIds?: number[] }[]) => {
+      // 各変更を順番に適用
+      for (const change of changes) {
+        await matchesApi.update(change.matchId, {
+          home_team_id: change.homeTeamId,
+          away_team_id: change.awayTeamId,
+        })
+      }
+      return { updated: changes.length }
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.updated}件の組み合わせを更新しました`)
+      queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
+    },
+    onError: (error: any) => {
+      const message = error?.message || '更新に失敗しました'
+      toast.error(message)
+    },
+  })
+
+  // 編集モードでの保存ハンドラ
+  const handleEditorSave = async (changes: { matchId: number; homeTeamId: number; awayTeamId: number; refereeTeamIds?: number[] }[]) => {
+    await bulkUpdateMatchesMutation.mutateAsync(changes)
+  }
+
   // 連打防止用ref
   const swappingRef = useRef<Set<number>>(new Set())
 
@@ -841,6 +890,32 @@ function MatchSchedule() {
           </span>
           {renderGenerateButtons()}
 
+          {/* 編集モードトグル（予選リーグタブのみ） */}
+          {(activeTab === 'day1' || activeTab === 'day2') && hasPreliminaryMatches && (
+            <button
+              onClick={() => setIsEditMode(!isEditMode)}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-colors
+                ${isEditMode
+                  ? 'bg-primary-600 text-white hover:bg-primary-700'
+                  : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                }
+              `}
+            >
+              {isEditMode ? (
+                <>
+                  <Eye className="w-4 h-4" />
+                  閲覧モード
+                </>
+              ) : (
+                <>
+                  <Edit3 className="w-4 h-4" />
+                  編集モード
+                </>
+              )}
+            </button>
+          )}
+
           {/* 試合数サマリー */}
           <div className="ml-auto text-sm text-gray-500">
             全{allMatches.length}試合 /
@@ -890,8 +965,46 @@ function MatchSchedule() {
                 </div>
               )}
             </div>
+          ) : isEditMode && (activeTab === 'day1' || activeTab === 'day2') ? (
+            // 編集モード: グループごとに編集テーブル表示
+            <div className="space-y-8">
+              {['A', 'B', 'C', 'D'].map(groupId => {
+                const groupMatches = filteredMatches.filter(m => m.groupId === groupId)
+                if (groupMatches.length === 0) return null
+
+                // グループごとの配色
+                const groupColors: Record<string, { bg: string; border: string; header: string }> = {
+                  A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
+                  B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
+                  C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
+                  D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
+                }
+                const colors = groupColors[groupId]
+
+                return (
+                  <div key={groupId} className={`rounded-lg border-2 ${colors.border} ${colors.bg} overflow-hidden`}>
+                    <div className={`px-4 py-2 ${colors.header} font-semibold`}>
+                      グループ{groupId}
+                    </div>
+                    <div className="p-4 bg-white">
+                      <MatchScheduleEditor
+                        matches={groupMatches}
+                        teams={allTeams}
+                        groupId={groupId}
+                        day={activeTab === 'day1' ? 1 : 2}
+                        onSave={handleEditorSave}
+                        disabled={bulkUpdateMatchesMutation.isPending}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="text-xs text-gray-500 text-center mt-4">
+                ※ ドロップダウンから対戦チームを選択して変更できます。エラーがある場合は保存できません。
+              </div>
+            </div>
           ) : (
-            // 通常の試合一覧（会場別カード表示 + ドラッグ&ドロップ対応）
+            // 通常の試合一覧（会場別カード表示 + クリック選択対応）
             <div className="space-y-6">
               {/* グループ（会場）ごとに表示 */}
               {venues.map(venue => {
@@ -917,7 +1030,7 @@ function MatchSchedule() {
                       {venue.groupId && <span className="text-xs opacity-75">({venue.groupId}組)</span>}
                       <span className="ml-auto text-xs font-normal opacity-75">{venueMatches.length}試合</span>
                     </div>
-                    {/* 試合リスト（ドラッグ&ドロップ対応） */}
+                    {/* 試合リスト（クリック選択対応） */}
                     <div className="p-3">
                       <DraggableMatchList
                         matches={venueMatches}
@@ -930,7 +1043,7 @@ function MatchSchedule() {
                 )
               })}
               <div className="text-xs text-gray-500 text-center">
-                ※ チームをドラッグして組み合わせを変更できます
+                ※ チームをクリックして組み合わせを変更できます
               </div>
             </div>
           )}
