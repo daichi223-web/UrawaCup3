@@ -130,15 +130,6 @@ export default function PublicMatchList() {
         );
     }
 
-    // Group by Date for cleaner UI
-    const groupedByDate = matches.reduce((acc, match) => {
-        const dateStr = match.match_date || '';
-        const date = format(new Date(dateStr), 'M月d日(E)', { locale: ja });
-        if (!acc[date]) acc[date] = [];
-        acc[date].push(match);
-        return acc;
-    }, {} as Record<string, MatchData[]>);
-
     // グループキーを取得（予選リーグはA,B,C,D、決勝トーナメント、研修試合）
     const getGroupKey = (match: MatchData): string => {
         if (match.stage === 'preliminary' && match.group_id) {
@@ -155,68 +146,92 @@ export default function PublicMatchList() {
 
     // グループ名を取得
     const getGroupLabel = (groupKey: string): string => {
-        if (groupKey === 'finals') return '決勝トーナメント';
-        if (groupKey === 'training') return '研修試合';
+        if (groupKey === 'finals') return '決勝T';
+        if (groupKey === 'training') return '研修';
         if (['A', 'B', 'C', 'D'].includes(groupKey)) return `${groupKey}組`;
         return groupKey;
     };
 
-    // グループの表示順
-    const groupOrder = ['A', 'B', 'C', 'D', 'finals', 'training', 'other'];
+    // 速報用ソート: 試合中 > 終了 > 予定 の順で、各ステータス内は時間順（最新が上）
+    const sortedMatches = [...matches].sort((a, b) => {
+        // ステータス優先度: in_progress > completed > scheduled
+        const statusOrder: Record<string, number> = {
+            'in_progress': 0,
+            'completed': 1,
+            'scheduled': 2,
+            'cancelled': 3,
+        };
+        const statusA = statusOrder[a.status] ?? 3;
+        const statusB = statusOrder[b.status] ?? 3;
+
+        if (statusA !== statusB) {
+            return statusA - statusB;
+        }
+
+        // 同じステータス内では日時でソート（終了・試合中は降順、予定は昇順）
+        const timeA = new Date(`${a.match_date} ${a.match_time}`).getTime();
+        const timeB = new Date(`${b.match_date} ${b.match_time}`).getTime();
+
+        if (a.status === 'completed' || a.status === 'in_progress') {
+            return timeB - timeA; // 最新が上
+        }
+        return timeA - timeB; // 予定は早い順
+    });
+
+    // 試合中・終了・予定に分類
+    const inProgressMatches = sortedMatches.filter(m => m.status === 'in_progress');
+    const completedMatches = sortedMatches.filter(m => m.status === 'completed');
+    const scheduledMatches = sortedMatches.filter(m => m.status === 'scheduled');
 
     return (
-        <div className="space-y-6 pb-20">
-            {Object.entries(groupedByDate).map(([date, dayMatches]) => {
-                // 日付内でグループごとに分類
-                const matchesByGroup = dayMatches.reduce((acc, match) => {
-                    const groupKey = getGroupKey(match);
-                    if (!acc[groupKey]) acc[groupKey] = [];
-                    acc[groupKey].push(match);
-                    return acc;
-                }, {} as Record<string, MatchData[]>);
-
-                // グループをソート
-                const sortedGroups = Object.keys(matchesByGroup).sort(
-                    (a, b) => groupOrder.indexOf(a) - groupOrder.indexOf(b)
-                );
-
-                return (
-                    <div key={date}>
-                        <h2 className="text-sm font-bold text-gray-500 mb-3 px-1 sticky top-0 bg-gray-50 py-2 z-10">
-                            {date}
-                        </h2>
-                        <div className="space-y-4">
-                            {sortedGroups.map(groupKey => {
-                                const groupMatches = matchesByGroup[groupKey];
-                                const colors = GROUP_COLORS[groupKey] || GROUP_COLORS.training;
-
-                                return (
-                                    <div key={groupKey} className={`rounded-lg border ${colors.border} overflow-hidden`}>
-                                        {/* グループヘッダー */}
-                                        <div className={`px-3 py-1.5 ${colors.header} ${colors.headerText} font-bold text-sm`}>
-                                            {getGroupLabel(groupKey)}
-                                            <span className="ml-2 font-normal text-xs opacity-75">
-                                                {groupMatches.length}試合
-                                            </span>
-                                        </div>
-                                        {/* 試合リスト */}
-                                        <div className={`${colors.bg} p-2 space-y-2`}>
-                                            {groupMatches.map(match => (
-                                                <PublicMatchCard key={match.id} match={match} groupKey={groupKey} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+        <div className="space-y-4 pb-20">
+            {/* 試合中 */}
+            {inProgressMatches.length > 0 && (
+                <div>
+                    <h2 className="text-sm font-bold text-red-600 mb-2 px-1 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                        試合中 ({inProgressMatches.length})
+                    </h2>
+                    <div className="space-y-2">
+                        {inProgressMatches.map(match => (
+                            <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                        ))}
                     </div>
-                );
-            })}
+                </div>
+            )}
+
+            {/* 終了した試合 */}
+            {completedMatches.length > 0 && (
+                <div>
+                    <h2 className="text-sm font-bold text-green-700 mb-2 px-1">
+                        終了 ({completedMatches.length})
+                    </h2>
+                    <div className="space-y-2">
+                        {completedMatches.map(match => (
+                            <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* 予定 */}
+            {scheduledMatches.length > 0 && (
+                <div>
+                    <h2 className="text-sm font-bold text-gray-500 mb-2 px-1">
+                        予定 ({scheduledMatches.length})
+                    </h2>
+                    <div className="space-y-2">
+                        {scheduledMatches.map(match => (
+                            <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
-function PublicMatchCard({ match, groupKey }: { match: MatchData; groupKey?: string }) {
+function PublicMatchCard({ match, groupKey, groupLabel }: { match: MatchData; groupKey?: string; groupLabel?: string }) {
     const isFinished = match.status === 'completed';
     const isLive = match.status === 'in_progress';
 
@@ -231,15 +246,30 @@ function PublicMatchCard({ match, groupKey }: { match: MatchData; groupKey?: str
     };
     const accentClass = groupKey ? accentColors[groupKey] || '' : '';
 
+    // グループに応じたバッジカラー
+    const badgeColors: Record<string, string> = {
+        A: 'bg-red-100 text-red-700',
+        B: 'bg-blue-100 text-blue-700',
+        C: 'bg-green-100 text-green-700',
+        D: 'bg-yellow-100 text-yellow-700',
+        finals: 'bg-purple-100 text-purple-700',
+        training: 'bg-gray-100 text-gray-600',
+    };
+    const badgeClass = groupKey ? badgeColors[groupKey] || 'bg-gray-100 text-gray-600' : '';
+
     return (
         <div className={`bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden ${accentClass ? `border-l-4 ${accentClass}` : ''}`}>
-            {/* Header: Time & Venue */}
+            {/* Header: Group, Time & Venue */}
             <div className="bg-gray-50 px-3 py-1.5 flex justify-between items-center text-xs text-gray-500">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-2">
+                    {/* グループバッジ */}
+                    {groupLabel && (
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${badgeClass}`}>
+                            {groupLabel}
+                        </span>
+                    )}
                     <Clock className="w-3 h-3" />
                     {match.match_time?.substring(0, 5) || '--:--'}
-                    {isLive && <span className="ml-2 text-red-600 font-bold animate-pulse">● LIVE</span>}
-                    {isFinished && <span className="ml-2 font-medium text-green-600">終了</span>}
                 </div>
                 <div className="flex items-center gap-1 truncate ml-2">
                     <MapPin className="w-3 h-3 flex-shrink-0" />
