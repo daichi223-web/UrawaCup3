@@ -974,10 +974,10 @@ function MatchSchedule() {
             // 編集モード: グループごとに編集テーブル表示
             <div className="space-y-8">
               {['A', 'B', 'C', 'D'].map(groupId => {
-                // 当日のグループ試合（編集対象）
-                const groupMatches = filteredMatches.filter(m => m.groupId === groupId)
+                // 当日のグループ試合（編集対象）- groupIdまたはgroup_id（snake_case）でフィルタ
+                const groupMatches = filteredMatches.filter(m => (m.groupId || m.group_id) === groupId)
                 // 全日程のグループ試合（バリデーション用）
-                const allGroupMatches = allMatches.filter(m => m.groupId === groupId && m.stage === 'preliminary')
+                const allGroupMatches = allMatches.filter(m => (m.groupId || m.group_id) === groupId && m.stage === 'preliminary')
                 if (groupMatches.length === 0) return null
 
                 // グループごとの配色
