@@ -36,10 +36,11 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       // 初期状態
+      // isLoading: true で開始し、checkAuth完了まで認証判定を遅延させる
       user: null,
       accessToken: null,
       isAuthenticated: false,
-      isLoading: false,
+      isLoading: true,
       error: null,
 
       /**
