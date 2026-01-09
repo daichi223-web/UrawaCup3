@@ -365,8 +365,24 @@ function MatchResult() {
                     <div className="flex-1 text-right font-bold text-lg">
                       {match.homeTeam?.name}
                     </div>
-                    <div className="mx-4 text-2xl font-bold bg-gray-100 px-4 py-1 rounded">
-                      {match.homeScoreTotal ?? '-'} - {match.awayScoreTotal ?? '-'}
+                    <div className="mx-4 text-center">
+                      {/* 合計スコア */}
+                      <div className="text-2xl font-bold bg-gray-100 px-4 py-1 rounded">
+                        {match.homeScoreTotal ?? '-'} - {match.awayScoreTotal ?? '-'}
+                      </div>
+                      {/* 前後半スコア（入力済みの場合のみ表示） */}
+                      {match.status === 'completed' && (
+                        <div className="text-xs text-gray-500 mt-1 flex justify-center gap-3">
+                          <span>前半: {match.homeScoreHalf1 ?? 0} - {match.awayScoreHalf1 ?? 0}</span>
+                          <span>後半: {match.homeScoreHalf2 ?? 0} - {match.awayScoreHalf2 ?? 0}</span>
+                        </div>
+                      )}
+                      {/* PK戦結果（ある場合のみ表示） */}
+                      {match.hasPenaltyShootout && (
+                        <div className="text-xs text-orange-600 font-medium mt-1">
+                          PK: {match.homePK ?? 0} - {match.awayPK ?? 0}
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 text-left font-bold text-lg">
                       {match.awayTeam?.name}

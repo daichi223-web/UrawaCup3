@@ -308,8 +308,19 @@ export default function DraggableMatchList({
 
               {/* スコア表示（完了時） */}
               {match.status === 'completed' && (
-                <div className="mt-3 text-center text-lg font-bold">
-                  {match.homeScoreTotal} - {match.awayScoreTotal}
+                <div className="mt-3 text-center">
+                  <div className="text-lg font-bold">
+                    {match.homeScoreTotal} - {match.awayScoreTotal}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    前半: {match.homeScoreHalf1 ?? 0} - {match.awayScoreHalf1 ?? 0}
+                    後半: {match.homeScoreHalf2 ?? 0} - {match.awayScoreHalf2 ?? 0}
+                  </div>
+                  {match.hasPenaltyShootout && (
+                    <div className="text-xs text-orange-600 font-medium mt-1">
+                      PK: {match.homePK ?? 0} - {match.awayPK ?? 0}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

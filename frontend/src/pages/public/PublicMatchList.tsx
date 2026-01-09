@@ -13,6 +13,10 @@ interface MatchData {
     status: string;
     home_score_total: number | null;
     away_score_total: number | null;
+    home_score_half1: number | null;
+    home_score_half2: number | null;
+    away_score_half1: number | null;
+    away_score_half2: number | null;
     home_pk: number | null;
     away_pk: number | null;
     home_team: { id: number; name: string } | null;
@@ -185,9 +189,17 @@ function PublicMatchCard({ match }: { match: MatchData }) {
                                 <span className="text-xl text-gray-400">vs</span>
                             )}
                         </div>
-                        {(match.home_pk != null || match.away_pk != null) && (
-                            <span className="text-xs text-gray-500 mt-1">
-                                (PK: {match.home_pk}-{match.away_pk})
+                        {/* 前後半スコア（終了時のみ表示） */}
+                        {isFinished && (
+                            <div className="text-xs text-gray-500 mt-1 flex gap-2">
+                                <span>前{match.home_score_half1 ?? 0}-{match.away_score_half1 ?? 0}</span>
+                                <span>後{match.home_score_half2 ?? 0}-{match.away_score_half2 ?? 0}</span>
+                            </div>
+                        )}
+                        {/* PK戦結果 */}
+                        {(match.home_pk != null && match.away_pk != null && (match.home_pk > 0 || match.away_pk > 0)) && (
+                            <span className="text-xs text-orange-600 font-medium mt-1">
+                                PK: {match.home_pk}-{match.away_pk}
                             </span>
                         )}
                     </div>
