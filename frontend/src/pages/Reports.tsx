@@ -766,8 +766,8 @@ function Reports() {
 
       {/* 印刷プレビューモーダル */}
       {showPrintModal && printData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:p-0 print:bg-white">
-          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[95vh] overflow-hidden print:max-w-none print:max-h-none print:shadow-none print:rounded-none">
+        <div className="print-modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:p-0 print:bg-white print:block">
+          <div className="print-modal-content bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[95vh] overflow-hidden print:max-w-none print:max-h-none print:shadow-none print:rounded-none print:block">
             {/* ヘッダー（印刷時非表示） */}
             <div className="flex items-center justify-between p-4 border-b print:hidden">
               <h3 className="text-lg font-semibold">
@@ -808,17 +808,43 @@ function Reports() {
       {/* 印刷時のスタイル */}
       <style>{`
         @media print {
-          body > *:not(.fixed) {
-            display: none !important;
+          /* 印刷時は全て非表示にしてからモーダルのみ表示 */
+          body * {
+            visibility: hidden;
           }
-          .fixed {
-            position: static !important;
+          .print-modal,
+          .print-modal *,
+          .print-view,
+          .print-view * {
+            visibility: visible !important;
+          }
+          .print-modal {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: auto !important;
             background: white !important;
+            padding: 0 !important;
           }
-          .fixed > div {
+          .print-modal-content {
             max-width: none !important;
             max-height: none !important;
+            width: 100% !important;
             box-shadow: none !important;
+            border-radius: 0 !important;
+            overflow: visible !important;
+          }
+          .print-view {
+            padding: 10mm !important;
+          }
+          .print\:hidden {
+            display: none !important;
+          }
+          /* 背景色を印刷 */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}</style>
