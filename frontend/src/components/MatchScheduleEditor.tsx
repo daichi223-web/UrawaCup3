@@ -391,10 +391,13 @@ export default function MatchScheduleEditor({
 
   const [editableMatches, setEditableMatches] = useState<EditableMatch[]>(initializeEditableMatches)
   const [isSaving, setIsSaving] = useState(false)
+  // エラー表示は保存ボタンを押した時のみ表示
+  const [validationTriggered, setValidationTriggered] = useState(false)
 
   // matches が変更されたら編集状態をリセット
   useEffect(() => {
     setEditableMatches(initializeEditableMatches())
+    setValidationTriggered(false) // 日程変更時はバリデーション表示をリセット
   }, [initializeEditableMatches])
 
   // 制約チェック
@@ -488,10 +491,14 @@ export default function MatchScheduleEditor({
   // リセット
   const handleReset = () => {
     setEditableMatches(initializeEditableMatches())
+    setValidationTriggered(false) // バリデーション表示もリセット
   }
 
   // 保存
   const handleSave = async () => {
+    // 保存ボタン押下時にバリデーション結果を表示
+    setValidationTriggered(true)
+
     if (!summary.canSave || isSaving) return
 
     const changes = editableMatches
@@ -558,8 +565,10 @@ export default function MatchScheduleEditor({
         </div>
       </div>
 
-      {/* 制約違反サマリー */}
-      <ViolationSummary violations={violations} teams={teams} />
+      {/* 制約違反サマリー（保存ボタン押下後のみ表示） */}
+      {validationTriggered && (
+        <ViolationSummary violations={violations} teams={teams} />
+      )}
 
       {/* 試合一覧テーブル */}
       <div className="overflow-x-auto border rounded-lg">
@@ -580,7 +589,7 @@ export default function MatchScheduleEditor({
                 key={match.id}
                 match={match}
                 groupTeams={groupTeams}
-                violations={getViolationsForMatch(match.id, violations)}
+                violations={validationTriggered ? getViolationsForMatch(match.id, violations) : []}
                 onHomeTeamChange={handleHomeTeamChange}
                 onAwayTeamChange={handleAwayTeamChange}
                 onRefereeChange={handleRefereeChange}
@@ -591,8 +600,8 @@ export default function MatchScheduleEditor({
         </table>
       </div>
 
-      {/* 保存ボタン（エラー時は無効） */}
-      {!summary.canSave && (
+      {/* 保存ボタン（エラー時は無効）- バリデーション実行後のみ表示 */}
+      {validationTriggered && !summary.canSave && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-2 text-red-700">
           <X className="w-5 h-5" />
           <span>エラーがあるため保存できません。上記のエラーを解消してください。</span>
