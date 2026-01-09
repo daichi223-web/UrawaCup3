@@ -11,6 +11,8 @@ interface MatchData {
     match_date: string;
     match_time: string;
     status: string;
+    stage: string;
+    group_id: string | null;
     home_score_total: number | null;
     away_score_total: number | null;
     home_score_half1: number | null;
@@ -22,6 +24,16 @@ interface MatchData {
     home_team: { id: number; name: string } | null;
     away_team: { id: number; name: string } | null;
     venue: { id: number; name: string } | null;
+}
+
+// グループごとの色設定
+const GROUP_COLORS: Record<string, { bg: string; border: string; header: string; headerText: string }> = {
+    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100', headerText: 'text-red-800' },
+    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100', headerText: 'text-blue-800' },
+    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100', headerText: 'text-green-800' },
+    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100', headerText: 'text-yellow-800' },
+    finals: { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100', headerText: 'text-purple-800' },
+    training: { bg: 'bg-gray-50', border: 'border-gray-200', header: 'bg-gray-100', headerText: 'text-gray-700' },
 }
 
 export default function PublicMatchList() {
@@ -119,7 +131,7 @@ export default function PublicMatchList() {
     }
 
     // Group by Date for cleaner UI
-    const groupedMatches = matches.reduce((acc, match) => {
+    const groupedByDate = matches.reduce((acc, match) => {
         const dateStr = match.match_date || '';
         const date = format(new Date(dateStr), 'M月d日(E)', { locale: ja });
         if (!acc[date]) acc[date] = [];
@@ -127,121 +139,191 @@ export default function PublicMatchList() {
         return acc;
     }, {} as Record<string, MatchData[]>);
 
+    // グループキーを取得（予選リーグはA,B,C,D、決勝トーナメント、研修試合）
+    const getGroupKey = (match: MatchData): string => {
+        if (match.stage === 'preliminary' && match.group_id) {
+            return match.group_id;
+        }
+        if (match.stage === 'semifinal' || match.stage === 'final' || match.stage === 'third_place') {
+            return 'finals';
+        }
+        if (match.stage === 'training') {
+            return 'training';
+        }
+        return match.group_id || 'other';
+    };
+
+    // グループ名を取得
+    const getGroupLabel = (groupKey: string): string => {
+        if (groupKey === 'finals') return '決勝トーナメント';
+        if (groupKey === 'training') return '研修試合';
+        if (['A', 'B', 'C', 'D'].includes(groupKey)) return `${groupKey}組`;
+        return groupKey;
+    };
+
+    // グループの表示順
+    const groupOrder = ['A', 'B', 'C', 'D', 'finals', 'training', 'other'];
+
     return (
         <div className="space-y-6 pb-20">
-            {Object.entries(groupedMatches).map(([date, dayMatches]) => (
-                <div key={date}>
-                    <h2 className="text-sm font-bold text-gray-500 mb-3 px-1 sticky top-0 bg-gray-50 py-2 z-10">
-                        {date}
-                    </h2>
-                    <div className="space-y-3">
-                        {dayMatches.map(match => (
-                            <PublicMatchCard key={match.id} match={match} />
-                        ))}
+            {Object.entries(groupedByDate).map(([date, dayMatches]) => {
+                // 日付内でグループごとに分類
+                const matchesByGroup = dayMatches.reduce((acc, match) => {
+                    const groupKey = getGroupKey(match);
+                    if (!acc[groupKey]) acc[groupKey] = [];
+                    acc[groupKey].push(match);
+                    return acc;
+                }, {} as Record<string, MatchData[]>);
+
+                // グループをソート
+                const sortedGroups = Object.keys(matchesByGroup).sort(
+                    (a, b) => groupOrder.indexOf(a) - groupOrder.indexOf(b)
+                );
+
+                return (
+                    <div key={date}>
+                        <h2 className="text-sm font-bold text-gray-500 mb-3 px-1 sticky top-0 bg-gray-50 py-2 z-10">
+                            {date}
+                        </h2>
+                        <div className="space-y-4">
+                            {sortedGroups.map(groupKey => {
+                                const groupMatches = matchesByGroup[groupKey];
+                                const colors = GROUP_COLORS[groupKey] || GROUP_COLORS.training;
+
+                                return (
+                                    <div key={groupKey} className={`rounded-lg border ${colors.border} overflow-hidden`}>
+                                        {/* グループヘッダー */}
+                                        <div className={`px-3 py-1.5 ${colors.header} ${colors.headerText} font-bold text-sm`}>
+                                            {getGroupLabel(groupKey)}
+                                            <span className="ml-2 font-normal text-xs opacity-75">
+                                                {groupMatches.length}試合
+                                            </span>
+                                        </div>
+                                        {/* 試合リスト */}
+                                        <div className={`${colors.bg} p-2 space-y-2`}>
+                                            {groupMatches.map(match => (
+                                                <PublicMatchCard key={match.id} match={match} groupKey={groupKey} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }
 
-function PublicMatchCard({ match }: { match: MatchData }) {
+function PublicMatchCard({ match, groupKey }: { match: MatchData; groupKey?: string }) {
     const isFinished = match.status === 'completed';
     const isLive = match.status === 'in_progress';
 
+    // グループに応じたアクセントカラー
+    const accentColors: Record<string, string> = {
+        A: 'border-l-red-400',
+        B: 'border-l-blue-400',
+        C: 'border-l-green-400',
+        D: 'border-l-yellow-400',
+        finals: 'border-l-purple-400',
+        training: 'border-l-gray-400',
+    };
+    const accentClass = groupKey ? accentColors[groupKey] || '' : '';
+
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className={`bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden ${accentClass ? `border-l-4 ${accentClass}` : ''}`}>
             {/* Header: Time & Venue */}
-            <div className="bg-gray-50 px-4 py-2 flex justify-between items-center text-xs text-gray-500">
+            <div className="bg-gray-50 px-3 py-1.5 flex justify-between items-center text-xs text-gray-500">
                 <div className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    {match.match_time || '--:--'}
+                    {match.match_time?.substring(0, 5) || '--:--'}
                     {isLive && <span className="ml-2 text-red-600 font-bold animate-pulse">● LIVE</span>}
-                    {isFinished && <span className="ml-2 font-medium text-gray-400">終了</span>}
+                    {isFinished && <span className="ml-2 font-medium text-green-600">終了</span>}
                 </div>
-                <div className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {match.venue?.name || '未定'}
+                <div className="flex items-center gap-1 truncate ml-2">
+                    <MapPin className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{match.venue?.name || '未定'}</span>
                 </div>
             </div>
 
             {/* Score Board */}
-            <div className="p-4">
+            <div className="px-3 py-2">
                 {isFinished ? (
-                    /* 終了時: 縦型レイアウト */
-                    <div className="flex items-stretch">
+                    /* 終了時: 横型レイアウト */
+                    <div className="flex items-center">
                         {/* ホームチーム名 + 合計得点 */}
                         <div className="flex-1 flex items-center justify-end gap-2">
-                            <span className="font-bold text-sm">{match.home_team?.name || 'TBD'}</span>
-                            <span className="text-2xl font-black text-gray-800 min-w-[1.5rem] text-center">
+                            <span className="font-bold text-sm truncate">{match.home_team?.name || 'TBD'}</span>
+                            <span className="text-xl font-black text-gray-800 min-w-[1.5rem] text-center">
                                 {match.home_score_total ?? '-'}
                             </span>
                         </div>
 
                         {/* 中央: 前後半スコア */}
-                        <div className="mx-3 text-center min-w-[70px]">
-                            <div className="flex items-center justify-center gap-1 text-xs">
-                                <span className="text-gray-600 w-4 text-right">{match.home_score_half1 ?? 0}</span>
-                                <span className="text-gray-400">前半</span>
-                                <span className="text-gray-600 w-4 text-left">{match.away_score_half1 ?? 0}</span>
+                        <div className="mx-2 text-center min-w-[60px]">
+                            <div className="flex items-center justify-center gap-0.5 text-[10px]">
+                                <span className="text-gray-600 w-3 text-right">{match.home_score_half1 ?? 0}</span>
+                                <span className="text-gray-400">前</span>
+                                <span className="text-gray-600 w-3 text-left">{match.away_score_half1 ?? 0}</span>
                             </div>
-                            <div className="flex items-center justify-center gap-1 text-xs">
-                                <span className="text-gray-600 w-4 text-right">{match.home_score_half2 ?? 0}</span>
-                                <span className="text-gray-400">後半</span>
-                                <span className="text-gray-600 w-4 text-left">{match.away_score_half2 ?? 0}</span>
+                            <div className="flex items-center justify-center gap-0.5 text-[10px]">
+                                <span className="text-gray-600 w-3 text-right">{match.home_score_half2 ?? 0}</span>
+                                <span className="text-gray-400">後</span>
+                                <span className="text-gray-600 w-3 text-left">{match.away_score_half2 ?? 0}</span>
                             </div>
                             {/* PK戦結果 */}
                             {(match.home_pk != null && match.away_pk != null && (match.home_pk > 0 || match.away_pk > 0)) && (
-                                <div className="flex items-center justify-center gap-1 text-xs mt-1">
-                                    <span className="text-orange-600 w-4 text-right font-medium">{match.home_pk}</span>
+                                <div className="flex items-center justify-center gap-0.5 text-[10px]">
+                                    <span className="text-orange-600 w-3 text-right font-medium">{match.home_pk}</span>
                                     <span className="text-orange-600 font-medium">PK</span>
-                                    <span className="text-orange-600 w-4 text-left font-medium">{match.away_pk}</span>
+                                    <span className="text-orange-600 w-3 text-left font-medium">{match.away_pk}</span>
                                 </div>
                             )}
                         </div>
 
                         {/* アウェイチーム得点 + 名前 */}
                         <div className="flex-1 flex items-center justify-start gap-2">
-                            <span className="text-2xl font-black text-gray-800 min-w-[1.5rem] text-center">
+                            <span className="text-xl font-black text-gray-800 min-w-[1.5rem] text-center">
                                 {match.away_score_total ?? '-'}
                             </span>
-                            <span className="font-bold text-sm">{match.away_team?.name || 'TBD'}</span>
+                            <span className="font-bold text-sm truncate">{match.away_team?.name || 'TBD'}</span>
                         </div>
                     </div>
                 ) : (
-                    /* 試合前・試合中: 従来のレイアウト */
+                    /* 試合前・試合中: コンパクトレイアウト */
                     <div className="flex items-center justify-between">
                         {/* Home Team */}
-                        <div className="flex-1 flex flex-col items-center gap-1">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
+                        <div className="flex-1 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs flex-shrink-0">
                                 {match.home_team?.name?.slice(0, 1) || '?'}
                             </div>
-                            <span className="font-bold text-sm text-center leading-tight">
+                            <span className="font-bold text-sm truncate">
                                 {match.home_team?.name || 'TBD'}
                             </span>
                         </div>
 
                         {/* Score */}
-                        <div className="px-4 flex flex-col items-center">
-                            <div className="text-3xl font-black font-mono tracking-widest text-gray-800">
+                        <div className="px-3 flex flex-col items-center">
+                            <div className="text-xl font-black font-mono text-gray-800">
                                 {isLive ? (
                                     <>
-                                        {match.home_score_total ?? '-'} <span className="text-gray-300 text-xl">-</span> {match.away_score_total ?? '-'}
+                                        {match.home_score_total ?? '-'} <span className="text-gray-300">-</span> {match.away_score_total ?? '-'}
                                     </>
                                 ) : (
-                                    <span className="text-xl text-gray-400">vs</span>
+                                    <span className="text-base text-gray-400">vs</span>
                                 )}
                             </div>
                         </div>
 
                         {/* Away Team */}
-                        <div className="flex-1 flex flex-col items-center gap-1">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
-                                {match.away_team?.name?.slice(0, 1) || '?'}
-                            </div>
-                            <span className="font-bold text-sm text-center leading-tight">
+                        <div className="flex-1 flex items-center justify-end gap-2">
+                            <span className="font-bold text-sm truncate">
                                 {match.away_team?.name || 'TBD'}
                             </span>
+                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs flex-shrink-0">
+                                {match.away_team?.name?.slice(0, 1) || '?'}
+                            </div>
                         </div>
                     </div>
                 )}
