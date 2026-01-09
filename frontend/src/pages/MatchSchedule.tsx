@@ -116,11 +116,25 @@ function MatchSchedule() {
     queryKey: ['venues', tournamentId],
     queryFn: async () => {
       const data = await venuesApi.getAll(tournamentId)
-      return data || []
+      // snake_case と camelCase の両方を保持
+      return (data || []).map((v: any) => ({
+        ...v,
+        groupId: v.group_id,
+        group_id: v.group_id,
+        maxMatchesPerDay: v.max_matches_per_day,
+        forPreliminary: v.for_preliminary,
+        forFinalDay: v.for_final_day,
+        isFinalsVenue: v.is_finals_venue,
+      }))
     },
     enabled: !!tournamentId,
+    staleTime: 0,
+    refetchOnMount: true,
   })
   const venues = Array.isArray(venuesData) ? venuesData : []
+
+  // デバッグログ
+  console.log('[MatchSchedule] venues:', venues.length, venues)
 
   // チーム一覧を取得（組み合わせ編集用）
   const { data: teamsData } = useQuery({
@@ -158,6 +172,7 @@ function MatchSchedule() {
       matchDate: m.match_date,
       matchTime: m.match_time,
       venueId: m.venue_id,
+      venue_id: m.venue_id, // snake_case も保持
       matchOrder: m.match_order,
       homeTeamId: m.home_team_id,
       awayTeamId: m.away_team_id,
@@ -165,8 +180,13 @@ function MatchSchedule() {
       awayTeam: m.away_team,
       homeScoreTotal: m.home_score_total,
       awayScoreTotal: m.away_score_total,
+      groupId: m.group_id, // グループID（camelCase）
+      group_id: m.group_id, // snake_case も保持
     }))
   }, [matchData])
+
+  // デバッグログ
+  console.log('[MatchSchedule] allMatches:', allMatches.length, 'filteredMatches will be calculated')
 
   // 日付ごとの試合をフィルタリング
   const getDateString = (dayOffset: number) => {

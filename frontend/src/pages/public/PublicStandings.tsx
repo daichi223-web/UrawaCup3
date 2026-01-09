@@ -1,91 +1,73 @@
 import { useState, useEffect, useCallback } from 'react';
-import { standingsApi } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { matchesApi, teamsApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-
-// Supabaseから取得するデータの型
-interface StandingData {
-    team_id: number;
-    played: number;
-    won: number;
-    drawn: number;
-    lost: number;
-    goals_for: number;
-    goals_against: number;
-    goal_difference: number;
-    points: number;
-    rank: number;
-    team: { id: number; name: string } | null;
-}
-
-interface GroupStandingsData {
-    groupId: string;
-    groupName: string;
-    standings: StandingData[];
-}
+import StarTable from '../../components/StarTable';
 
 export default function PublicStandings() {
-    const [standings, setStandings] = useState<Record<string, StandingData[]>>({});
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState('A');
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-    const fetchStandings = useCallback(async (showLoading = true) => {
-        try {
-            if (showLoading) setLoading(true);
-            setError(null);
+    const tournamentId = 1; // デフォルトの大会ID
 
-            // 順位表データを取得（APIがチームへのフォールバックを含む）
-            const data = await standingsApi.getByGroup(1);
+    // チーム一覧を取得
+    const { data: teamsData, isLoading: isLoadingTeams, refetch: refetchTeams } = useQuery({
+        queryKey: ['public-teams', tournamentId],
+        queryFn: async () => {
+            const data = await teamsApi.getAll(tournamentId);
+            return data?.teams || [];
+        },
+        staleTime: 30000,
+    });
 
-            // Transform Array to Map for easier access by tab
-            const standingsMap: Record<string, StandingData[]> = {};
-            if (Array.isArray(data)) {
-                data.forEach((groupData: GroupStandingsData) => {
-                    if (groupData.groupId) {
-                        standingsMap[groupData.groupId] = groupData.standings;
-                    }
-                });
-            }
+    // 試合一覧を取得
+    const { data: matchesData, isLoading: isLoadingMatches, refetch: refetchMatches } = useQuery({
+        queryKey: ['public-matches', tournamentId],
+        queryFn: async () => {
+            const data = await matchesApi.getAll(tournamentId);
+            return data?.matches || [];
+        },
+        staleTime: 30000,
+    });
 
-            setStandings(standingsMap);
-            setLastUpdated(new Date());
-        } catch (err) {
-            console.error("Failed to load standings", err);
-            setError("順位表の読み込みに失敗しました");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+    // データ更新関数
+    const refreshData = useCallback(async () => {
+        await Promise.all([refetchTeams(), refetchMatches()]);
+        setLastUpdated(new Date());
+    }, [refetchTeams, refetchMatches]);
 
-    // 初回読み込み
+    // 初回読み込み時に更新時刻を設定
     useEffect(() => {
-        fetchStandings();
-    }, [fetchStandings]);
+        if (teamsData && matchesData) {
+            setLastUpdated(new Date());
+        }
+    }, [teamsData, matchesData]);
 
     // 30秒ごとに自動更新
     useEffect(() => {
         const interval = setInterval(() => {
-            fetchStandings(false); // ローディング表示なしで更新
+            refreshData();
         }, 30000);
         return () => clearInterval(interval);
-    }, [fetchStandings]);
+    }, [refreshData]);
 
-    if (loading) return <div className="flex justify-center py-10"><LoadingSpinner /></div>;
+    const isLoading = isLoadingTeams || isLoadingMatches;
 
-    if (error) {
-        return (
-            <div className="text-center py-10 text-red-600">
-                {error}
-            </div>
-        );
+    if (isLoading) {
+        return <div className="flex justify-center py-10"><LoadingSpinner /></div>;
     }
 
-    const currentGroupStandings = standings[activeTab] || [];
+    // グループごとのチームと試合を抽出
+    const groupTeams = (teamsData || []).filter(
+        (t: any) => (t.group_id || t.groupId) === activeTab
+    );
+    const groupMatches = (matchesData || []).filter(
+        (m: any) => (m.group_id || m.groupId) === activeTab && m.stage === 'preliminary'
+    );
 
     return (
         <div className="space-y-4 pb-20">
-            <h1 className="text-xl font-bold text-gray-800 px-1">予選リーグ順位表</h1>
+            <h1 className="text-xl font-bold text-gray-800 px-1">予選リーグ 星取表</h1>
 
             {/* Tabs */}
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
@@ -103,52 +85,19 @@ export default function PublicStandings() {
                 ))}
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-500 border-b border-gray-100">
-                        <tr>
-                            <th className="py-3 pl-3 text-center w-10">順位</th>
-                            <th className="py-3 text-left">チーム</th>
-                            <th className="py-3 text-center w-8">試</th>
-                            <th className="py-3 text-center w-8">勝</th>
-                            <th className="py-3 text-center w-8">分</th>
-                            <th className="py-3 text-center w-8">負</th>
-                            <th className="py-3 text-center w-8">得</th>
-                            <th className="py-3 text-center w-8">失</th>
-                            <th className="py-3 text-center w-10">差</th>
-                            <th className="py-3 pr-3 text-center w-12 bg-red-50 text-red-600 font-bold">勝点</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {currentGroupStandings.length === 0 ? (
-                            <tr><td colSpan={10} className="text-center py-8 text-gray-400">データなし</td></tr>
-                        ) : (
-                            currentGroupStandings.map((row, index) => (
-                                <tr key={index} className={`hover:bg-red-50 transition-colors ${index < 2 ? 'bg-green-50/50' : ''}`}>
-                                    <td className="py-3 pl-3 text-center font-bold text-gray-700">
-                                        {row.rank || index + 1}
-                                    </td>
-                                    <td className="py-3 font-bold text-gray-800">
-                                        {row.team?.name ?? `Team ${row.team_id}`}
-                                    </td>
-                                    <td className="py-3 text-center text-gray-600">{row.played}</td>
-                                    <td className="py-3 text-center text-gray-600">{row.won}</td>
-                                    <td className="py-3 text-center text-gray-600">{row.drawn}</td>
-                                    <td className="py-3 text-center text-gray-600">{row.lost}</td>
-                                    <td className="py-3 text-center text-gray-600">{row.goals_for}</td>
-                                    <td className="py-3 text-center text-gray-600">{row.goals_against}</td>
-                                    <td className="py-3 text-center font-medium text-gray-900">
-                                        {row.goal_difference > 0 ? `+${row.goal_difference}` : row.goal_difference}
-                                    </td>
-                                    <td className="py-3 pr-3 text-center font-bold text-lg text-red-600 bg-red-50/50">
-                                        {row.points}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+            {/* 星取表 */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-4">
+                {groupTeams.length > 0 ? (
+                    <StarTable
+                        teams={groupTeams}
+                        matches={groupMatches}
+                        groupId={activeTab}
+                    />
+                ) : (
+                    <div className="text-center py-8 text-gray-400">
+                        チームデータがありません
+                    </div>
+                )}
             </div>
 
             {/* 最終更新時刻 */}
@@ -159,7 +108,7 @@ export default function PublicStandings() {
             )}
 
             <p className="text-[10px] text-gray-400 px-2">
-                ※ 順位決定ルール: 1.勝点 2.得失点差 3.総得点 4.直接対決
+                ※ ○=勝利 △=引分 ●=敗北
             </p>
         </div>
     );
