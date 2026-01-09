@@ -182,14 +182,19 @@ function Settings() {
       isFinalsVenue?: boolean;
     }) => {
       const { id, ...rest } = data
-      if (import.meta.env.DEV) console.log('[updateVenueMutation] Sending to Supabase:', rest)
+      // snake_case でSupabaseに送信
+      const updatePayload = {
+        name: rest.name,
+        address: rest.address,
+        group_id: rest.groupId || null,
+        max_matches_per_day: rest.maxMatchesPerDay,
+        for_final_day: rest.forFinalDay,
+        is_finals_venue: rest.isFinalsVenue,
+      }
+      if (import.meta.env.DEV) console.log('[updateVenueMutation] Sending to Supabase:', updatePayload)
       const { data: venue, error } = await supabase
         .from('venues')
-        .update({
-          name: rest.name,
-          address: rest.address,
-          // Note: 実際のテーブルカラムに合わせて調整
-        })
+        .update(updatePayload)
         .eq('id', id)
         .select()
         .single()

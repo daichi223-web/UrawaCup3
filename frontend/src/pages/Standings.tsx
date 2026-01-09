@@ -10,11 +10,13 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, AlertCircle, WifiOff, Clock, Printer } from 'lucide-react';
+import { RefreshCw, AlertCircle, WifiOff, Clock, Printer, Grid3X3, List } from 'lucide-react';
 import { standingApi, type GroupStandings } from '@/features/standings';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import StarTable from '../components/StarTable';
 import { useAppStore } from '@/stores/appStore';
+import { matchesApi, teamsApi } from '@/lib/api';
 // 印刷用スタイル（2x2レイアウトで1ページに収める）
 const printStyles = `
 @media print {
@@ -81,6 +83,9 @@ function Standings() {
   const { currentTournament } = useAppStore();
   const tournamentId = currentTournament?.id || 1;
 
+  // 表示モード: 'list' = 従来の順位表, 'star' = 星取表
+  const [viewMode, setViewMode] = useState<'list' | 'star'>('list');
+
   // アニメーション用の更新フラグ
   const [recentlyUpdated, setRecentlyUpdated] = useState(false);
 
@@ -108,6 +113,22 @@ function Standings() {
     refetchOnWindowFocus: false, // WebSocketで更新されるので不要
     staleTime: 30000, // 30秒間はフレッシュとみなす（WebSocketで更新される）
     gcTime: 5 * 60 * 1000, // 5分間キャッシュを保持
+  });
+
+  // 星取表用の試合データを取得
+  const { data: matchesData } = useQuery({
+    queryKey: ['matches', tournamentId],
+    queryFn: () => matchesApi.getAll(tournamentId),
+    enabled: viewMode === 'star',
+    staleTime: 30000,
+  });
+
+  // 星取表用のチームデータを取得
+  const { data: teamsData } = useQuery({
+    queryKey: ['teams', tournamentId],
+    queryFn: () => teamsApi.getAll(tournamentId),
+    enabled: viewMode === 'star',
+    staleTime: 30000,
   });
 
   // データ更新時のアニメーション
@@ -193,6 +214,31 @@ function Standings() {
               )}
             </span>
           )}
+          {/* 表示切り替えボタン */}
+          <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <List className="w-4 h-4" />
+              順位表
+            </button>
+            <button
+              onClick={() => setViewMode('star')}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === 'star'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Grid3X3 className="w-4 h-4" />
+              星取表
+            </button>
+          </div>
           {/* PDF印刷ボタン */}
             <button
               onClick={handlePrint}
@@ -225,81 +271,122 @@ function Standings() {
         </div>
       </div>
 
-      {/* グループ別順位表 */}
-      <div className={`standings-grid grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
-        recentlyUpdated ? 'opacity-80' : 'opacity-100'
-      }`}>
-        {groupStandings.map((groupData) => (
-          <div key={groupData.groupId} className={`card transition-shadow ${
-            recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
-          }`}>
-            <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
-              <h3 className="text-lg font-semibold">{groupData.groupId}グループ</h3>
-              {groupData.needsTiebreaker && (
-                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                  同順位あり
-                </span>
-              )}
+      {/* グループ別順位表 / 星取表 */}
+      {viewMode === 'list' ? (
+        // 従来の順位表
+        <div className={`standings-grid grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
+          recentlyUpdated ? 'opacity-80' : 'opacity-100'
+        }`}>
+          {groupStandings.map((groupData) => (
+            <div key={groupData.groupId} className={`card transition-shadow ${
+              recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
+            }`}>
+              <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
+                <h3 className="text-lg font-semibold">{groupData.groupId}グループ</h3>
+                {groupData.needsTiebreaker && (
+                  <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
+                    同順位あり
+                  </span>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="table w-full">
+                  <thead>
+                    <tr className="text-xs uppercase bg-gray-50 border-b">
+                      <th className="px-4 py-3 text-center font-bold text-gray-700 w-12">順位</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-500">チーム</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">勝</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">敗</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">分</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">得点</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">失点</th>
+                      <th className="px-2 py-3 text-center font-medium text-gray-500 w-12">得失点差</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {groupData.standings.map((standing, index) => (
+                      <tr
+                        key={standing.teamId}
+                        className={`hover:bg-gray-50 transition-colors ${
+                          index < 2 ? 'bg-green-50/50' : '' // 上位2チームをハイライト
+                        }`}
+                      >
+                        <td className="px-4 py-3 text-center font-bold text-gray-900">
+                          <span className={`${
+                            standing.rank === 1 ? 'text-yellow-600' :
+                            standing.rank === 2 ? 'text-gray-500' : ''
+                          }`}>
+                            {standing.rank}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-900 font-medium">
+                          {standing.team?.name ?? `Team ${standing.teamId}`}
+                          {standing.rankReason && (
+                            <span className="ml-2 text-xs text-blue-500" title={standing.rankReason}>ℹ️</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-3 text-center text-gray-600">{standing.won}</td>
+                        <td className="px-2 py-3 text-center text-gray-600">{standing.lost}</td>
+                        <td className="px-2 py-3 text-center text-gray-600">{standing.drawn}</td>
+                        <td className="px-2 py-3 text-center text-gray-600">{standing.goalsFor}</td>
+                        <td className="px-2 py-3 text-center text-gray-600">{standing.goalsAgainst}</td>
+                        <td className="px-2 py-3 text-center font-medium text-gray-900">
+                          {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
+                        </td>
+                      </tr>
+                    ))}
+                    {groupData.standings.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="text-center py-8 text-gray-400">
+                          データがありません
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="table w-full">
-                <thead>
-                  <tr className="text-xs uppercase bg-gray-50 border-b">
-                    <th className="px-4 py-3 text-center font-bold text-gray-700 w-12">順位</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-500">チーム</th>
-                    <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">勝</th>
-                    <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">敗</th>
-                    <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">分</th>
-                    <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">得点</th>
-                    <th className="px-2 py-3 text-center font-medium text-gray-500 w-10">失点</th>
-                    <th className="px-2 py-3 text-center font-medium text-gray-500 w-12">得失点差</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {groupData.standings.map((standing, index) => (
-                    <tr
-                      key={standing.teamId}
-                      className={`hover:bg-gray-50 transition-colors ${
-                        index < 2 ? 'bg-green-50/50' : '' // 上位2チームをハイライト
-                      }`}
-                    >
-                      <td className="px-4 py-3 text-center font-bold text-gray-900">
-                        <span className={`${
-                          standing.rank === 1 ? 'text-yellow-600' :
-                          standing.rank === 2 ? 'text-gray-500' : ''
-                        }`}>
-                          {standing.rank}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-900 font-medium">
-                        {standing.team?.name ?? `Team ${standing.teamId}`}
-                        {standing.rankReason && (
-                          <span className="ml-2 text-xs text-blue-500" title={standing.rankReason}>ℹ️</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-3 text-center text-gray-600">{standing.won}</td>
-                      <td className="px-2 py-3 text-center text-gray-600">{standing.lost}</td>
-                      <td className="px-2 py-3 text-center text-gray-600">{standing.drawn}</td>
-                      <td className="px-2 py-3 text-center text-gray-600">{standing.goalsFor}</td>
-                      <td className="px-2 py-3 text-center text-gray-600">{standing.goalsAgainst}</td>
-                      <td className="px-2 py-3 text-center font-medium text-gray-900">
-                        {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
-                      </td>
-                    </tr>
-                  ))}
-                  {groupData.standings.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="text-center py-8 text-gray-400">
-                        データがありません
-                      </td>
-                    </tr>
+          ))}
+        </div>
+      ) : (
+        // 星取表
+        <div className={`grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
+          recentlyUpdated ? 'opacity-80' : 'opacity-100'
+        }`}>
+          {groupStandings.map((groupData) => {
+            // グループのチームと試合を抽出
+            const groupTeams = (teamsData?.teams || []).filter(
+              t => (t.group_id || t.groupId) === groupData.groupId
+            )
+            const groupMatches = (matchesData?.matches || []).filter(
+              m => (m.group_id || m.groupId) === groupData.groupId
+            )
+
+            return (
+              <div key={groupData.groupId} className={`card transition-shadow ${
+                recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
+              }`}>
+                <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
+                  <h3 className="text-lg font-semibold">{groupData.groupId}グループ 星取表</h3>
+                </div>
+                <div className="card-body p-4">
+                  {groupTeams.length > 0 ? (
+                    <StarTable
+                      teams={groupTeams}
+                      matches={groupMatches}
+                      groupId={groupData.groupId}
+                    />
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      チームデータを読み込み中...
+                    </div>
                   )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
-      </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* 順位決定ルール説明 */}
       <div className="card no-print">

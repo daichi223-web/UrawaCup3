@@ -1,0 +1,300 @@
+/**
+ * 星取表コンポーネント
+ * 予選リーグの対戦結果をマトリックス形式で表示
+ * ○：勝ち　△：引き分け　●：負け
+ */
+import { useMemo } from 'react'
+import type { MatchWithDetails, Team } from '@/types'
+
+interface StarTableProps {
+  teams: Team[]
+  matches: MatchWithDetails[]
+  groupId: string
+  byePairs?: [number, number][]  // 対戦しないペア
+}
+
+interface TeamStats {
+  teamId: number
+  team: Team
+  won: number
+  drawn: number
+  lost: number
+  points: number
+  goalsFor: number
+  goalsAgainst: number
+  goalDiff: number
+  rank: number
+  headToHead: Map<number, { result: 'win' | 'draw' | 'loss' | null; score: string; opponentScore: string }>
+}
+
+export default function StarTable({ teams, matches, groupId, byePairs = [] }: StarTableProps) {
+  // 完了した予選試合のみをフィルタ
+  const completedMatches = useMemo(() => {
+    return matches.filter(m =>
+      m.status === 'completed' &&
+      m.stage === 'preliminary' &&
+      (m.groupId === groupId || m.group_id === groupId)
+    )
+  }, [matches, groupId])
+
+  // 対戦しないペアのセット (両方向をチェックするため)
+  const byePairSet = useMemo(() => {
+    const set = new Set<string>()
+    byePairs.forEach(([a, b]) => {
+      set.add(`${a}-${b}`)
+      set.add(`${b}-${a}`)
+    })
+    return set
+  }, [byePairs])
+
+  // 各チームの成績を計算
+  const teamStats = useMemo(() => {
+    const statsMap = new Map<number, TeamStats>()
+
+    // 初期化
+    teams.forEach(team => {
+      statsMap.set(team.id, {
+        teamId: team.id,
+        team,
+        won: 0,
+        drawn: 0,
+        lost: 0,
+        points: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
+        goalDiff: 0,
+        rank: 0,
+        headToHead: new Map()
+      })
+    })
+
+    // 試合結果を集計
+    completedMatches.forEach(match => {
+      const homeId = match.homeTeamId ?? match.home_team_id
+      const awayId = match.awayTeamId ?? match.away_team_id
+      const homeScore = match.homeScoreTotal ?? match.home_score_total ?? 0
+      const awayScore = match.awayScoreTotal ?? match.away_score_total ?? 0
+
+      if (!homeId || !awayId) return
+
+      const homeStats = statsMap.get(homeId)
+      const awayStats = statsMap.get(awayId)
+
+      if (!homeStats || !awayStats) return
+
+      // 得失点
+      homeStats.goalsFor += homeScore
+      homeStats.goalsAgainst += awayScore
+      awayStats.goalsFor += awayScore
+      awayStats.goalsAgainst += homeScore
+
+      // 勝敗
+      if (homeScore > awayScore) {
+        homeStats.won++
+        homeStats.points += 3
+        awayStats.lost++
+        homeStats.headToHead.set(awayId, {
+          result: 'win',
+          score: String(homeScore),
+          opponentScore: String(awayScore)
+        })
+        awayStats.headToHead.set(homeId, {
+          result: 'loss',
+          score: String(awayScore),
+          opponentScore: String(homeScore)
+        })
+      } else if (homeScore < awayScore) {
+        awayStats.won++
+        awayStats.points += 3
+        homeStats.lost++
+        homeStats.headToHead.set(awayId, {
+          result: 'loss',
+          score: String(homeScore),
+          opponentScore: String(awayScore)
+        })
+        awayStats.headToHead.set(homeId, {
+          result: 'win',
+          score: String(awayScore),
+          opponentScore: String(homeScore)
+        })
+      } else {
+        homeStats.drawn++
+        awayStats.drawn++
+        homeStats.points++
+        awayStats.points++
+        homeStats.headToHead.set(awayId, {
+          result: 'draw',
+          score: String(homeScore),
+          opponentScore: String(awayScore)
+        })
+        awayStats.headToHead.set(homeId, {
+          result: 'draw',
+          score: String(awayScore),
+          opponentScore: String(homeScore)
+        })
+      }
+    })
+
+    // 得失点差を計算
+    statsMap.forEach(stats => {
+      stats.goalDiff = stats.goalsFor - stats.goalsAgainst
+    })
+
+    // 順位をソート（勝点 → 得失点差 → 得点）
+    const sorted = Array.from(statsMap.values()).sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff
+      return b.goalsFor - a.goalsFor
+    })
+
+    // 順位を割り当て
+    sorted.forEach((stats, index) => {
+      stats.rank = index + 1
+    })
+
+    return sorted
+  }, [teams, completedMatches])
+
+  // チーム名の短縮表示
+  const getShortName = (team: Team) => {
+    return team.shortName || team.short_name || team.name.slice(0, 4)
+  }
+
+  // 結果記号を取得
+  const getResultSymbol = (result: 'win' | 'draw' | 'loss' | null) => {
+    switch (result) {
+      case 'win': return { symbol: '○', className: 'text-red-600 font-bold' }
+      case 'draw': return { symbol: '△', className: 'text-gray-600' }
+      case 'loss': return { symbol: '●', className: 'text-blue-600' }
+      default: return { symbol: '', className: '' }
+    }
+  }
+
+  // 対戦しないペアかどうか
+  const isByePair = (team1Id: number, team2Id: number) => {
+    return byePairSet.has(`${team1Id}-${team2Id}`)
+  }
+
+  if (teams.length === 0) {
+    return <div className="text-center py-4 text-gray-500">チームデータがありません</div>
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-gray-300 px-2 py-1 text-left font-medium w-24">チーム</th>
+            {teamStats.map(stats => (
+              <th
+                key={`header-${stats.teamId}`}
+                className="border border-gray-300 px-1 py-1 text-center font-medium w-12"
+                title={stats.team.name}
+              >
+                {getShortName(stats.team)}
+              </th>
+            ))}
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">勝</th>
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">分</th>
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">負</th>
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-yellow-100 w-10">勝点</th>
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">得点</th>
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">失点</th>
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">差</th>
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-green-100 w-8">順</th>
+          </tr>
+        </thead>
+        <tbody>
+          {teamStats.map((rowStats, rowIndex) => (
+            <tr
+              key={`row-${rowStats.teamId}`}
+              className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+            >
+              {/* チーム名 */}
+              <td
+                className="border border-gray-300 px-2 py-1 font-medium whitespace-nowrap"
+                title={rowStats.team.name}
+              >
+                {getShortName(rowStats.team)}
+              </td>
+
+              {/* 対戦結果マトリックス */}
+              {teamStats.map(colStats => {
+                // 自分自身のセル
+                if (rowStats.teamId === colStats.teamId) {
+                  return (
+                    <td
+                      key={`cell-${rowStats.teamId}-${colStats.teamId}`}
+                      className="border border-gray-300 px-1 py-1 text-center bg-gray-200"
+                    >
+                      -
+                    </td>
+                  )
+                }
+
+                // 対戦しないペア
+                if (isByePair(rowStats.teamId, colStats.teamId)) {
+                  return (
+                    <td
+                      key={`cell-${rowStats.teamId}-${colStats.teamId}`}
+                      className="border border-gray-300 px-1 py-1 text-center bg-gray-100"
+                      title="対戦なし"
+                    >
+                      <span className="text-gray-400">-</span>
+                    </td>
+                  )
+                }
+
+                // 対戦結果
+                const h2h = rowStats.headToHead.get(colStats.teamId)
+                const { symbol, className } = getResultSymbol(h2h?.result ?? null)
+
+                return (
+                  <td
+                    key={`cell-${rowStats.teamId}-${colStats.teamId}`}
+                    className="border border-gray-300 px-1 py-1 text-center"
+                    title={h2h ? `${h2h.score}-${h2h.opponentScore}` : '未対戦'}
+                  >
+                    {h2h ? (
+                      <div className="flex flex-col items-center leading-tight">
+                        <span className={className}>{symbol}</span>
+                        <span className="text-xs text-gray-500">{h2h.score}-{h2h.opponentScore}</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-300">-</span>
+                    )}
+                  </td>
+                )
+              })}
+
+              {/* 統計列 */}
+              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.won}</td>
+              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.drawn}</td>
+              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.lost}</td>
+              <td className="border border-gray-300 px-1 py-1 text-center font-bold bg-yellow-50">{rowStats.points}</td>
+              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.goalsFor}</td>
+              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.goalsAgainst}</td>
+              <td className="border border-gray-300 px-1 py-1 text-center">
+                {rowStats.goalDiff > 0 ? `+${rowStats.goalDiff}` : rowStats.goalDiff}
+              </td>
+              <td className={`border border-gray-300 px-1 py-1 text-center font-bold ${
+                rowStats.rank === 1 ? 'text-yellow-600 bg-yellow-50' :
+                rowStats.rank === 2 ? 'text-gray-500 bg-green-50' :
+                'bg-green-50'
+              }`}>
+                {rowStats.rank}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* 凡例 */}
+      <div className="mt-2 flex gap-4 text-xs text-gray-600">
+        <span><span className="text-red-600 font-bold">○</span> 勝ち</span>
+        <span><span className="text-gray-600">△</span> 引き分け</span>
+        <span><span className="text-blue-600">●</span> 負け</span>
+      </div>
+    </div>
+  )
+}
