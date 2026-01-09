@@ -122,6 +122,7 @@ export interface Venue {
   id: number
   name: string
   groupId?: string
+  group_id?: string  // snake_case (from Supabase)
 }
 
 /**
@@ -145,22 +146,40 @@ function getTeamsByGroup(teams: TeamInfo[], groupId: string): TeamInfo[] {
  * 会場IDを取得（グループIDから）
  */
 function getVenueForGroup(venues: Venue[], groupId: string): Venue | undefined {
-  // まずgroupIdが一致する会場を探す
-  let venue = venues.find(v => v.groupId === groupId)
-  if (venue) return venue
+  // まずgroupIdまたはgroup_id（snake_case）が一致する会場を探す
+  let venue = venues.find(v => (v.groupId || v.group_id) === groupId)
+  if (venue) {
+    console.log(`[Schedule] グループ${groupId}の会場: ${venue.name} (group_id=${venue.group_id || venue.groupId})`)
+    return venue
+  }
 
   // グループ名を含む会場を探す
   const groupVenueName = GROUP_VENUES[groupId]
   if (groupVenueName) {
     venue = venues.find(v => v.name.includes(groupVenueName.replace('高G', '')))
+    if (venue) {
+      console.log(`[Schedule] グループ${groupId}の会場（名前一致）: ${venue.name}`)
+      return venue
+    }
   }
 
   // それでも見つからない場合はインデックスで割り当て
-  if (!venue) {
-    const groupIndex = GROUPS.indexOf(groupId)
-    if (groupIndex >= 0 && groupIndex < venues.length) {
-      venue = venues[groupIndex]
+  const groupIndex = GROUPS.indexOf(groupId)
+  if (groupIndex >= 0 && groupIndex < venues.length) {
+    venue = venues[groupIndex]
+    if (venue) {
+      console.log(`[Schedule] グループ${groupId}の会場（インデックス）: ${venue.name}`)
     }
+  }
+
+  // デバッグ: 見つからない場合
+  if (!venue) {
+    console.log(`[Schedule] グループ${groupId}の会場が見つかりません。会場一覧:`, venues.map(v => ({
+      id: v.id,
+      name: v.name,
+      groupId: v.groupId,
+      group_id: v.group_id
+    })))
   }
 
   return venue
