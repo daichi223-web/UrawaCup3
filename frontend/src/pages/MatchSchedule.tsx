@@ -3,7 +3,7 @@
  * 予選リーグ・決勝トーナメントの日程管理
  * Supabase版
  */
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Edit3, Eye } from 'lucide-react'
@@ -137,7 +137,8 @@ function MatchSchedule() {
   console.log('[MatchSchedule] venues:', venues.length, venues)
 
   // チーム一覧を取得（組み合わせ編集用）
-  // placeholderData でリフェッチ中も前のデータを保持（空配列になるのを防ぐ）
+  // refにバックアップを保持し、空配列になることを防ぐ
+  const teamsBackupRef = useRef<any[]>([])
   const { data: teamsData } = useQuery({
     queryKey: ['teams', tournamentId],
     queryFn: async () => {
@@ -148,14 +149,34 @@ function MatchSchedule() {
     staleTime: 5 * 60 * 1000, // 5分間はstaleにならない
     placeholderData: (previousData) => previousData, // リフェッチ中も前のデータを表示
   })
+
+  // チームデータが取得できたらバックアップに保存
+  useEffect(() => {
+    if (Array.isArray(teamsData) && teamsData.length > 0) {
+      teamsBackupRef.current = teamsData
+      console.log('[MatchSchedule] Teams backup updated:', teamsData.length)
+    }
+  }, [teamsData])
+
   const allTeams = useMemo(() => {
-    if (!Array.isArray(teamsData)) return []
-    return teamsData.map((t: any) => ({
+    // teamsDataが有効ならそれを使用、無効ならバックアップを使用
+    const sourceData = (Array.isArray(teamsData) && teamsData.length > 0)
+      ? teamsData
+      : teamsBackupRef.current
+
+    if (!Array.isArray(sourceData) || sourceData.length === 0) {
+      console.log('[MatchSchedule] allTeams: empty (teamsData:', teamsData?.length, 'backup:', teamsBackupRef.current?.length, ')')
+      return []
+    }
+
+    const result = sourceData.map((t: any) => ({
       id: t.id,
       name: t.name,
       shortName: t.short_name,
       groupId: t.group_id,
     }))
+    console.log('[MatchSchedule] allTeams:', result.length)
+    return result
   }, [teamsData])
 
   // 試合一覧を取得
