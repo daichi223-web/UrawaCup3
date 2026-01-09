@@ -167,53 +167,84 @@ function PublicMatchCard({ match }: { match: MatchData }) {
 
             {/* Score Board */}
             <div className="p-4">
-                <div className="flex items-center justify-between">
-                    {/* Home Team */}
-                    <div className="flex-1 flex flex-col items-center gap-1">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
-                            {match.home_team?.name?.slice(0, 1) || '?'}
+                {isFinished ? (
+                    /* 終了時: 縦型レイアウト */
+                    <div className="flex items-stretch">
+                        {/* ホームチーム名 + 合計得点 */}
+                        <div className="flex-1 flex items-center justify-end gap-2">
+                            <span className="font-bold text-sm">{match.home_team?.name || 'TBD'}</span>
+                            <span className="text-2xl font-black text-gray-800 min-w-[1.5rem] text-center">
+                                {match.home_score_total ?? '-'}
+                            </span>
                         </div>
-                        <span className="font-bold text-sm text-center leading-tight">
-                            {match.home_team?.name || 'TBD'}
-                        </span>
-                    </div>
 
-                    {/* Score */}
-                    <div className="px-4 flex flex-col items-center">
-                        <div className="text-3xl font-black font-mono tracking-widest text-gray-800">
-                            {isFinished || isLive ? (
-                                <>
-                                    {match.home_score_total ?? '-'} <span className="text-gray-300 text-xl">-</span> {match.away_score_total ?? '-'}
-                                </>
-                            ) : (
-                                <span className="text-xl text-gray-400">vs</span>
+                        {/* 中央: 前後半スコア */}
+                        <div className="mx-3 text-center min-w-[70px]">
+                            <div className="flex items-center justify-center gap-1 text-xs">
+                                <span className="text-gray-600 w-4 text-right">{match.home_score_half1 ?? 0}</span>
+                                <span className="text-gray-400">前半</span>
+                                <span className="text-gray-600 w-4 text-left">{match.away_score_half1 ?? 0}</span>
+                            </div>
+                            <div className="flex items-center justify-center gap-1 text-xs">
+                                <span className="text-gray-600 w-4 text-right">{match.home_score_half2 ?? 0}</span>
+                                <span className="text-gray-400">後半</span>
+                                <span className="text-gray-600 w-4 text-left">{match.away_score_half2 ?? 0}</span>
+                            </div>
+                            {/* PK戦結果 */}
+                            {(match.home_pk != null && match.away_pk != null && (match.home_pk > 0 || match.away_pk > 0)) && (
+                                <div className="flex items-center justify-center gap-1 text-xs mt-1">
+                                    <span className="text-orange-600 w-4 text-right font-medium">{match.home_pk}</span>
+                                    <span className="text-orange-600 font-medium">PK</span>
+                                    <span className="text-orange-600 w-4 text-left font-medium">{match.away_pk}</span>
+                                </div>
                             )}
                         </div>
-                        {/* 前後半スコア（終了時のみ表示） */}
-                        {isFinished && (
-                            <div className="text-xs text-gray-500 mt-1 flex gap-2">
-                                <span>前{match.home_score_half1 ?? 0}-{match.away_score_half1 ?? 0}</span>
-                                <span>後{match.home_score_half2 ?? 0}-{match.away_score_half2 ?? 0}</span>
-                            </div>
-                        )}
-                        {/* PK戦結果 */}
-                        {(match.home_pk != null && match.away_pk != null && (match.home_pk > 0 || match.away_pk > 0)) && (
-                            <span className="text-xs text-orange-600 font-medium mt-1">
-                                PK: {match.home_pk}-{match.away_pk}
-                            </span>
-                        )}
-                    </div>
 
-                    {/* Away Team */}
-                    <div className="flex-1 flex flex-col items-center gap-1">
-                        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
-                            {match.away_team?.name?.slice(0, 1) || '?'}
+                        {/* アウェイチーム得点 + 名前 */}
+                        <div className="flex-1 flex items-center justify-start gap-2">
+                            <span className="text-2xl font-black text-gray-800 min-w-[1.5rem] text-center">
+                                {match.away_score_total ?? '-'}
+                            </span>
+                            <span className="font-bold text-sm">{match.away_team?.name || 'TBD'}</span>
                         </div>
-                        <span className="font-bold text-sm text-center leading-tight">
-                            {match.away_team?.name || 'TBD'}
-                        </span>
                     </div>
-                </div>
+                ) : (
+                    /* 試合前・試合中: 従来のレイアウト */
+                    <div className="flex items-center justify-between">
+                        {/* Home Team */}
+                        <div className="flex-1 flex flex-col items-center gap-1">
+                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
+                                {match.home_team?.name?.slice(0, 1) || '?'}
+                            </div>
+                            <span className="font-bold text-sm text-center leading-tight">
+                                {match.home_team?.name || 'TBD'}
+                            </span>
+                        </div>
+
+                        {/* Score */}
+                        <div className="px-4 flex flex-col items-center">
+                            <div className="text-3xl font-black font-mono tracking-widest text-gray-800">
+                                {isLive ? (
+                                    <>
+                                        {match.home_score_total ?? '-'} <span className="text-gray-300 text-xl">-</span> {match.away_score_total ?? '-'}
+                                    </>
+                                ) : (
+                                    <span className="text-xl text-gray-400">vs</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Away Team */}
+                        <div className="flex-1 flex flex-col items-center gap-1">
+                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
+                                {match.away_team?.name?.slice(0, 1) || '?'}
+                            </div>
+                            <span className="font-bold text-sm text-center leading-tight">
+                                {match.away_team?.name || 'TBD'}
+                            </span>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

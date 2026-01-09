@@ -361,32 +361,62 @@ function MatchResult() {
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center mt-3">
-                    <div className="flex-1 text-right font-bold text-lg">
-                      {match.homeTeam?.name}
-                    </div>
-                    <div className="mx-4 text-center">
-                      {/* 合計スコア */}
-                      <div className="text-2xl font-bold bg-gray-100 px-4 py-1 rounded">
-                        {match.homeScoreTotal ?? '-'} - {match.awayScoreTotal ?? '-'}
+                  {/* スコアボード（縦型レイアウト） */}
+                  <div className="mt-3">
+                    {match.status === 'completed' ? (
+                      <div className="flex items-stretch">
+                        {/* ホームチーム名 + 合計得点 */}
+                        <div className="flex-1 flex items-center justify-end gap-2">
+                          <span className="font-bold text-lg">{match.homeTeam?.name}</span>
+                          <span className="text-2xl font-bold text-primary-600 min-w-[2rem] text-center">
+                            {match.homeScoreTotal ?? '-'}
+                          </span>
+                        </div>
+
+                        {/* 中央: 前後半スコア */}
+                        <div className="mx-4 text-center min-w-[100px]">
+                          <div className="flex items-center justify-center gap-2 text-sm">
+                            <span className="text-gray-500 w-8 text-right">{match.homeScoreHalf1 ?? 0}</span>
+                            <span className="text-gray-400 text-xs">前半</span>
+                            <span className="text-gray-500 w-8 text-left">{match.awayScoreHalf1 ?? 0}</span>
+                          </div>
+                          <div className="flex items-center justify-center gap-2 text-sm">
+                            <span className="text-gray-500 w-8 text-right">{match.homeScoreHalf2 ?? 0}</span>
+                            <span className="text-gray-400 text-xs">後半</span>
+                            <span className="text-gray-500 w-8 text-left">{match.awayScoreHalf2 ?? 0}</span>
+                          </div>
+                          {/* PK戦結果（ある場合のみ表示） */}
+                          {match.hasPenaltyShootout && (
+                            <div className="flex items-center justify-center gap-2 text-sm mt-1">
+                              <span className="text-orange-600 w-8 text-right font-medium">{match.homePK ?? 0}</span>
+                              <span className="text-orange-600 text-xs font-medium">PK</span>
+                              <span className="text-orange-600 w-8 text-left font-medium">{match.awayPK ?? 0}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* アウェイチーム得点 + 名前 */}
+                        <div className="flex-1 flex items-center justify-start gap-2">
+                          <span className="text-2xl font-bold text-primary-600 min-w-[2rem] text-center">
+                            {match.awayScoreTotal ?? '-'}
+                          </span>
+                          <span className="font-bold text-lg">{match.awayTeam?.name}</span>
+                        </div>
                       </div>
-                      {/* 前後半スコア（入力済みの場合のみ表示） */}
-                      {match.status === 'completed' && (
-                        <div className="text-xs text-gray-500 mt-1 flex justify-center gap-3">
-                          <span>前半: {match.homeScoreHalf1 ?? 0} - {match.awayScoreHalf1 ?? 0}</span>
-                          <span>後半: {match.homeScoreHalf2 ?? 0} - {match.awayScoreHalf2 ?? 0}</span>
+                    ) : (
+                      /* 未入力時のシンプル表示 */
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 text-right font-bold text-lg">
+                          {match.homeTeam?.name}
                         </div>
-                      )}
-                      {/* PK戦結果（ある場合のみ表示） */}
-                      {match.hasPenaltyShootout && (
-                        <div className="text-xs text-orange-600 font-medium mt-1">
-                          PK: {match.homePK ?? 0} - {match.awayPK ?? 0}
+                        <div className="mx-4 text-2xl font-bold bg-gray-100 px-4 py-1 rounded">
+                          - vs -
                         </div>
-                      )}
-                    </div>
-                    <div className="flex-1 text-left font-bold text-lg">
-                      {match.awayTeam?.name}
-                    </div>
+                        <div className="flex-1 text-left font-bold text-lg">
+                          {match.awayTeam?.name}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-4 text-right">

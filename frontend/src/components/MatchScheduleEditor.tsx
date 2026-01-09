@@ -55,7 +55,8 @@ interface EditableMatch {
 }
 
 interface MatchScheduleEditorProps {
-  matches: MatchWithDetails[]
+  matches: MatchWithDetails[]  // 編集対象日の試合
+  allGroupMatches?: MatchWithDetails[]  // 全日程の試合（バリデーション用）
   teams: Team[]
   groupId: string
   day: 1 | 2  // 1日目 or 2日目
@@ -340,6 +341,7 @@ function ViolationSummary({
  */
 export default function MatchScheduleEditor({
   matches,
+  allGroupMatches,
   teams,
   groupId,
   day,
@@ -352,15 +354,30 @@ export default function MatchScheduleEditor({
     [teams, groupId]
   )
 
+  // 時間からスロット番号を計算
+  const getSlotFromTime = (matchTime: string): number => {
+    const [h, m] = matchTime.split(':').map(Number)
+    const matchMinutes = h * 60 + m
+    const startMinutes = 9 * 60  // 09:00
+    const slotDuration = 25  // 15分試合 + 10分間隔
+    return Math.floor((matchMinutes - startMinutes) / slotDuration) + 1
+  }
+
   // 編集状態を初期化
   const initializeEditableMatches = useCallback((): EditableMatch[] => {
     return matches
       .filter(m => m.groupId === groupId)
+      .sort((a, b) => {
+        // 時間順にソート
+        const timeA = a.matchTime || '00:00'
+        const timeB = b.matchTime || '00:00'
+        return timeA.localeCompare(timeB)
+      })
       .map((m, index) => ({
         id: m.id,
         matchDate: m.matchDate,
         matchTime: m.matchTime,
-        slot: index + 1,  // 1-6
+        slot: getSlotFromTime(m.matchTime) || (index + 1),  // 時間からスロット計算
         homeTeamId: m.homeTeamId!,
         awayTeamId: m.awayTeamId!,
         groupId: groupId,
@@ -370,7 +387,6 @@ export default function MatchScheduleEditor({
         originalRefereeTeamIds: (m as any).refereeTeamIds || [],
         isModified: false,
       }))
-      .sort((a, b) => a.slot - b.slot)
   }, [matches, groupId])
 
   const [editableMatches, setEditableMatches] = useState<EditableMatch[]>(initializeEditableMatches)
@@ -383,7 +399,8 @@ export default function MatchScheduleEditor({
 
   // 制約チェック
   const violations = useMemo(() => {
-    const matchesForValidation: MatchForValidation[] = editableMatches.map(m => ({
+    // 編集中の試合
+    const editedMatchesForValidation: MatchForValidation[] = editableMatches.map(m => ({
       id: m.id,
       matchDate: m.matchDate,
       matchTime: m.matchTime,
@@ -394,14 +411,32 @@ export default function MatchScheduleEditor({
       refereeTeamIds: m.refereeTeamIds,
     }))
 
+    // 他の日の試合も含めてバリデーション（同一カード重複チェック用）
+    const otherDayMatches: MatchForValidation[] = (allGroupMatches || [])
+      .filter(m => m.groupId === groupId && !editableMatches.some(em => em.id === m.id))
+      .map(m => ({
+        id: m.id,
+        matchDate: m.matchDate,
+        matchTime: m.matchTime,
+        slot: getSlotFromTime(m.matchTime) || 1,
+        homeTeamId: m.homeTeamId!,
+        awayTeamId: m.awayTeamId!,
+        groupId: groupId,
+        refereeTeamIds: (m as any).refereeTeamIds || [],
+      }))
+
+    const allMatchesForValidation = [...editedMatchesForValidation, ...otherDayMatches]
+
     const teamInfos: TeamInfo[] = groupTeams.map(t => ({
       id: t.id,
       name: t.name,
       groupId: t.groupId || groupId,
     }))
 
-    return validateMatches(matchesForValidation, teamInfos)
-  }, [editableMatches, groupTeams, groupId])
+    console.log('[Validation] Matches:', allMatchesForValidation.length, 'Teams:', teamInfos.length)
+
+    return validateMatches(allMatchesForValidation, teamInfos)
+  }, [editableMatches, allGroupMatches, groupTeams, groupId])
 
   const summary = getViolationSummary(violations)
 

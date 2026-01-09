@@ -969,7 +969,10 @@ function MatchSchedule() {
             // 編集モード: グループごとに編集テーブル表示
             <div className="space-y-8">
               {['A', 'B', 'C', 'D'].map(groupId => {
+                // 当日のグループ試合（編集対象）
                 const groupMatches = filteredMatches.filter(m => m.groupId === groupId)
+                // 全日程のグループ試合（バリデーション用）
+                const allGroupMatches = allMatches.filter(m => m.groupId === groupId && m.stage === 'preliminary')
                 if (groupMatches.length === 0) return null
 
                 // グループごとの配色
@@ -989,6 +992,7 @@ function MatchSchedule() {
                     <div className="p-4 bg-white">
                       <MatchScheduleEditor
                         matches={groupMatches}
+                        allGroupMatches={allGroupMatches}
                         teams={allTeams}
                         groupId={groupId}
                         day={activeTab === 'day1' ? 1 : 2}
