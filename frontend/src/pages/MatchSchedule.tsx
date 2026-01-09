@@ -137,6 +137,7 @@ function MatchSchedule() {
   console.log('[MatchSchedule] venues:', venues.length, venues)
 
   // チーム一覧を取得（組み合わせ編集用）
+  // placeholderData でリフェッチ中も前のデータを保持（空配列になるのを防ぐ）
   const { data: teamsData } = useQuery({
     queryKey: ['teams', tournamentId],
     queryFn: async () => {
@@ -144,6 +145,8 @@ function MatchSchedule() {
       return data?.teams || []
     },
     enabled: !!tournamentId,
+    staleTime: 5 * 60 * 1000, // 5分間はstaleにならない
+    placeholderData: (previousData) => previousData, // リフェッチ中も前のデータを表示
   })
   const allTeams = useMemo(() => {
     if (!Array.isArray(teamsData)) return []
