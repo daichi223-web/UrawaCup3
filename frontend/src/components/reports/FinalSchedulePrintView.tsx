@@ -252,12 +252,18 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
         浦和カップ運営委員会
       </div>
 
-      {/* 印刷用スタイル */}
+            {/* 印刷用スタイル */}
       <style>{`
         @media print {
           .print-view {
             max-width: none !important;
             padding: 10mm !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-view * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           @page {
             size: A4;
@@ -268,6 +274,17 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
           }
           .md\\:grid-cols-4 {
             grid-template-columns: repeat(4, 1fr) !important;
+          }
+          /* 背景色を確実に印刷 */
+          .bg-yellow-50, .bg-purple-50, .bg-blue-50,
+          .bg-yellow-100, .bg-gray-100, .bg-gray-50 {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          /* テーブルヘッダー背景 */
+          thead, th, .bg-gray-700, .bg-blue-600, .bg-gray-600 {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
       `}</style>

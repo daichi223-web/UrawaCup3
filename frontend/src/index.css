@@ -163,3 +163,67 @@
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
 }
+
+/* 印刷用スタイル */
+@media print {
+  /* 背景色・画像を印刷する */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* 印刷時にナビゲーションなどを非表示 */
+  nav, .no-print, .sidebar, header:not(.print-header) {
+    display: none !important;
+  }
+
+  /* 印刷ビューのスタイル */
+  .print-view {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 10mm !important;
+    background: white !important;
+  }
+
+  /* ページ設定 */
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  /* グラデーション背景を印刷可能に */
+  .bg-gradient-to-br {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* テーブルヘッダーの背景色を印刷 */
+  th, thead tr {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ボーダーを確実に印刷 */
+  .border, .border-2, .border-b, .border-t, .border-l, .border-r {
+    border-color: currentColor !important;
+  }
+
+  /* リンクの下線を削除 */
+  a {
+    text-decoration: none !important;
+  }
+
+  /* 改ページ制御 */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  .page-break-after {
+    page-break-after: always;
+  }
+
+  .avoid-break {
+    page-break-inside: avoid;
+  }
+}
