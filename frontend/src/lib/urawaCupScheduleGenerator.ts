@@ -37,15 +37,38 @@ const NON_MATCHING_PAIRS: [number, number][] = [
   [3, 4], // シード中位同士
 ]
 
-// キックオフ時刻（25分間隔: 試合15分 + インターバル10分）
-const KICKOFF_TIMES = [
-  '09:00',
-  '09:25',
-  '09:50',
-  '10:15',
-  '10:40',
-  '11:05',
-]
+// デフォルト設定
+const DEFAULT_START_TIME = '09:00'
+const DEFAULT_MATCH_DURATION = 15 // 試合時間（分）
+const DEFAULT_INTERVAL = 10 // 試合間隔（分）= HT + 入れ替え
+
+/**
+ * キックオフ時刻を動的に生成
+ * @param startTime 開始時刻 (HH:MM)
+ * @param matchDuration 試合時間（分）
+ * @param interval 試合間隔（分）= HT + 入れ替え
+ * @param matchCount 試合数
+ */
+function generateKickoffTimes(
+  startTime: string,
+  matchDuration: number,
+  interval: number,
+  matchCount: number
+): string[] {
+  const times: string[] = []
+  const [startHour, startMinute] = startTime.split(':').map(Number)
+  let currentMinutes = startHour * 60 + startMinute
+
+  for (let i = 0; i < matchCount; i++) {
+    const hours = Math.floor(currentMinutes / 60)
+    const minutes = currentMinutes % 60
+    times.push(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`)
+    // 次の試合開始時刻 = 試合時間 + 間隔
+    currentMinutes += matchDuration + interval
+  }
+
+  return times
+}
 
 // グループ定義
 const GROUPS = ['A', 'B', 'C', 'D']
@@ -157,18 +180,41 @@ function getRefereeTeams(
     .map(t => t.id)
 }
 
+export interface ScheduleConfig {
+  startTime?: string        // 開始時刻（デフォルト: 09:00）
+  matchDuration?: number    // 試合時間（分、デフォルト: 15）
+  intervalMinutes?: number  // 試合間隔（分、HT+入れ替え、デフォルト: 10）
+}
+
 /**
  * 浦和カップの日程を生成
+ * @param teams チーム一覧
+ * @param venues 会場一覧
+ * @param day1Date 初日の日付
+ * @param day2Date 二日目の日付
+ * @param config 設定（試合時間、間隔など）
  */
 export function generateUrawaCupSchedule(
   teams: TeamInfo[],
   venues: Venue[],
   day1Date: string,
-  day2Date: string
+  day2Date: string,
+  config?: ScheduleConfig
 ): ScheduleGenerationResult {
   const warnings: string[] = []
   const matches: GeneratedMatch[] = []
   let matchOrder = 1
+
+  // 設定値を取得（デフォルト値を適用）
+  const startTime = config?.startTime || DEFAULT_START_TIME
+  const matchDuration = config?.matchDuration || DEFAULT_MATCH_DURATION
+  const interval = config?.intervalMinutes || DEFAULT_INTERVAL
+
+  // キックオフ時刻を動的に生成（1日6試合）
+  const kickoffTimes = generateKickoffTimes(startTime, matchDuration, interval, 6)
+
+  console.log('[Schedule] 設定:', { startTime, matchDuration, interval })
+  console.log('[Schedule] キックオフ時刻:', kickoffTimes)
 
   // グループごとに処理
   for (const groupId of GROUPS) {
@@ -211,7 +257,7 @@ export function generateUrawaCupSchedule(
         venueId: venue.id,
         venueName: venue.name,
         matchDate: day1Date,
-        matchTime: KICKOFF_TIMES[slot],
+        matchTime: kickoffTimes[slot],
         matchOrder: matchOrder++,
         day: 1,
         slot: slot + 1,
@@ -242,7 +288,7 @@ export function generateUrawaCupSchedule(
         venueId: venue.id,
         venueName: venue.name,
         matchDate: day2Date,
-        matchTime: KICKOFF_TIMES[slot],
+        matchTime: kickoffTimes[slot],
         matchOrder: matchOrder++,
         day: 2,
         slot: slot + 1,

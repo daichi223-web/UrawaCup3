@@ -401,13 +401,13 @@ function Settings() {
               />
             </div>
             <div>
-              <label className="form-label">試合間隔（分）</label>
+              <label className="form-label">試合間隔（分）<span className="text-xs text-gray-500 ml-1">(HT+入れ替え)</span></label>
               <input
                 type="number"
                 className="form-input"
                 value={tournamentForm.intervalMinutes}
-                placeholder="15"
-                onChange={(e) => setTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 15 }))}
+                placeholder="10"
+                onChange={(e) => setTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 10 }))}
               />
             </div>
           </div>
@@ -672,14 +672,14 @@ function Settings() {
               />
             </div>
             <div>
-              <label className="form-label">試合間隔（分）</label>
+              <label className="form-label">試合間隔（分）<span className="text-xs text-gray-500 ml-1">(HT+入れ替え)</span></label>
               <input
                 type="number"
                 className="form-input"
                 min={5}
                 max={60}
                 value={newTournamentForm.intervalMinutes}
-                onChange={(e) => setNewTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 15 }))}
+                onChange={(e) => setNewTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 10 }))}
               />
             </div>
           </div>
