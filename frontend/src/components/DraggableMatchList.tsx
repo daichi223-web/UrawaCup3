@@ -330,23 +330,60 @@ export default function DraggableMatchList({
                 </div>
               </div>
 
-              {/* スコア表示（完了時） */}
-              {match.status === 'completed' && (
-                <div className="mt-3 text-center">
-                  <div className="text-lg font-bold">
-                    {match.homeScoreTotal} - {match.awayScoreTotal}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    前半: {match.homeScoreHalf1 ?? 0} - {match.awayScoreHalf1 ?? 0}
-                    後半: {match.homeScoreHalf2 ?? 0} - {match.awayScoreHalf2 ?? 0}
-                  </div>
-                  {match.hasPenaltyShootout && (
-                    <div className="text-xs text-orange-600 font-medium mt-1">
-                      PK: {match.homePK ?? 0} - {match.awayPK ?? 0}
+              {/* スコア表示（常に領域を確保） */}
+              <div className="mt-3">
+                {match.status === 'completed' ? (
+                  /* 完了時: スコア表示 */
+                  <div className="flex items-center justify-center gap-3">
+                    {/* ホームスコア */}
+                    <div className="text-2xl font-bold text-gray-800 w-8 text-center">
+                      {match.homeScoreTotal ?? 0}
                     </div>
-                  )}
-                </div>
-              )}
+                    {/* 中央: 前後半スコア */}
+                    <div className="flex flex-col items-center text-xs text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <span className="w-3 text-right">{match.homeScoreHalf1 ?? 0}</span>
+                        <span className="text-gray-400">前</span>
+                        <span className="w-3 text-left">{match.awayScoreHalf1 ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="w-3 text-right">{match.homeScoreHalf2 ?? 0}</span>
+                        <span className="text-gray-400">後</span>
+                        <span className="w-3 text-left">{match.awayScoreHalf2 ?? 0}</span>
+                      </div>
+                      {match.hasPenaltyShootout && (
+                        <div className="flex items-center gap-1 text-orange-600 font-medium">
+                          <span className="w-3 text-right">{match.homePK ?? 0}</span>
+                          <span>PK</span>
+                          <span className="w-3 text-left">{match.awayPK ?? 0}</span>
+                        </div>
+                      )}
+                    </div>
+                    {/* アウェイスコア */}
+                    <div className="text-2xl font-bold text-gray-800 w-8 text-center">
+                      {match.awayScoreTotal ?? 0}
+                    </div>
+                  </div>
+                ) : (
+                  /* 未完了時: プレースホルダー */
+                  <div className="flex items-center justify-center gap-3 text-gray-300">
+                    <div className="text-2xl font-bold w-8 text-center">-</div>
+                    <div className="flex flex-col items-center text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="w-3 text-right">-</span>
+                        <span>前</span>
+                        <span className="w-3 text-left">-</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="w-3 text-right">-</span>
+                        <span>後</span>
+                        <span className="w-3 text-left">-</span>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold w-8 text-center">-</div>
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}

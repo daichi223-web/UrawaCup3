@@ -1064,10 +1064,10 @@ function MatchSchedule() {
               )}
             </div>
           ) : isEditMode && (activeTab === 'day1' || activeTab === 'day2') ? (
-            // 編集モード: 二日間同時表示 + グループごとに編集テーブル
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Day1 編集 */}
-              <div className="space-y-4">
+            // 編集モード: 二日間同時表示（グループごとに横並び）
+            <div className="space-y-4">
+              {/* 日付ヘッダー */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
                   <span>Day1 ({getDateString(0)})</span>
                   {day1Matches.some(m => {
@@ -1078,27 +1078,42 @@ function MatchSchedule() {
                     <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
                   )}
                 </h3>
-                {['A', 'B', 'C', 'D'].map(groupId => {
-                  const groupMatches = day1Matches.filter(m => (m.groupId || m.group_id) === groupId)
-                  const allGroupMatches = allMatches.filter(m => (m.groupId || m.group_id) === groupId && m.stage === 'preliminary')
-                  if (groupMatches.length === 0) return null
+                <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
+                  <span>Day2 ({getDateString(1)})</span>
+                  {day2Matches.some(m => {
+                    const homeId = m.homeTeamId || m.home_team_id
+                    const awayId = m.awayTeamId || m.away_team_id
+                    return (homeId && consecutiveMatchTeams.has(homeId)) || (awayId && consecutiveMatchTeams.has(awayId))
+                  }) && (
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
+                  )}
+                </h3>
+              </div>
 
-                  const groupColors: Record<string, { bg: string; border: string; header: string }> = {
-                    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
-                    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
-                    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
-                    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
-                  }
-                  const colors = groupColors[groupId]
+              {/* グループごとに横並び表示 */}
+              {['A', 'B', 'C', 'D'].map(groupId => {
+                const day1GroupMatches = day1Matches.filter(m => (m.groupId || m.group_id) === groupId)
+                const day2GroupMatches = day2Matches.filter(m => (m.groupId || m.group_id) === groupId)
+                const allGroupMatches = allMatches.filter(m => (m.groupId || m.group_id) === groupId && m.stage === 'preliminary')
 
-                  return (
-                    <div key={`day1-edit-${groupId}`} className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+                const groupColors: Record<string, { bg: string; border: string; header: string }> = {
+                  A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
+                  B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
+                  C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
+                  D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
+                }
+                const colors = groupColors[groupId]
+
+                return (
+                  <div key={groupId} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Day1のグループ */}
+                    <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
                         {groupId}組
                       </div>
                       <div className="p-2 bg-white">
                         <MatchScheduleEditor
-                          matches={groupMatches}
+                          matches={day1GroupMatches}
                           allGroupMatches={allGroupMatches}
                           teams={allTeams}
                           groupId={groupId}
@@ -1108,43 +1123,14 @@ function MatchSchedule() {
                         />
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-
-              {/* Day2 編集 */}
-              <div className="space-y-4">
-                <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
-                  <span>Day2 ({getDateString(1)})</span>
-                  {day2Matches.some(m => {
-                    const homeId = m.homeTeamId || m.home_team_id
-                    const awayId = m.awayTeamId || m.away_team_id
-                    return (homeId && consecutiveMatchTeams.has(homeId)) || (awayId && consecutiveMatchTeams.has(awayId))
-                  }) && (
-                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
-                  )}
-                </h3>
-                {['A', 'B', 'C', 'D'].map(groupId => {
-                  const groupMatches = day2Matches.filter(m => (m.groupId || m.group_id) === groupId)
-                  const allGroupMatches = allMatches.filter(m => (m.groupId || m.group_id) === groupId && m.stage === 'preliminary')
-                  if (groupMatches.length === 0) return null
-
-                  const groupColors: Record<string, { bg: string; border: string; header: string }> = {
-                    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
-                    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
-                    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
-                    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
-                  }
-                  const colors = groupColors[groupId]
-
-                  return (
-                    <div key={`day2-edit-${groupId}`} className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+                    {/* Day2のグループ */}
+                    <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
                         {groupId}組
                       </div>
                       <div className="p-2 bg-white">
                         <MatchScheduleEditor
-                          matches={groupMatches}
+                          matches={day2GroupMatches}
                           allGroupMatches={allGroupMatches}
                           teams={allTeams}
                           groupId={groupId}
@@ -1154,15 +1140,15 @@ function MatchSchedule() {
                         />
                       </div>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
             </div>
           ) : (activeTab === 'day1' || activeTab === 'day2') && hasPreliminaryMatches ? (
-            // 閲覧モード: 二日間同時表示
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Day1 */}
-              <div className="space-y-3">
+            // 閲覧モード: 二日間同時表示（グループごとに横並び）
+            <div className="space-y-4">
+              {/* 日付ヘッダー */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
                   <span>Day1 ({getDateString(0)})</span>
                   {day1Matches.some(m => {
@@ -1173,39 +1159,6 @@ function MatchSchedule() {
                     <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
                   )}
                 </h3>
-                {['A', 'B', 'C', 'D'].map(groupId => {
-                  const groupMatches = day1Matches.filter(m => (m.groupId || m.group_id) === groupId)
-                  if (groupMatches.length === 0) return null
-
-                  const groupColors: Record<string, { bg: string; border: string; header: string }> = {
-                    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
-                    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
-                    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
-                    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
-                  }
-                  const colors = groupColors[groupId]
-
-                  return (
-                    <div key={`day1-${groupId}`} className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
-                      <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
-                        {groupId}組
-                      </div>
-                      <div className="p-2 bg-white">
-                        <DraggableMatchList
-                          matches={groupMatches}
-                          onSwapTeams={handleSwapTeams}
-                          title=""
-                          emptyMessage="試合がありません"
-                          consecutiveMatchTeams={consecutiveMatchTeams}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Day2 */}
-              <div className="space-y-3">
                 <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
                   <span>Day2 ({getDateString(1)})</span>
                   {day2Matches.some(m => {
@@ -1216,26 +1169,31 @@ function MatchSchedule() {
                     <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
                   )}
                 </h3>
-                {['A', 'B', 'C', 'D'].map(groupId => {
-                  const groupMatches = day2Matches.filter(m => (m.groupId || m.group_id) === groupId)
-                  if (groupMatches.length === 0) return null
+              </div>
 
-                  const groupColors: Record<string, { bg: string; border: string; header: string }> = {
-                    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
-                    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
-                    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
-                    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
-                  }
-                  const colors = groupColors[groupId]
+              {/* グループごとに横並び表示 */}
+              {['A', 'B', 'C', 'D'].map(groupId => {
+                const day1GroupMatches = day1Matches.filter(m => (m.groupId || m.group_id) === groupId)
+                const day2GroupMatches = day2Matches.filter(m => (m.groupId || m.group_id) === groupId)
 
-                  return (
-                    <div key={`day2-${groupId}`} className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+                const groupColors: Record<string, { bg: string; border: string; header: string }> = {
+                  A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
+                  B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
+                  C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
+                  D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
+                }
+                const colors = groupColors[groupId]
+
+                return (
+                  <div key={groupId} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Day1のグループ */}
+                    <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
                         {groupId}組
                       </div>
                       <div className="p-2 bg-white">
                         <DraggableMatchList
-                          matches={groupMatches}
+                          matches={day1GroupMatches}
                           onSwapTeams={handleSwapTeams}
                           title=""
                           emptyMessage="試合がありません"
@@ -1243,9 +1201,24 @@ function MatchSchedule() {
                         />
                       </div>
                     </div>
-                  )
-                })}
-              </div>
+                    {/* Day2のグループ */}
+                    <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+                      <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
+                        {groupId}組
+                      </div>
+                      <div className="p-2 bg-white">
+                        <DraggableMatchList
+                          matches={day2GroupMatches}
+                          onSwapTeams={handleSwapTeams}
+                          title=""
+                          emptyMessage="試合がありません"
+                          consecutiveMatchTeams={consecutiveMatchTeams}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           ) : (
             // 通常の試合一覧（会場別カード表示 + クリック選択対応）
