@@ -31,12 +31,28 @@ export const venueApi = {
 
   // 会場作成
   create: async (data: CreateVenueInput): Promise<Venue> => {
-    const venue = await venuesApi.create({
+    console.log('[venueApi.create] Input:', data);
+    const insertData = {
       tournament_id: data.tournamentId,
       name: data.name,
-      address: data.address,
-      map_url: data.mapUrl,
-    });
+      address: data.address || null,
+      group_id: data.groupId || null,
+      max_matches_per_day: 6, // デフォルト値
+      for_preliminary: data.forPreliminary ?? true,
+      for_final_day: data.forFinalDay ?? false,
+      is_finals_venue: data.isFinalsVenue ?? false,
+    };
+    console.log('[venueApi.create] Inserting:', insertData);
+    const { data: venue, error } = await supabase
+      .from('venues')
+      .insert(insertData)
+      .select()
+      .single();
+    if (error) {
+      console.error('[venueApi.create] Error:', error);
+      throw error;
+    }
+    console.log('[venueApi.create] Success:', venue);
     return venue as Venue;
   },
 
