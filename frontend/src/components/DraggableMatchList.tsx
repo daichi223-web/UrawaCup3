@@ -21,12 +21,13 @@ interface TeamSlotProps {
   isSwapTarget: boolean
   onClick: () => void
   disabled: boolean
+  hasConsecutiveError?: boolean
 }
 
 /**
  * クリック可能なチームスロット
  */
-function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled }: TeamSlotProps) {
+function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError }: TeamSlotProps) {
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
 
@@ -36,17 +37,20 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
       disabled={disabled}
       className={`
         flex items-center gap-2 p-2 rounded border-2 w-full text-left transition-all
-        ${isSelected
-          ? 'border-primary-500 bg-primary-100 ring-2 ring-primary-300'
-          : isSwapTarget
-            ? 'border-green-400 bg-green-50 hover:bg-green-100'
-            : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-gray-50'
+        ${hasConsecutiveError
+          ? 'border-red-400 bg-red-50'
+          : isSelected
+            ? 'border-primary-500 bg-primary-100 ring-2 ring-primary-300'
+            : isSwapTarget
+              ? 'border-green-400 bg-green-50 hover:bg-green-100'
+              : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-gray-50'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
     >
       {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
-      <span className="font-medium truncate flex-1">
+      {hasConsecutiveError && !isSelected && <span className="text-red-500 text-xs">⚠</span>}
+      <span className={`font-medium truncate flex-1 ${hasConsecutiveError ? 'text-red-700' : ''}`}>
         {team?.shortName || team?.name || `チームID: ${teamId}`}
       </span>
     </button>
@@ -143,6 +147,7 @@ interface ClickableMatchListProps {
   onSwapTeams: (matchId: number, homeTeamId: number, awayTeamId: number) => void
   title?: string
   emptyMessage?: string
+  consecutiveMatchTeams?: Set<number>
 }
 
 /**
@@ -158,6 +163,7 @@ export default function DraggableMatchList({
   onSwapTeams,
   title = '試合一覧',
   emptyMessage = '試合がありません',
+  consecutiveMatchTeams,
 }: ClickableMatchListProps) {
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
 
@@ -261,21 +267,37 @@ export default function DraggableMatchList({
           // 選択中のチームがあり、この試合の別のチームである場合はスワップターゲット
           const isHomeSwapTarget = selectedTeam !== null && !isHomeSelected && !isDisabled
           const isAwaySwapTarget = selectedTeam !== null && !isAwaySelected && !isDisabled
+          // 連戦チェック
+          const homeTeamId = match.homeTeamId || (match as any).home_team_id
+          const awayTeamId = match.awayTeamId || (match as any).away_team_id
+          const homeHasConsecutiveError = consecutiveMatchTeams?.has(homeTeamId) ?? false
+          const awayHasConsecutiveError = consecutiveMatchTeams?.has(awayTeamId) ?? false
 
           return (
-            <div key={match.id} className="bg-white rounded-lg border-2 border-gray-200 p-4">
+            <div key={match.id} className={`bg-white rounded-lg border-2 p-4 ${
+              homeHasConsecutiveError || awayHasConsecutiveError
+                ? 'border-red-300'
+                : 'border-gray-200'
+            }`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-gray-500">
                   #{match.matchOrder} {match.matchTime?.substring(0, 5)}
                 </div>
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  match.status === 'completed' ? 'bg-green-100 text-green-800' :
-                  match.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-gray-100 text-gray-700'
-                }`}>
-                  {match.status === 'completed' ? '終了' :
-                   match.status === 'in_progress' ? '試合中' : '予定'}
-                </span>
+                <div className="flex items-center gap-1">
+                  {(homeHasConsecutiveError || awayHasConsecutiveError) && (
+                    <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
+                      連戦
+                    </span>
+                  )}
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    match.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    match.status === 'in_progress' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {match.status === 'completed' ? '終了' :
+                     match.status === 'in_progress' ? '試合中' : '予定'}
+                  </span>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
@@ -288,6 +310,7 @@ export default function DraggableMatchList({
                     isSwapTarget={isHomeSwapTarget}
                     onClick={() => handleTeamClick(match, 'home')}
                     disabled={isDisabled}
+                    hasConsecutiveError={homeHasConsecutiveError}
                   />
                 </div>
 
@@ -302,6 +325,7 @@ export default function DraggableMatchList({
                     isSwapTarget={isAwaySwapTarget}
                     onClick={() => handleTeamClick(match, 'away')}
                     disabled={isDisabled}
+                    hasConsecutiveError={awayHasConsecutiveError}
                   />
                 </div>
               </div>
