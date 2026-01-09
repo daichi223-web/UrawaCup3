@@ -272,12 +272,17 @@ function MatchSchedule() {
 
       console.log('[Schedule] チーム情報:', teamInfoList)
 
-      // 会場情報を取得
-      const venueList = venues.map(v => ({
+      // 会場情報を取得（APIから直接取得）
+      const venuesResult = await venuesApi.getAll(tournamentId)
+      const fetchedVenues = venuesResult || []
+      console.log('[Schedule] 取得した会場:', fetchedVenues)
+
+      const venueList = fetchedVenues.map((v: any) => ({
         id: v.id,
         name: v.name,
-        groupId: (v as any).group_id,
+        groupId: v.group_id,
       }))
+      console.log('[Schedule] 会場リスト:', venueList)
 
       // 浦和カップ方式で日程生成
       const result = generateUrawaCupSchedule(teamInfoList, venueList, day1Date, day2Date)
