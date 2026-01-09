@@ -93,7 +93,6 @@ function MatchSchedule() {
     matchOrder: number
   } | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)  // 組み合わせ編集モード
-  const [showBothDays, setShowBothDays] = useState(false)  // 二日間同時表示
 
   // 大会情報を取得
   const { data: tournament, isLoading: isLoadingTournament } = useQuery({
@@ -1006,20 +1005,10 @@ function MatchSchedule() {
                   </>
                 )}
               </button>
-              {/* 二日間同時表示トグル */}
-              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded text-sm cursor-pointer bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  checked={showBothDays}
-                  onChange={(e) => setShowBothDays(e.target.checked)}
-                  className="w-4 h-4 text-primary-600 rounded"
-                />
-                二日間表示
-              </label>
               {/* 連戦エラーバッジ */}
               {consecutiveMatchTeams.size > 0 && (
-                <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
-                  連戦: {consecutiveMatchTeams.size}チーム
+                <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
+                  ⚠ 連戦: {consecutiveMatchTeams.size}チーム
                 </span>
               )}
             </>
@@ -1075,53 +1064,115 @@ function MatchSchedule() {
               )}
             </div>
           ) : isEditMode && (activeTab === 'day1' || activeTab === 'day2') ? (
-            // 編集モード: グループごとに編集テーブル表示
-            <div className="space-y-8">
-              {['A', 'B', 'C', 'D'].map(groupId => {
-                // 当日のグループ試合（編集対象）- groupIdまたはgroup_id（snake_case）でフィルタ
-                const groupMatches = filteredMatches.filter(m => (m.groupId || m.group_id) === groupId)
-                // 全日程のグループ試合（バリデーション用）
-                const allGroupMatches = allMatches.filter(m => (m.groupId || m.group_id) === groupId && m.stage === 'preliminary')
-                if (groupMatches.length === 0) return null
+            // 編集モード: 二日間同時表示 + グループごとに編集テーブル
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Day1 編集 */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
+                  <span>Day1 ({getDateString(0)})</span>
+                  {day1Matches.some(m => {
+                    const homeId = m.homeTeamId || m.home_team_id
+                    const awayId = m.awayTeamId || m.away_team_id
+                    return (homeId && consecutiveMatchTeams.has(homeId)) || (awayId && consecutiveMatchTeams.has(awayId))
+                  }) && (
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
+                  )}
+                </h3>
+                {['A', 'B', 'C', 'D'].map(groupId => {
+                  const groupMatches = day1Matches.filter(m => (m.groupId || m.group_id) === groupId)
+                  const allGroupMatches = allMatches.filter(m => (m.groupId || m.group_id) === groupId && m.stage === 'preliminary')
+                  if (groupMatches.length === 0) return null
 
-                // グループごとの配色
-                const groupColors: Record<string, { bg: string; border: string; header: string }> = {
-                  A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
-                  B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
-                  C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
-                  D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
-                }
-                const colors = groupColors[groupId]
+                  const groupColors: Record<string, { bg: string; border: string; header: string }> = {
+                    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
+                    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
+                    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
+                    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
+                  }
+                  const colors = groupColors[groupId]
 
-                return (
-                  <div key={groupId} className={`rounded-lg border-2 ${colors.border} ${colors.bg} overflow-hidden`}>
-                    <div className={`px-4 py-2 ${colors.header} font-semibold`}>
-                      グループ{groupId}
+                  return (
+                    <div key={`day1-edit-${groupId}`} className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+                      <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
+                        {groupId}組
+                      </div>
+                      <div className="p-2 bg-white">
+                        <MatchScheduleEditor
+                          matches={groupMatches}
+                          allGroupMatches={allGroupMatches}
+                          teams={allTeams}
+                          groupId={groupId}
+                          day={1}
+                          onSave={handleEditorSave}
+                          disabled={bulkUpdateMatchesMutation.isPending}
+                        />
+                      </div>
                     </div>
-                    <div className="p-4 bg-white">
-                      <MatchScheduleEditor
-                        matches={groupMatches}
-                        allGroupMatches={allGroupMatches}
-                        teams={allTeams}
-                        groupId={groupId}
-                        day={activeTab === 'day1' ? 1 : 2}
-                        onSave={handleEditorSave}
-                        disabled={bulkUpdateMatchesMutation.isPending}
-                      />
+                  )
+                })}
+              </div>
+
+              {/* Day2 編集 */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
+                  <span>Day2 ({getDateString(1)})</span>
+                  {day2Matches.some(m => {
+                    const homeId = m.homeTeamId || m.home_team_id
+                    const awayId = m.awayTeamId || m.away_team_id
+                    return (homeId && consecutiveMatchTeams.has(homeId)) || (awayId && consecutiveMatchTeams.has(awayId))
+                  }) && (
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
+                  )}
+                </h3>
+                {['A', 'B', 'C', 'D'].map(groupId => {
+                  const groupMatches = day2Matches.filter(m => (m.groupId || m.group_id) === groupId)
+                  const allGroupMatches = allMatches.filter(m => (m.groupId || m.group_id) === groupId && m.stage === 'preliminary')
+                  if (groupMatches.length === 0) return null
+
+                  const groupColors: Record<string, { bg: string; border: string; header: string }> = {
+                    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
+                    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
+                    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
+                    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
+                  }
+                  const colors = groupColors[groupId]
+
+                  return (
+                    <div key={`day2-edit-${groupId}`} className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
+                      <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
+                        {groupId}組
+                      </div>
+                      <div className="p-2 bg-white">
+                        <MatchScheduleEditor
+                          matches={groupMatches}
+                          allGroupMatches={allGroupMatches}
+                          teams={allTeams}
+                          groupId={groupId}
+                          day={2}
+                          onSave={handleEditorSave}
+                          disabled={bulkUpdateMatchesMutation.isPending}
+                        />
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-              <div className="text-xs text-gray-500 text-center mt-4">
-                ※ ドロップダウンから対戦チームを選択して変更できます。エラーがある場合は保存できません。
+                  )
+                })}
               </div>
             </div>
-          ) : showBothDays && (activeTab === 'day1' || activeTab === 'day2') ? (
-            // 二日間同時表示モード
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          ) : (activeTab === 'day1' || activeTab === 'day2') && hasPreliminaryMatches ? (
+            // 閲覧モード: 二日間同時表示
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Day1 */}
               <div className="space-y-3">
-                <h3 className="font-semibold text-gray-700 border-b pb-2">Day1 ({getDateString(0)})</h3>
+                <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
+                  <span>Day1 ({getDateString(0)})</span>
+                  {day1Matches.some(m => {
+                    const homeId = m.homeTeamId || m.home_team_id
+                    const awayId = m.awayTeamId || m.away_team_id
+                    return (homeId && consecutiveMatchTeams.has(homeId)) || (awayId && consecutiveMatchTeams.has(awayId))
+                  }) && (
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
+                  )}
+                </h3>
                 {['A', 'B', 'C', 'D'].map(groupId => {
                   const groupMatches = day1Matches.filter(m => (m.groupId || m.group_id) === groupId)
                   if (groupMatches.length === 0) return null
@@ -1139,27 +1190,14 @@ function MatchSchedule() {
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
                         {groupId}組
                       </div>
-                      <div className="p-2 bg-white text-sm">
-                        {groupMatches.map((match, idx) => {
-                          const homeId = match.homeTeamId || match.home_team_id
-                          const awayId = match.awayTeamId || match.away_team_id
-                          const homeHasError = homeId && consecutiveMatchTeams.has(homeId)
-                          const awayHasError = awayId && consecutiveMatchTeams.has(awayId)
-                          return (
-                            <div key={match.id} className="flex items-center gap-2 py-1 border-b last:border-0">
-                              <span className="text-gray-400 text-xs w-4">{idx + 1}</span>
-                              <span className={`flex-1 ${homeHasError ? 'text-red-600 font-bold' : ''}`}>
-                                {match.homeTeam?.name || match.home_team?.name || '未定'}
-                                {homeHasError && <span className="ml-1 text-xs">⚠</span>}
-                              </span>
-                              <span className="text-gray-400">vs</span>
-                              <span className={`flex-1 text-right ${awayHasError ? 'text-red-600 font-bold' : ''}`}>
-                                {match.awayTeam?.name || match.away_team?.name || '未定'}
-                                {awayHasError && <span className="ml-1 text-xs">⚠</span>}
-                              </span>
-                            </div>
-                          )
-                        })}
+                      <div className="p-2 bg-white">
+                        <DraggableMatchList
+                          matches={groupMatches}
+                          onSwapTeams={handleSwapTeams}
+                          title=""
+                          emptyMessage="試合がありません"
+                          consecutiveMatchTeams={consecutiveMatchTeams}
+                        />
                       </div>
                     </div>
                   )
@@ -1168,7 +1206,16 @@ function MatchSchedule() {
 
               {/* Day2 */}
               <div className="space-y-3">
-                <h3 className="font-semibold text-gray-700 border-b pb-2">Day2 ({getDateString(1)})</h3>
+                <h3 className="font-semibold text-gray-700 border-b pb-2 flex items-center gap-2">
+                  <span>Day2 ({getDateString(1)})</span>
+                  {day2Matches.some(m => {
+                    const homeId = m.homeTeamId || m.home_team_id
+                    const awayId = m.awayTeamId || m.away_team_id
+                    return (homeId && consecutiveMatchTeams.has(homeId)) || (awayId && consecutiveMatchTeams.has(awayId))
+                  }) && (
+                    <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">⚠ 連戦あり</span>
+                  )}
+                </h3>
                 {['A', 'B', 'C', 'D'].map(groupId => {
                   const groupMatches = day2Matches.filter(m => (m.groupId || m.group_id) === groupId)
                   if (groupMatches.length === 0) return null
@@ -1186,27 +1233,14 @@ function MatchSchedule() {
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
                         {groupId}組
                       </div>
-                      <div className="p-2 bg-white text-sm">
-                        {groupMatches.map((match, idx) => {
-                          const homeId = match.homeTeamId || match.home_team_id
-                          const awayId = match.awayTeamId || match.away_team_id
-                          const homeHasError = homeId && consecutiveMatchTeams.has(homeId)
-                          const awayHasError = awayId && consecutiveMatchTeams.has(awayId)
-                          return (
-                            <div key={match.id} className="flex items-center gap-2 py-1 border-b last:border-0">
-                              <span className="text-gray-400 text-xs w-4">{idx + 1}</span>
-                              <span className={`flex-1 ${homeHasError ? 'text-red-600 font-bold' : ''}`}>
-                                {match.homeTeam?.name || match.home_team?.name || '未定'}
-                                {homeHasError && <span className="ml-1 text-xs">⚠</span>}
-                              </span>
-                              <span className="text-gray-400">vs</span>
-                              <span className={`flex-1 text-right ${awayHasError ? 'text-red-600 font-bold' : ''}`}>
-                                {match.awayTeam?.name || match.away_team?.name || '未定'}
-                                {awayHasError && <span className="ml-1 text-xs">⚠</span>}
-                              </span>
-                            </div>
-                          )
-                        })}
+                      <div className="p-2 bg-white">
+                        <DraggableMatchList
+                          matches={groupMatches}
+                          onSwapTeams={handleSwapTeams}
+                          title=""
+                          emptyMessage="試合がありません"
+                          consecutiveMatchTeams={consecutiveMatchTeams}
+                        />
                       </div>
                     </div>
                   )
