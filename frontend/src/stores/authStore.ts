@@ -322,11 +322,14 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       // ユーザー情報は既存のものを維持
       user: currentState.user,
     })
-  } else if (event === 'SIGNED_IN' && session?.user) {
+  } else if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+    // 既存のユーザー情報を取得（タイムアウト時のフォールバック用）
+    const currentState = useAuthStore.getState()
+
     // タイムアウト付きでプロフィール取得
     const timeoutPromise = new Promise<null>((resolve) =>
       setTimeout(() => {
-        console.warn('[Auth] Profile fetch timeout in onAuthStateChange')
+        console.warn('[Auth] Profile fetch timeout in onAuthStateChange, using cached data')
         resolve(null)
       }, 5000)
     )
@@ -341,37 +344,56 @@ supabase.auth.onAuthStateChange(async (event, session) => {
 
       const profile = await Promise.race([profilePromise, timeoutPromise])
 
-      const user: User = {
-        id: session.user.id as any,
-        username: profile?.username || session.user.email?.split('@')[0] || 'user',
-        email: session.user.email || '',
-        role: (profile?.role as UserRole) || 'viewer',
-        name: profile?.display_name || session.user.email?.split('@')[0] || 'User',
-        venueId: profile?.venue_id,
-      }
+      // プロフィール取得成功、またはキャッシュがない場合は新規作成
+      if (profile || !currentState.user) {
+        const user: User = {
+          id: session.user.id as any,
+          username: profile?.username || session.user.email?.split('@')[0] || 'user',
+          email: session.user.email || '',
+          role: (profile?.role as UserRole) || 'viewer',
+          name: profile?.display_name || session.user.email?.split('@')[0] || 'User',
+          venueId: profile?.venue_id,
+        }
 
-      useAuthStore.setState({
-        user,
-        accessToken: session.access_token,
-        isAuthenticated: true,
-        isLoading: false,
-      })
+        useAuthStore.setState({
+          user,
+          accessToken: session.access_token,
+          isAuthenticated: true,
+          isLoading: false,
+        })
+      } else {
+        // タイムアウトでキャッシュがある場合はトークンのみ更新
+        console.log('[Auth] Using cached user data, updating token only')
+        useAuthStore.setState({
+          accessToken: session.access_token,
+          isAuthenticated: true,
+          isLoading: false,
+        })
+      }
     } catch (error) {
       console.error('[Auth] Error in onAuthStateChange:', error)
-      // エラー時でも基本的なユーザー情報で認証状態を設定
-      useAuthStore.setState({
-        user: {
-          id: session.user.id as any,
-          username: session.user.email?.split('@')[0] || 'user',
-          email: session.user.email || '',
-          role: 'viewer',
-          name: session.user.email?.split('@')[0] || 'User',
-          venueId: undefined,
-        },
-        accessToken: session.access_token,
-        isAuthenticated: true,
-        isLoading: false,
-      })
+      // エラー時でもキャッシュがあれば維持、なければ基本情報で設定
+      if (currentState.user) {
+        useAuthStore.setState({
+          accessToken: session.access_token,
+          isAuthenticated: true,
+          isLoading: false,
+        })
+      } else {
+        useAuthStore.setState({
+          user: {
+            id: session.user.id as any,
+            username: session.user.email?.split('@')[0] || 'user',
+            email: session.user.email || '',
+            role: 'viewer',
+            name: session.user.email?.split('@')[0] || 'User',
+            venueId: undefined,
+          },
+          accessToken: session.access_token,
+          isAuthenticated: true,
+          isLoading: false,
+        })
+      }
     }
   }
 })
