@@ -79,13 +79,14 @@ export interface UseWebSocketReturn {
 export function useWebSocket(
   _onMessage?: (message: WebSocketMessage) => void
 ): UseWebSocketReturn {
-  const [connectionState] = useState<ConnectionState>('disconnected');
-  const [connectionCount] = useState(0);
+  // Supabase Realtimeを使用しているため、常に接続状態とする
+  const [connectionState] = useState<ConnectionState>('connected');
+  const [connectionCount] = useState(1);
   const [lastMessage] = useState<WebSocketMessage | null>(null);
 
   const reconnect = () => {
     // Supabase版では何もしない
-    console.log('[WebSocket] Supabase Realtimeを使用中 - カスタムWebSocketは無効');
+    // Supabase Realtimeが自動再接続を処理
   };
 
   return {
