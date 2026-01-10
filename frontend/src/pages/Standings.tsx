@@ -80,7 +80,7 @@ const printStyles = `
 function Standings() {
   // appStoreから現在のトーナメントIDを取得
   const { currentTournament } = useAppStore();
-  const tournamentId = currentTournament?.id || 1;
+  const tournamentId = currentTournament?.id;
 
   // アニメーション用の更新フラグ
   const [recentlyUpdated, setRecentlyUpdated] = useState(false);
@@ -104,25 +104,28 @@ function Standings() {
     dataUpdatedAt,
   } = useQuery<GroupStandings[]>({
     queryKey: ['standings', tournamentId],
-    queryFn: () => standingApi.getStandingsByGroup(tournamentId),
+    queryFn: () => standingApi.getStandingsByGroup(tournamentId!),
     // 自動リフェッチの設定
     refetchOnWindowFocus: false, // WebSocketで更新されるので不要
     staleTime: 30000, // 30秒間はフレッシュとみなす（WebSocketで更新される）
     gcTime: 5 * 60 * 1000, // 5分間キャッシュを保持
+    enabled: !!tournamentId, // tournamentIdが確定してから実行
   });
 
   // 星取表用の試合データを取得
-  const { data: matchesData } = useQuery({
+  const { data: matchesData, isLoading: isLoadingMatches } = useQuery({
     queryKey: ['matches', tournamentId],
-    queryFn: () => matchesApi.getAll(tournamentId),
+    queryFn: () => matchesApi.getAll(tournamentId!),
     staleTime: 30000,
+    enabled: !!tournamentId,
   });
 
   // 星取表用のチームデータを取得
-  const { data: teamsData } = useQuery({
+  const { data: teamsData, isLoading: isLoadingTeams } = useQuery({
     queryKey: ['teams', tournamentId],
-    queryFn: () => teamsApi.getAll(tournamentId),
+    queryFn: () => teamsApi.getAll(tournamentId!),
     staleTime: 30000,
+    enabled: !!tournamentId,
   });
 
   // データ更新時のアニメーション
@@ -142,7 +145,8 @@ function Standings() {
   // 印刷ハンドラー
   const handlePrint = () => window.print();
 
-  if (isLoading) return <LoadingSpinner />;
+  // tournamentIdがまだない場合やデータロード中はローディング表示
+  if (!tournamentId || isLoading || isLoadingTeams || isLoadingMatches) return <LoadingSpinner />;
   if (isError) {
     return (
       <div className="text-center py-8">

@@ -127,7 +127,7 @@ export function MatchEditModal({
               <option value="">選択してください</option>
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.name} {team.groupId ? `(${team.groupId}組)` : ''}
+                  {team.name} {team.groupId ? `(${team.groupId}グループ)` : ''}
                 </option>
               ))}
             </select>
@@ -152,7 +152,7 @@ export function MatchEditModal({
               <option value="">選択してください</option>
               {teams.map((team) => (
                 <option key={team.id} value={team.id}>
-                  {team.name} {team.groupId ? `(${team.groupId}組)` : ''}
+                  {team.name} {team.groupId ? `(${team.groupId}グループ)` : ''}
                 </option>
               ))}
             </select>

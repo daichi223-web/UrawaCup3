@@ -27,9 +27,9 @@ export function RequireAuth({ children, requiredRole }: RequireAuthProps) {
     return <LoadingSpinner />
   }
 
-  // 未認証の場合は公開ページへリダイレクト
+  // 未認証の場合はログインページへリダイレクト
   if (!isAuthenticated) {
-    return <Navigate to="/public/matches" state={{ from: location.pathname }} replace />
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />
   }
 
   // 権限チェックが必要な場合
@@ -38,7 +38,7 @@ export function RequireAuth({ children, requiredRole }: RequireAuthProps) {
 
     // 管理者は全ての権限を持つ
     if (user.role !== 'admin' && !roles.includes(user.role)) {
-      return <Navigate to="/public/matches" replace />
+      return <Navigate to="/login" replace />
     }
   }
 

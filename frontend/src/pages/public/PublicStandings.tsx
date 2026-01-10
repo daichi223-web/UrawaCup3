@@ -80,7 +80,7 @@ export default function PublicStandings() {
                             : 'text-gray-500 hover:bg-gray-200'
                             }`}
                     >
-                        Group {group}
+                        {group}グループ
                     </button>
                 ))}
             </div>

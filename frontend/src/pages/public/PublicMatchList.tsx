@@ -153,7 +153,7 @@ export default function PublicMatchList() {
     const getGroupLabel = (groupKey: string): string => {
         if (groupKey === 'finals') return '決勝T';
         if (groupKey === 'training') return '研修';
-        if (['A', 'B', 'C', 'D'].includes(groupKey)) return `${groupKey}組`;
+        if (['A', 'B', 'C', 'D'].includes(groupKey)) return `${groupKey}グループ`;
         return groupKey;
     };
 
@@ -192,10 +192,10 @@ export default function PublicMatchList() {
     const groupKeys = ['all', 'A', 'B', 'C', 'D', 'finals', 'training'];
     const groupLabels: Record<string, string> = {
         all: 'すべて',
-        A: 'A組',
-        B: 'B組',
-        C: 'C組',
-        D: 'D組',
+        A: 'Aグループ',
+        B: 'Bグループ',
+        C: 'Cグループ',
+        D: 'Dグループ',
         finals: '決勝T',
         training: '研修',
     };

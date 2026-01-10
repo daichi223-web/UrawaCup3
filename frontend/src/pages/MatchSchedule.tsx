@@ -1130,7 +1130,7 @@ function MatchSchedule() {
                     {/* Day1のグループ */}
                     <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
-                        {groupId}組
+                        {groupId}グループ
                       </div>
                       <div className="p-2 bg-white">
                         <MatchScheduleEditor
@@ -1147,7 +1147,7 @@ function MatchSchedule() {
                     {/* Day2のグループ */}
                     <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
-                        {groupId}組
+                        {groupId}グループ
                       </div>
                       <div className="p-2 bg-white">
                         <MatchScheduleEditor
@@ -1210,7 +1210,7 @@ function MatchSchedule() {
                     {/* Day1のグループ */}
                     <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
-                        {groupId}組
+                        {groupId}グループ
                       </div>
                       <div className="p-2 bg-white">
                         <DraggableMatchList
@@ -1225,7 +1225,7 @@ function MatchSchedule() {
                     {/* Day2のグループ */}
                     <div className={`rounded-lg border ${colors.border} ${colors.bg} overflow-hidden`}>
                       <div className={`px-3 py-1.5 ${colors.header} font-medium text-sm`}>
-                        {groupId}組
+                        {groupId}グループ
                       </div>
                       <div className="p-2 bg-white">
                         <DraggableMatchList
@@ -1269,7 +1269,7 @@ function MatchSchedule() {
                     <div className={`px-4 py-2 ${colors.header} font-semibold flex items-center gap-2`}>
                       <span className={`w-3 h-3 rounded-full ${colors.dot}`} />
                       <span>{venue.name}</span>
-                      {venueGroupId && <span className="text-xs opacity-75">({venueGroupId}組)</span>}
+                      {venueGroupId && <span className="text-xs opacity-75">({venueGroupId}グループ)</span>}
                       <span className="ml-auto text-xs font-normal opacity-75">{venueMatches.length}試合</span>
                     </div>
                     {/* 試合リスト（クリック選択対応） */}

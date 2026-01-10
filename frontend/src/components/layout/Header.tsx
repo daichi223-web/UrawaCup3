@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Menu,
   X,
@@ -28,10 +28,12 @@ export function Header({ isSidebarOpen, onToggleSidebar }: HeaderProps) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const { isOnline, currentTournament } = useAppStore()
   const { user, logout, isAuthenticated } = useAuthStore()
+  const navigate = useNavigate()
 
   const handleLogout = () => {
     logout()
     setIsUserMenuOpen(false)
+    navigate('/login')
   }
 
   return (

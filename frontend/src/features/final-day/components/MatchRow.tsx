@@ -114,7 +114,7 @@ export function MatchRow({ match, onMatchClick, showLabel = false, isRematch = f
             <div className="flex items-center justify-center gap-1 mt-1 text-xs text-orange-600">
               <AlertTriangle className="w-3 h-3" />
               <span>
-                予選{rematchInfo?.groupId ? `${rematchInfo.groupId}組` : ''}で対戦済み
+                予選{rematchInfo?.groupId ? `${rematchInfo.groupId}グループ` : ''}で対戦済み
                 {rematchInfo?.score && ` (${rematchInfo.score})`}
               </span>
             </div>

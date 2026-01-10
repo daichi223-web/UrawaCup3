@@ -51,9 +51,13 @@ function TeamManagement() {
 
   // appStoreから現在のトーナメントIDを取得
   const { currentTournament } = useAppStore();
-  const tournamentId = currentTournament?.id || 1;
+  const tournamentId = currentTournament?.id;
 
   useEffect(() => {
+    // tournamentIdが確定するまで待機
+    if (!tournamentId) {
+      return;
+    }
     const fetchTeams = async () => {
       try {
         setLoading(true);
@@ -68,6 +72,11 @@ function TeamManagement() {
     };
     fetchTeams();
   }, [tournamentId]);
+
+  // tournamentIdが確定するまでローディング表示
+  if (!tournamentId) {
+    return <LoadingSpinner />;
+  }
 
   // タブでフィルタリング
   const filteredTeams = useMemo(() => {

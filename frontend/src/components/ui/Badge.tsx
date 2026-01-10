@@ -97,7 +97,7 @@ export function GroupBadge({ group }: { group: 'A' | 'B' | 'C' | 'D' }) {
   const variant = `group-${group.toLowerCase()}` as BadgeVariant
   return (
     <Badge variant={variant} size="sm">
-      {group}組
+      {group}グループ
     </Badge>
   )
 }

@@ -377,7 +377,7 @@ function MatchDetailModal({
               <div className="font-bold text-lg">{match.homeTeam?.name}</div>
               {match.groupId && (
                 <div className="text-sm text-gray-500">
-                  {match.groupId}組{match.homeTeam?.groupOrder}番
+                  {match.groupId}グループ{match.homeTeam?.groupOrder}番
                 </div>
               )}
             </div>
@@ -399,7 +399,7 @@ function MatchDetailModal({
               <div className="font-bold text-lg">{match.awayTeam?.name}</div>
               {match.groupId && (
                 <div className="text-sm text-gray-500">
-                  {match.groupId}組{match.awayTeam?.groupOrder}番
+                  {match.groupId}グループ{match.awayTeam?.groupOrder}番
                 </div>
               )}
             </div>
