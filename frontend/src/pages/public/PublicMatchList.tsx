@@ -50,20 +50,18 @@ export default function PublicMatchList() {
 
     useEffect(() => {
         let mounted = true;
-        const abortController = new AbortController();
-        const timeoutId = setTimeout(() => abortController.abort(), 15000); // 15秒でタイムアウト
+        let retryCount = 0;
+        const maxRetries = 2;
 
-        const fetchMatches = async () => {
+        const fetchMatches = async (): Promise<void> => {
             try {
                 setLoading(true);
                 setError(null);
 
                 // タイムアウト付きでフェッチ
-                // matchesApi.getAll自体はsignalを受け取らないかもしれないが、
-                // 非同期処理が長引いた場合にUI側で打ち切るためのロジック
                 const fetchPromise = matchesApi.getAll(tournamentId);
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('データの取得がタイムアウトしました')), 10000)
+                    setTimeout(() => reject(new Error('データの取得がタイムアウトしました')), 8000)
                 );
 
                 const data: any = await Promise.race([fetchPromise, timeoutPromise]);
@@ -77,24 +75,36 @@ export default function PublicMatchList() {
                     return new Date(aTime).getTime() - new Date(bTime).getTime();
                 });
                 setMatches(sorted);
+                setLoading(false);
             } catch (err: any) {
                 if (!mounted) return;
                 console.error("Failed to load matches", err);
-                const errorMessage = err.message || "試合データの読み込みに失敗しました";
-                setError(`${errorMessage} (Reload to try again)`);
-            } finally {
-                if (mounted) {
-                    setLoading(false);
-                    clearTimeout(timeoutId);
+
+                // 自動リトライ（最大2回）
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    console.log(`[PublicMatchList] Retrying... (${retryCount}/${maxRetries})`);
+                    // 少し待ってからリトライ
+                    setTimeout(() => {
+                        if (mounted) fetchMatches();
+                    }, 1000 * retryCount);
+                    return;
                 }
+
+                const errorMessage = err.message || "試合データの読み込みに失敗しました";
+                setError(errorMessage);
+                setLoading(false);
             }
         };
-        fetchMatches();
+
+        // 少し遅延してからフェッチ開始（認証状態の安定化を待つ）
+        const startTimeout = setTimeout(() => {
+            if (mounted) fetchMatches();
+        }, 100);
 
         return () => {
             mounted = false;
-            clearTimeout(timeoutId);
-            abortController.abort();
+            clearTimeout(startTimeout);
         };
     }, [tournamentId]);
 
@@ -109,19 +119,21 @@ export default function PublicMatchList() {
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg max-w-sm w-full">
-                    <p className="font-bold mb-2">エラーが発生しました</p>
-                    <p className="text-sm mb-4">{error}</p>
+                    <p className="font-bold mb-2">データの読み込みに失敗しました</p>
+                    <p className="text-sm mb-4 text-gray-600">
+                        通信状況を確認の上、再読み込みしてください。
+                    </p>
                     <button
                         onClick={() => window.location.reload()}
                         className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition-colors"
                     >
                         再読み込み
                     </button>
-                    <div className="mt-4 pt-4 border-t border-red-200 text-left text-xs font-mono bg-white p-2 rounded">
-                        <p>Debug Info:</p>
-                        <p>Tournament ID: {tournamentId}</p>
-                        <p>Supabase Configured: {import.meta.env.VITE_SUPABASE_URL ? 'Yes' : 'No'}</p>
-                    </div>
+                    {import.meta.env.DEV && (
+                        <div className="mt-4 pt-4 border-t border-red-200 text-left text-xs font-mono bg-white p-2 rounded">
+                            <p>Debug: {error}</p>
+                        </div>
+                    )}
                 </div>
             </div>
         );

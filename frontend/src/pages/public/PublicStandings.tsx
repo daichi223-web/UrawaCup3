@@ -11,23 +11,25 @@ export default function PublicStandings() {
     const tournamentId = 1; // デフォルトの大会ID
 
     // チーム一覧を取得
-    const { data: teamsData, isLoading: isLoadingTeams, refetch: refetchTeams } = useQuery({
+    const { data: teamsData, isLoading: isLoadingTeams, refetch: refetchTeams, error: teamsError } = useQuery({
         queryKey: ['public-teams', tournamentId],
         queryFn: async () => {
             const data = await teamsApi.getAll(tournamentId);
             return data?.teams || [];
         },
         staleTime: 30000,
+        retry: 2,
     });
 
     // 試合一覧を取得
-    const { data: matchesData, isLoading: isLoadingMatches, refetch: refetchMatches } = useQuery({
+    const { data: matchesData, isLoading: isLoadingMatches, refetch: refetchMatches, error: matchesError } = useQuery({
         queryKey: ['public-matches', tournamentId],
         queryFn: async () => {
             const data = await matchesApi.getAll(tournamentId);
             return data?.matches || [];
         },
         staleTime: 30000,
+        retry: 2,
     });
 
     // データ更新関数
@@ -52,9 +54,29 @@ export default function PublicStandings() {
     }, [refreshData]);
 
     const isLoading = isLoadingTeams || isLoadingMatches;
+    const hasError = teamsError || matchesError;
 
     if (isLoading) {
         return <div className="flex justify-center py-10"><LoadingSpinner /></div>;
+    }
+
+    if (hasError) {
+        return (
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+                <div className="bg-red-50 text-red-600 p-4 rounded-lg max-w-sm w-full">
+                    <p className="font-bold mb-2">データの読み込みに失敗しました</p>
+                    <p className="text-sm mb-4 text-gray-600">
+                        通信状況を確認の上、再読み込みしてください。
+                    </p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition-colors"
+                    >
+                        再読み込み
+                    </button>
+                </div>
+            </div>
+        );
     }
 
     // グループごとのチームと試合を抽出

@@ -301,6 +301,7 @@ export const useAuthStore = create<AuthState>()(
 )
 
 // Supabase認証状態変更のリスナー（タイムアウト付き）
+// 注意: この処理は非同期で行われ、公開ページのデータ取得をブロックしない
 supabase.auth.onAuthStateChange(async (event, session) => {
   console.log('[Auth] onAuthStateChange:', event)
 
@@ -311,7 +312,10 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       isAuthenticated: false,
       isLoading: false,
     })
-  } else if (event === 'TOKEN_REFRESHED' && session) {
+    return // 早期リターンで余分な処理を避ける
+  }
+
+  if (event === 'TOKEN_REFRESHED' && session) {
     // トークン更新時は認証状態を維持しながらトークンのみ更新
     console.log('[Auth] Token refreshed, updating access token')
     const currentState = useAuthStore.getState()
@@ -322,16 +326,27 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       // ユーザー情報は既存のものを維持
       user: currentState.user,
     })
-  } else if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+    return
+  }
+
+  if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session?.user) {
+    // セッションの有効期限をチェック
+    const expiresAt = session.expires_at
+    if (expiresAt && expiresAt * 1000 < Date.now()) {
+      console.warn('[Auth] Session expired, skipping profile fetch')
+      // 期限切れセッションは無視し、Supabaseが自動的にSIGNED_OUTをトリガーするのを待つ
+      return
+    }
+
     // 既存のユーザー情報を取得（タイムアウト時のフォールバック用）
     const currentState = useAuthStore.getState()
 
-    // タイムアウト付きでプロフィール取得
+    // タイムアウトを3秒に短縮して公開ページへの影響を最小化
     const timeoutPromise = new Promise<null>((resolve) =>
       setTimeout(() => {
         console.warn('[Auth] Profile fetch timeout in onAuthStateChange, using cached data')
         resolve(null)
-      }, 5000)
+      }, 3000)
     )
 
     try {
@@ -341,6 +356,10 @@ supabase.auth.onAuthStateChange(async (event, session) => {
         .eq('id', session.user.id)
         .single()
         .then(({ data }) => data)
+        .catch((err) => {
+          console.warn('[Auth] Profile fetch failed:', err.message)
+          return null
+        })
 
       const profile = await Promise.race([profilePromise, timeoutPromise])
 

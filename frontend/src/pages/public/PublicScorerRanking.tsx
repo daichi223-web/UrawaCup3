@@ -26,6 +26,7 @@ export default function PublicScorerRanking() {
         queryFn: () => standingsApi.getTopScorers(tournamentId, 30),
         refetchOnWindowFocus: true,
         staleTime: 30000,
+        retry: 2,
     });
 
     // 順位に応じたスタイル
