@@ -26,7 +26,7 @@ export const finalDayApi = {
         venue:venues(*)
       `)
       .eq('tournament_id', tournamentId)
-      .in('stage', ['semi_final', 'third_place', 'final'])
+      .in('stage', ['semifinal', 'third_place', 'final'])
       .order('match_date')
       .order('match_time');
 
@@ -108,7 +108,7 @@ export const finalDayApi = {
       .from('matches')
       .select('*')
       .eq('tournament_id', tournamentId)
-      .eq('stage', 'semi_final')
+      .eq('stage', 'semifinal')
       .eq('status', 'completed');
 
     if (error) throw error;

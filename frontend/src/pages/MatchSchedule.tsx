@@ -508,8 +508,9 @@ function MatchSchedule() {
       // 試合日（大会最終日）
       const matchDate = tournament?.endDate || new Date().toISOString().split('T')[0]
 
-      // 決勝トーナメント会場（最初の会場を使用）
-      const finalsVenueId = venues[0]?.id || 1
+      // 決勝トーナメント会場（isFinalsVenueがtrueの会場、なければ最初の会場）
+      const finalsVenue = venues.find(v => v.isFinalsVenue || v.is_finals_venue) || venues[0]
+      const finalsVenueId = finalsVenue?.id || 1
 
       // 既存の決勝トーナメント試合を削除
       await supabase

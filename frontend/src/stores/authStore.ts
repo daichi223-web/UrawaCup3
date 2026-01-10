@@ -174,7 +174,16 @@ export const useAuthStore = create<AuthState>()(
           return
         }
 
-        set({ isLoading: true })
+        // ローカルストレージにユーザー情報があれば、まず認証済みとしてマーク
+        if (currentState.user && currentState.accessToken) {
+          console.log('[Auth] Found cached user, setting authenticated temporarily')
+          set({
+            isAuthenticated: true,
+            isLoading: false,
+          })
+        } else {
+          set({ isLoading: true })
+        }
 
         // タイムアウト用プロミス (10秒)
         const timeoutPromise = new Promise<{ timeout: true }>((_, reject) =>
@@ -226,8 +235,13 @@ export const useAuthStore = create<AuthState>()(
           await Promise.race([checkProcess(), timeoutPromise])
         } catch (error) {
           console.error('[Auth] セッション確認エラー:', error)
-          // エラー時・タイムアウト時も isLoading を false にする
-          set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false })
+          // エラー時でもローカルにユーザー情報があれば認証状態を維持
+          if (currentState.user && currentState.accessToken) {
+            console.log('[Auth] Keeping cached auth state despite error')
+            set({ isAuthenticated: true, isLoading: false })
+          } else {
+            set({ isAuthenticated: false, user: null, accessToken: null, isLoading: false })
+          }
         }
       },
 
@@ -296,6 +310,17 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       accessToken: null,
       isAuthenticated: false,
       isLoading: false,
+    })
+  } else if (event === 'TOKEN_REFRESHED' && session) {
+    // トークン更新時は認証状態を維持しながらトークンのみ更新
+    console.log('[Auth] Token refreshed, updating access token')
+    const currentState = useAuthStore.getState()
+    useAuthStore.setState({
+      accessToken: session.access_token,
+      isAuthenticated: true,
+      isLoading: false,
+      // ユーザー情報は既存のものを維持
+      user: currentState.user,
     })
   } else if (event === 'SIGNED_IN' && session?.user) {
     // タイムアウト付きでプロフィール取得
