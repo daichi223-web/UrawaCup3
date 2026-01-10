@@ -232,9 +232,9 @@ class DailyReportGenerator:
         # 左側：試合結果
         result_data = [
             [f'第{match_num}試合', '', f'KO {kickoff}', '', ''],
-            [home_team, '', 'VS', '', away_team],
+            [home_team, '', 'VS', away_team, ''],
             ['', '', '', '', ''],
-            [str(home_total), f'{h1_str}  前半  {a1_str}', '', '', str(away_total)],
+            [str(home_total), f'{h1_str}  前半  {a1_str}', '', str(away_total), ''],
             ['', f'{h2_str}  後半  {a2_str}', '', '', ''],
         ]
         
