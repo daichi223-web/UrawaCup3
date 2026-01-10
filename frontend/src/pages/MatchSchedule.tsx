@@ -467,27 +467,25 @@ function MatchSchedule() {
       }
 
       // 順位表を取得
-      const standingsData = await standingsApi.getAll(tournamentId)
+      const standingsData = await standingsApi.getByGroup(tournamentId)
       if (!standingsData || standingsData.length === 0) {
         throw new Error('順位表データがありません。予選リーグを先に完了してください。')
       }
 
-      // グループ別に整理
+      // グループ別に整理（getByGroupはグループごとの配列を返す）
       const standingsByGroup: Record<string, any[]> = {}
-      for (const s of standingsData) {
-        if (!s.group_id) continue
-        if (!standingsByGroup[s.group_id]) {
-          standingsByGroup[s.group_id] = []
-        }
-        standingsByGroup[s.group_id].push({
+      for (const groupData of standingsData) {
+        const groupId = groupData.groupId
+        if (!groupId) continue
+        standingsByGroup[groupId] = (groupData.standings || []).map((s: any) => ({
           id: s.team_id,
           name: s.team?.name || `Team ${s.team_id}`,
-          group: s.group_id,
+          group: groupId,
           rank: s.rank,
           points: s.points,
-          goalDiff: s.goal_diff,
+          goalDiff: s.goal_difference,
           goalsFor: s.goals_for,
-        })
+        }))
       }
 
       // 対戦済みペアを取得（同グループ内）
@@ -567,27 +565,25 @@ function MatchSchedule() {
       }
 
       // 順位表を取得
-      const standingsData = await standingsApi.getAll(tournamentId)
+      const standingsData = await standingsApi.getByGroup(tournamentId)
       if (!standingsData || standingsData.length === 0) {
         throw new Error('順位表データがありません。予選リーグを先に完了してください。')
       }
 
-      // グループ別に整理
+      // グループ別に整理（getByGroupはグループごとの配列を返す）
       const standingsByGroup: Record<string, any[]> = {}
-      for (const s of standingsData) {
-        if (!s.group_id) continue
-        if (!standingsByGroup[s.group_id]) {
-          standingsByGroup[s.group_id] = []
-        }
-        standingsByGroup[s.group_id].push({
+      for (const groupData of standingsData) {
+        const groupId = groupData.groupId
+        if (!groupId) continue
+        standingsByGroup[groupId] = (groupData.standings || []).map((s: any) => ({
           id: s.team_id,
           name: s.team?.name || `Team ${s.team_id}`,
-          group: s.group_id,
+          group: groupId,
           rank: s.rank,
           points: s.points,
-          goalDiff: s.goal_diff,
+          goalDiff: s.goal_difference,
           goalsFor: s.goals_for,
-        })
+        }))
       }
 
       // 対戦済みペアを取得

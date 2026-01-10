@@ -74,9 +74,28 @@ export const tournamentsApi = {
   },
 
   async update(id: number, updates: Partial<Tournament>) {
+    // 400対策: IDバリデーション
+    validateId(id, '大会ID')
+
+    // 401対策: セッション確認
+    await ensureValidSession()
+
+    // 許可されたフィールドのみを抽出
+    const allowedFields = ['name', 'short_name', 'start_date', 'end_date', 'year', 'edition'] as const
+    const sanitizedUpdates: Record<string, any> = {}
+    for (const key of allowedFields) {
+      if (key in updates && updates[key as keyof Tournament] !== undefined) {
+        sanitizedUpdates[key] = updates[key as keyof Tournament]
+      }
+    }
+
+    if (Object.keys(sanitizedUpdates).length === 0) {
+      throw new Error('更新するフィールドがありません')
+    }
+
     const { data, error } = await supabase
       .from('tournaments')
-      .update(updates)
+      .update(sanitizedUpdates)
       .eq('id', id)
       .select()
       .single()
