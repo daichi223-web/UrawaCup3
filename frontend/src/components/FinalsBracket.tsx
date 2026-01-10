@@ -15,6 +15,14 @@ interface SelectedTeam {
   teamName: string
 }
 
+// グループごとの色設定
+const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+  A: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', badge: 'bg-red-100 text-red-700' },
+  B: { bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-800', badge: 'bg-blue-100 text-blue-700' },
+  C: { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-800', badge: 'bg-green-100 text-green-700' },
+  D: { bg: 'bg-yellow-50', border: 'border-yellow-300', text: 'text-yellow-800', badge: 'bg-yellow-100 text-yellow-700' },
+}
+
 interface FinalsBracketProps {
   matches: MatchWithDetails[]
   onMatchClick?: (match: MatchWithDetails) => void
@@ -40,6 +48,8 @@ function ClickableTeam({ match, position, isWinner, isSelected, isSwapTarget, on
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
   const teamName = team?.shortName || team?.name || `チームID: ${teamId}`
+  const groupId = team?.groupId || team?.group_id || null
+  const groupColors = groupId ? GROUP_COLORS[groupId] : null
 
   return (
     <button
@@ -55,7 +65,9 @@ function ClickableTeam({ match, position, isWinner, isSelected, isSwapTarget, on
           ? 'ring-2 ring-primary-500 bg-primary-100 border-primary-500'
           : isSwapTarget
             ? 'bg-green-50 border-green-400 hover:bg-green-100'
-            : 'hover:bg-gray-100 border-transparent'
+            : groupColors && !isWinner
+              ? `${groupColors.bg} ${groupColors.border} hover:opacity-80`
+              : 'hover:bg-gray-100 border-transparent'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         border-2
@@ -63,8 +75,13 @@ function ClickableTeam({ match, position, isWinner, isSelected, isSwapTarget, on
     >
       <div className="flex items-center gap-2 flex-1">
         {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
-        <span className="truncate">{teamName}</span>
-        {isWinner && <span className="ml-2 text-green-600">◎</span>}
+        <span className={`truncate ${groupColors ? groupColors.text : ''}`}>{teamName}</span>
+        {groupId && (
+          <span className={`text-xs px-1.5 py-0.5 rounded ${groupColors?.badge || 'bg-gray-100 text-gray-600'}`}>
+            {groupId}グループ
+          </span>
+        )}
+        {isWinner && <span className="ml-1 text-green-600">◎</span>}
       </div>
     </button>
   )

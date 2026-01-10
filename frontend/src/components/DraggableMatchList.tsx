@@ -24,12 +24,22 @@ interface TeamSlotProps {
   hasConsecutiveError?: boolean
 }
 
+// グループごとの色設定
+const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
+  A: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', badge: 'bg-red-100 text-red-700' },
+  B: { bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-800', badge: 'bg-blue-100 text-blue-700' },
+  C: { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-800', badge: 'bg-green-100 text-green-700' },
+  D: { bg: 'bg-yellow-50', border: 'border-yellow-300', text: 'text-yellow-800', badge: 'bg-yellow-100 text-yellow-700' },
+}
+
 /**
  * クリック可能なチームスロット
  */
 function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError }: TeamSlotProps) {
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
+  const groupId = team?.groupId || team?.group_id || null
+  const groupColors = groupId ? GROUP_COLORS[groupId] : null
 
   return (
     <button
@@ -43,15 +53,22 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
             ? 'border-primary-500 bg-primary-100 ring-2 ring-primary-300'
             : isSwapTarget
               ? 'border-green-400 bg-green-50 hover:bg-green-100'
-              : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-gray-50'
+              : groupColors
+                ? `${groupColors.border} ${groupColors.bg} hover:opacity-80`
+                : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-gray-50'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
     >
       {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
       {hasConsecutiveError && !isSelected && <span className="text-red-500 text-xs">⚠</span>}
-      <span className={`font-medium truncate flex-1 ${hasConsecutiveError ? 'text-red-700' : ''}`}>
+      <span className={`font-medium truncate flex-1 ${hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}>
         {team?.shortName || team?.name || `チームID: ${teamId}`}
+        {groupId && (
+          <span className={`ml-1 text-xs px-1.5 py-0.5 rounded ${groupColors?.badge || 'bg-gray-100 text-gray-600'}`}>
+            {groupId}グループ
+          </span>
+        )}
       </span>
     </button>
   )
