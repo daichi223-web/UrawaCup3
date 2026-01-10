@@ -239,9 +239,9 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
         </div>
       </section>
 
-      {/* 決勝トーナメント - 新しいページ */}
-      <section className="mb-8 page-break-before">
-        <h2 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
+      {/* 決勝トーナメント + 研修試合 - 1ページに収める */}
+      <section className="mb-4 page-break-before">
+        <h2 className="text-base font-bold text-gray-800 mb-2 pb-1 border-b-2 border-gray-300">
           🏆 決勝トーナメント
         </h2>
         {(() => {
@@ -253,126 +253,96 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
             return acc
           }, {} as Record<string, Match[]>)
 
-          return Object.entries(tournamentByVenue).map(([venue, matches]) => (
-            <div key={venue} className="mb-4">
-              <div className="text-sm font-bold text-gray-600 bg-gray-100 px-3 py-1 rounded mb-2">
-                📍 {venue}
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-700 text-white">
-                    <th className="px-3 py-2 w-16">時間</th>
-                    <th className="px-3 py-2 w-24">種別</th>
-                    <th className="px-3 py-2 text-right">ホーム</th>
-                    <th className="px-3 py-2 w-10">vs</th>
-                    <th className="px-3 py-2 text-left">アウェイ</th>
-                    <th className="px-3 py-2 w-16">審判</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matches.map((match) => {
-                    const isFinal = match.stage === 'final'
-                    const isThird = match.stage === 'third_place'
-                    const homeName = match.home_team?.short_name || match.home_team?.name || match.home_seed || '未定'
-                    const awayName = match.away_team?.short_name || match.away_team?.name || match.away_seed || '未定'
-                    const homeSeed = match.home_team
-                      ? `${match.home_team.group_id || ''}1位`
-                      : ''
-                    const awaySeed = match.away_team
-                      ? `${match.away_team.group_id || ''}1位`
-                      : ''
-
-                    return (
-                      <tr
-                        key={match.id}
-                        className={`border-b ${
-                          isFinal ? 'bg-yellow-50' : isThird ? 'bg-purple-50' : ''
-                        }`}
-                      >
-                        <td className="px-3 py-2 text-gray-500">
-                          {match.match_time?.slice(0, 5)}
-                        </td>
-                        <td className={`px-3 py-2 font-bold ${
-                          isFinal ? 'text-yellow-700' : isThird ? 'text-purple-700' : 'text-blue-700'
-                        }`}>
-                          {getStageName(match.stage)}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <div className="font-bold">{homeName}</div>
-                          {homeSeed && <div className="text-xs text-gray-500">{homeSeed}</div>}
-                        </td>
-                        <td className="px-3 py-2 text-center text-gray-400">vs</td>
-                        <td className="px-3 py-2 text-left">
-                          <div className="font-bold">{awayName}</div>
-                          {awaySeed && <div className="text-xs text-gray-500">{awaySeed}</div>}
-                        </td>
-                        <td className="px-3 py-2 text-center text-xs text-gray-500">
-                          派遣
-                        </td>
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(tournamentByVenue).map(([venue, matches]) => (
+                <div key={venue}>
+                  <div className="text-xs font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded mb-1">
+                    📍 {venue}
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-700 text-white">
+                        <th className="px-1 py-0.5 w-10">時間</th>
+                        <th className="px-1 py-0.5 w-14">種別</th>
+                        <th className="px-1 py-0.5 text-right">ホーム</th>
+                        <th className="px-1 py-0.5 w-6">vs</th>
+                        <th className="px-1 py-0.5 text-left">アウェイ</th>
                       </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {matches.map((match) => {
+                        const isFinal = match.stage === 'final'
+                        const isThird = match.stage === 'third_place'
+                        const homeName = match.home_team?.short_name || match.home_team?.name || match.home_seed || '未定'
+                        const awayName = match.away_team?.short_name || match.away_team?.name || match.away_seed || '未定'
+
+                        return (
+                          <tr
+                            key={match.id}
+                            className={`border-b ${
+                              isFinal ? 'bg-yellow-50' : isThird ? 'bg-purple-50' : ''
+                            }`}
+                          >
+                            <td className="px-1 py-0.5 text-gray-500">
+                              {match.match_time?.slice(0, 5)}
+                            </td>
+                            <td className={`px-1 py-0.5 font-bold ${
+                              isFinal ? 'text-yellow-700' : isThird ? 'text-purple-700' : 'text-blue-700'
+                            }`}>
+                              {getStageName(match.stage)}
+                            </td>
+                            <td className="px-1 py-0.5 text-right font-medium truncate max-w-[50px]">
+                              {homeName}
+                            </td>
+                            <td className="px-1 py-0.5 text-center text-gray-400">vs</td>
+                            <td className="px-1 py-0.5 text-left font-medium truncate max-w-[50px]">
+                              {awayName}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
-          ))
+          )
         })()}
       </section>
 
-      {/* 研修試合 - 新しいページ */}
-      <section className="mb-8 page-break-before">
-        <h2 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
-          ⚽ 研修試合
+      {/* 研修試合 - 決勝トーナメントと同じページに */}
+      <section className="mb-4">
+        <h2 className="text-base font-bold text-gray-800 mb-2 pb-1 border-b-2 border-gray-300">
+          ⚽ 研修試合（順位リーグ）
         </h2>
         {Object.keys(trainingByVenue).length === 0 ? (
-          <div className="text-gray-500 text-sm py-4 text-center">
+          <div className="text-gray-500 text-xs py-2 text-center">
             研修試合のデータがありません
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             {Object.entries(trainingByVenue).map(([venue, matches]) => (
-              <div key={venue} className="border rounded-lg overflow-hidden">
-                <div className="text-sm font-bold text-white bg-green-600 px-3 py-2">
+              <div key={venue} className="text-xs">
+                <div className="font-bold text-white bg-green-600 px-2 py-0.5 rounded-t">
                   📍 {venue}（{matches.length}試合）
                 </div>
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="px-2 py-1 w-12 text-gray-600">時間</th>
-                      <th className="px-2 py-1 text-right text-gray-600">ホーム</th>
-                      <th className="px-2 py-1 w-8 text-gray-600">vs</th>
-                      <th className="px-2 py-1 text-left text-gray-600">アウェイ</th>
-                    </tr>
-                  </thead>
+                <table className="w-full border border-green-200">
                   <tbody>
                     {matches.map((match) => {
                       const homeTeam = match.home_team
                       const awayTeam = match.away_team
-                      // グループIDから位置を表示（例: A3位）
-                      const homeSeed = homeTeam?.group_id
-                        ? `(${homeTeam.group_id}${homeTeam.rank || '?'}位)`
-                        : ''
-                      const awaySeed = awayTeam?.group_id
-                        ? `(${awayTeam.group_id}${awayTeam.rank || '?'}位)`
-                        : ''
-
                       return (
-                        <tr key={match.id} className="border-b hover:bg-gray-50">
-                          <td className="px-2 py-2 text-gray-500 font-medium">
+                        <tr key={match.id} className="border-b border-gray-200">
+                          <td className="px-1 py-0.5 text-gray-500 w-10">
                             {match.match_time?.slice(0, 5)}
                           </td>
-                          <td className="px-2 py-2 text-right">
-                            <div className="font-medium">
-                              {homeTeam?.short_name || homeTeam?.name || match.home_seed || '未定'}
-                            </div>
-                            {homeSeed && <div className="text-gray-400 text-[10px]">{homeSeed}</div>}
+                          <td className="px-1 py-0.5 text-right font-medium truncate max-w-[55px]">
+                            {homeTeam?.short_name || homeTeam?.name || '未定'}
                           </td>
-                          <td className="px-2 py-2 text-center text-gray-400">vs</td>
-                          <td className="px-2 py-2 text-left">
-                            <div className="font-medium">
-                              {awayTeam?.short_name || awayTeam?.name || match.away_seed || '未定'}
-                            </div>
-                            {awaySeed && <div className="text-gray-400 text-[10px]">{awaySeed}</div>}
+                          <td className="px-1 py-0.5 text-center text-gray-400 w-6">vs</td>
+                          <td className="px-1 py-0.5 text-left font-medium truncate max-w-[55px]">
+                            {awayTeam?.short_name || awayTeam?.name || '未定'}
                           </td>
                         </tr>
                       )

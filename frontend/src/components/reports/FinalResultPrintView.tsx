@@ -231,47 +231,49 @@ const FinalResultPrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
         </div>
       </section>
 
-      {/* 研修試合結果 */}
+      {/* 研修試合結果 - 2列レイアウトで1ページに収める */}
       {Object.keys(trainingByVenue).length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
+        <section className="mb-6 page-break-before">
+          <h2 className="text-base font-bold text-gray-800 mb-3 pb-1 border-b-2 border-gray-300">
             ⚽ 研修試合結果
           </h2>
-          {Object.entries(trainingByVenue).map(([venue, matches]) => (
-            <div key={venue} className="mb-4">
-              <div className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-2 rounded mb-2">
-                📍 {venue}（{matches.length}試合）
-              </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-100">
-                    <th className="px-2 py-1 text-left w-16">時間</th>
-                    <th className="px-2 py-1 text-right">ホーム</th>
-                    <th className="px-2 py-1 text-center w-24">スコア</th>
-                    <th className="px-2 py-1 text-left">アウェイ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matches.map((match) => (
-                    <tr key={match.id} className="border-b">
-                      <td className="px-2 py-2 text-gray-500">
-                        {match.match_time?.slice(0, 5)}
-                      </td>
-                      <td className="px-2 py-2 text-right font-medium">
-                        {match.home_team?.short_name || match.home_team?.name || '未定'}
-                      </td>
-                      <td className="px-2 py-2 text-center font-bold">
-                        {formatScore(match)}
-                      </td>
-                      <td className="px-2 py-2 text-left font-medium">
-                        {match.away_team?.short_name || match.away_team?.name || '未定'}
-                      </td>
+          <div className="grid grid-cols-2 gap-3">
+            {Object.entries(trainingByVenue).map(([venue, matches]) => (
+              <div key={venue} className="text-xs">
+                <div className="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded mb-1">
+                  📍 {venue}（{matches.length}試合）
+                </div>
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-1 py-0.5 text-left w-10">時間</th>
+                      <th className="px-1 py-0.5 text-right">ホーム</th>
+                      <th className="px-1 py-0.5 text-center w-12">スコア</th>
+                      <th className="px-1 py-0.5 text-left">アウェイ</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))}
+                  </thead>
+                  <tbody>
+                    {matches.map((match) => (
+                      <tr key={match.id} className="border-b border-gray-200">
+                        <td className="px-1 py-0.5 text-gray-500">
+                          {match.match_time?.slice(0, 5)}
+                        </td>
+                        <td className="px-1 py-0.5 text-right font-medium truncate max-w-[60px]">
+                          {match.home_team?.short_name || match.home_team?.name || '未定'}
+                        </td>
+                        <td className="px-1 py-0.5 text-center font-bold">
+                          {match.home_score_total ?? 0} - {match.away_score_total ?? 0}
+                        </td>
+                        <td className="px-1 py-0.5 text-left font-medium truncate max-w-[60px]">
+                          {match.away_team?.short_name || match.away_team?.name || '未定'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         </section>
       )}
 
