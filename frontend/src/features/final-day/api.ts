@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase';
 import type { MatchWithDetails } from '@shared/types';
 import type { SwapTeamsRequest } from './types';
 
+// バックエンドAPI URL
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
+
 interface MatchListResponse {
   matches: MatchWithDetails[];
   total: number;
