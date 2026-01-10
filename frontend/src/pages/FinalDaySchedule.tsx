@@ -99,12 +99,17 @@ export default function FinalDaySchedule() {
           const managerTeam = managerId
             ? teams.find(t => t.id === managerId)
             : null;
+          // 混合会場フラグを取得
+          const isMixedUse = (venueData as any)?.isMixedUse ?? (venueData as any)?.is_mixed_use ?? false;
+          const finalsMatchCount = (venueData as any)?.finalsMatchCount ?? (venueData as any)?.finals_match_count ?? 1;
 
           trainingMap.set(venueId, {
             id: venueId,
             name: match.venue.name,
             manager: managerTeam?.shortName || managerTeam?.name,
             matches: [],
+            isMixedUse,
+            finalsMatchCount,
           });
         }
         trainingMap.get(venueId)!.matches.push(match);

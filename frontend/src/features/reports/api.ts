@@ -82,6 +82,15 @@ interface Player {
   team: string
 }
 
+interface OutstandingPlayerData {
+  id: number
+  awardType: 'mvp' | 'outstanding'
+  playerName: string
+  playerNumber?: number
+  teamName?: string
+  displayOrder: number
+}
+
 export interface FinalResultData {
   tournamentName: string
   date: string
@@ -89,6 +98,7 @@ export interface FinalResultData {
   tournament: Match[]
   training: Match[]
   players: Player[]
+  outstandingPlayers: OutstandingPlayerData[]
 }
 
 export interface FinalScheduleData {
@@ -97,6 +107,10 @@ export interface FinalScheduleData {
   standings: GroupStanding[]
   tournament: Match[]
   training: Match[]
+  /** グループステージの試合結果（星取表用） */
+  groupMatches: Match[]
+  /** 優秀選手 */
+  outstandingPlayers: OutstandingPlayerData[]
 }
 
 export const reportApi = {
@@ -801,7 +815,31 @@ export const reportApi = {
 
     console.log('Ranking:', ranking.map(r => r?.name || 'null'));
 
-    // TODO: 優秀選手データを取得（テーブルがあれば）
+    // 優秀選手データを取得
+    const { data: outstandingPlayersData, error: playersError } = await supabase
+      .from('outstanding_players')
+      .select(`
+        *,
+        team:teams(name, short_name)
+      `)
+      .eq('tournament_id', tournamentId)
+      .order('award_type')
+      .order('display_order');
+
+    if (playersError) {
+      console.error('Failed to fetch outstanding players:', playersError);
+    }
+    console.log('Outstanding players:', outstandingPlayersData?.length || 0);
+
+    const outstandingPlayers: OutstandingPlayerData[] = (outstandingPlayersData || []).map((p: any) => ({
+      id: p.id,
+      awardType: p.award_type,
+      playerName: p.player_name,
+      playerNumber: p.player_number,
+      teamName: p.team_name || p.team?.short_name || p.team?.name,
+      displayOrder: p.display_order,
+    }));
+
     const players: Player[] = [];
 
     return {
@@ -811,6 +849,7 @@ export const reportApi = {
       tournament: tournamentMatches || [],
       training: trainingMatches || [],
       players,
+      outstandingPlayers,
     };
   },
 
@@ -901,12 +940,58 @@ export const reportApi = {
 
     const { data: trainingMatches } = await trainingQuery;
 
+    // グループステージの試合を取得（星取表用）
+    const { data: groupMatches, error: groupMatchError } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(id, name, short_name, group_id),
+        away_team:teams!matches_away_team_id_fkey(id, name, short_name, group_id),
+        venue:venues(name)
+      `)
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'group')
+      .eq('status', 'completed')
+      .order('group_id')
+      .order('match_time');
+
+    if (groupMatchError) {
+      console.error('Failed to fetch group matches:', groupMatchError);
+    }
+    console.log('Group matches:', groupMatches?.length || 0);
+
+    // 優秀選手データを取得
+    const { data: outstandingPlayersData, error: playersError } = await supabase
+      .from('outstanding_players')
+      .select(`
+        *,
+        team:teams(name, short_name)
+      `)
+      .eq('tournament_id', tournamentId)
+      .order('award_type')
+      .order('display_order');
+
+    if (playersError) {
+      console.error('Failed to fetch outstanding players:', playersError);
+    }
+
+    const outstandingPlayers: OutstandingPlayerData[] = (outstandingPlayersData || []).map((p: any) => ({
+      id: p.id,
+      awardType: p.award_type,
+      playerName: p.player_name,
+      playerNumber: p.player_number,
+      teamName: p.team_name || p.team?.short_name || p.team?.name,
+      displayOrder: p.display_order,
+    }));
+
     return {
       tournamentName: tournament?.name || '浦和カップ',
       date: date || tournament?.end_date || '',
       standings,
       tournament: tournamentMatches || [],
       training: trainingMatches || [],
+      groupMatches: groupMatches || [],
+      outstandingPlayers,
     };
   },
 

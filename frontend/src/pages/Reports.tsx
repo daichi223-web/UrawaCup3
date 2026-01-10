@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { reportApi, type FinalResultData, type FinalScheduleData } from '@/features/reports';
 import { useSenderSettings, useUpdateSenderSettings } from '@/features/reports/hooks';
 import { matchesApi, venuesApi } from '@/lib/api';
-import { FileText, Download, Trophy, Calendar, Table, Eye, X, Clock, Edit2, Save, Printer } from 'lucide-react'
+import { FileText, Download, Trophy, Calendar, Table, Eye, X, Clock, Edit2, Save, Printer, Medal, Users } from 'lucide-react'
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/stores/appStore';
 import { FinalResultPrintView, FinalSchedulePrintView } from '@/components/reports';
+import { OutstandingPlayersModal } from '@/features/outstanding-players';
 
 interface MatchPreview {
   id: number;
@@ -50,6 +51,9 @@ function Reports() {
   const [printData, setPrintData] = useState<FinalResultData | FinalScheduleData | null>(null);
   const [printLoading, setPrintLoading] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+
+  // 優秀選手登録モーダル
+  const [showOutstandingPlayersModal, setShowOutstandingPlayersModal] = useState(false);
 
   // appStoreから現在のトーナメントIDを取得
   const { currentTournament } = useAppStore();
@@ -559,6 +563,36 @@ function Reports() {
         </div>
       </div>
 
+      {/* 優秀選手登録 */}
+      <div className="card">
+        <div className="card-header flex items-center justify-between">
+          <h3 className="text-lg font-semibold">優秀選手登録</h3>
+        </div>
+        <div className="card-body">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Medal className="w-8 h-8 text-yellow-600" />
+                <Trophy className="w-6 h-6 text-yellow-500" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-medium text-yellow-800">最優秀選手・優秀選手</h4>
+                <p className="text-sm text-yellow-700 mt-1">
+                  最優秀選手1名、優秀選手11名を登録して報告書に含めます
+                </p>
+              </div>
+              <button
+                onClick={() => setShowOutstandingPlayersModal(true)}
+                className="btn btn-primary flex items-center gap-2"
+              >
+                <Users className="w-4 h-4" />
+                優秀選手登録
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 発信元設定 */}
       <div className="card">
         <div className="card-header flex items-center justify-between">
@@ -848,6 +882,13 @@ function Reports() {
           }
         }
       `}</style>
+
+      {/* 優秀選手登録モーダル */}
+      <OutstandingPlayersModal
+        isOpen={showOutstandingPlayersModal}
+        onClose={() => setShowOutstandingPlayersModal(false)}
+        tournamentId={tournamentId}
+      />
     </div>
   )
 }

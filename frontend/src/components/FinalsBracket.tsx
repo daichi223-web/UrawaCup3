@@ -75,13 +75,25 @@ function ClickableTeam({ match, position, isWinner, isSelected, isSwapTarget, on
     >
       <div className="flex items-center gap-2 flex-1">
         {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
-        <span className={`truncate ${groupColors ? groupColors.text : ''}`}>{teamName}</span>
+        <span
+          className={`${groupColors ? groupColors.text : ''}`}
+          style={{
+            fontSize: teamName.length > 8 ? '0.75rem' : '0.875rem',
+            lineHeight: '1.25',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}
+        >
+          {teamName}
+        </span>
         {groupId && (
-          <span className={`text-xs px-1.5 py-0.5 rounded ${groupColors?.badge || 'bg-gray-100 text-gray-600'}`}>
+          <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${groupColors?.badge || 'bg-gray-100 text-gray-600'}`}>
             {groupId}グループ
           </span>
         )}
-        {isWinner && <span className="ml-1 text-green-600">◎</span>}
+        {isWinner && <span className="ml-1 text-green-600 flex-shrink-0">◎</span>}
       </div>
     </button>
   )

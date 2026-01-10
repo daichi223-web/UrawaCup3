@@ -63,7 +63,14 @@ export function VenueCard({ venue, teams, onMatchClick, onManagerChange, selecte
     <div className="border rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
       {/* 会場名ヘッダー */}
       <div className="bg-gray-100 px-3 py-2 font-semibold text-center border-b text-sm">
-        <div>{venue.name}</div>
+        <div className="flex items-center justify-center gap-2">
+          <span>{venue.name}</span>
+          {venue.isMixedUse && (
+            <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded" title={`最初の${venue.finalsMatchCount || 1}試合は決勝、以降は研修`}>
+              混合
+            </span>
+          )}
+        </div>
         {leagueInfo && (
           <div className="text-xs font-normal text-gray-600 mt-0.5">
             リーグ{leagueInfo.leagueNumber}（{leagueInfo.rankRange}）

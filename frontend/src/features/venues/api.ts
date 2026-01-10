@@ -41,6 +41,8 @@ export const venueApi = {
       for_preliminary: data.forPreliminary ?? true,
       for_final_day: data.forFinalDay ?? false,
       is_finals_venue: data.isFinalsVenue ?? false,
+      is_mixed_use: data.isMixedUse ?? false,
+      finals_match_count: data.finalsMatchCount ?? 1,
     };
     console.log('[venueApi.create] Inserting:', insertData);
     const { data: venue, error } = await supabase

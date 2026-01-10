@@ -73,6 +73,10 @@ export interface VenueSchedule {
   leagueNumber?: number;
   /** 順位範囲（例: "5〜9位"） */
   rankRange?: string;
+  /** 混合会場フラグ */
+  isMixedUse?: boolean;
+  /** 混合会場での決勝試合数 */
+  finalsMatchCount?: number;
 }
 
 /** 試合notesからリーグ情報を抽出 */

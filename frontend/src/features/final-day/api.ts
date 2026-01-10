@@ -3,6 +3,12 @@
 import { supabase } from '@/lib/supabase';
 import type { MatchWithDetails } from '@shared/types';
 import type { SwapTeamsRequest } from './types';
+import {
+  calculateMixedVenueSchedule,
+  isMixedUseVenue,
+  getFinalsMatchCount,
+  type MixedVenueConfig,
+} from '@/lib/mixedVenueScheduler';
 
 // バックエンドAPI URL
 const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
@@ -333,6 +339,80 @@ export const finalDayApi = {
       homeScore: null,
       awayScore: null,
       message: '予選では対戦していません',
+    };
+  },
+
+  /**
+   * 混合会場の試合時間を再計算して更新
+   * @param tournamentId 大会ID
+   * @param venueId 会場ID
+   * @param config 混合会場設定
+   */
+  recalculateMixedVenueMatchTimes: async (
+    tournamentId: number,
+    venueId: number,
+    config: MixedVenueConfig
+  ): Promise<{ updated: number; matches: MatchWithDetails[] }> => {
+    // 該当会場の最終日試合を取得（時間順）
+    const { data: matches, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .eq('venue_id', venueId)
+      .in('stage', ['semifinal', 'third_place', 'final', 'training'])
+      .order('match_order');
+
+    if (error) throw error;
+    if (!matches || matches.length === 0) {
+      return { updated: 0, matches: [] };
+    }
+
+    // 混合会場の試合時間を計算
+    const timeSlots = calculateMixedVenueSchedule(config, matches.length);
+
+    // 各試合の時間と試合時間を更新
+    let updated = 0;
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const slot = timeSlots[i];
+
+      // ステージを確認して適切に設定
+      const isFinalMatch = slot.matchType === 'finals';
+      const newStage = isFinalMatch
+        ? (match.stage === 'training' ? 'semifinal' : match.stage) // 研修から決勝に変更の場合はsemifinalに
+        : 'training';
+
+      const { error: updateError } = await supabase
+        .from('matches')
+        .update({
+          match_time: slot.kickoffTime,
+          match_duration_minutes: slot.matchDuration,
+          stage: newStage,
+        })
+        .eq('id', match.id);
+
+      if (!updateError) {
+        updated++;
+      }
+    }
+
+    // 更新後のデータを取得
+    const { data: updatedMatches } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(*),
+        away_team:teams!matches_away_team_id_fkey(*),
+        venue:venues(*)
+      `)
+      .eq('tournament_id', tournamentId)
+      .eq('venue_id', venueId)
+      .in('stage', ['semifinal', 'third_place', 'final', 'training'])
+      .order('match_time');
+
+    return {
+      updated,
+      matches: (updatedMatches || []) as MatchWithDetails[],
     };
   },
 };

@@ -62,7 +62,16 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
     >
       {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
       {hasConsecutiveError && !isSelected && <span className="text-red-500 text-xs">⚠</span>}
-      <span className={`font-medium truncate flex-1 ${hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}>
+      <span
+        className={`font-medium flex-1 ${hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
+        style={{
+          fontSize: (team?.shortName || team?.name || '')?.length > 8 ? '0.75rem' : '0.875rem',
+          lineHeight: '1.25',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
         {team?.shortName || team?.name || `チームID: ${teamId}`}
         {groupId && (
           <span className={`ml-1 text-xs px-1.5 py-0.5 rounded ${groupColors?.badge || 'bg-gray-100 text-gray-600'}`}>
@@ -277,7 +286,21 @@ export default function DraggableMatchList({
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {matches.map((match) => {
+        {/* 試合を左右2列に分割: 左列に前半分、右列に後半分 */}
+        {(() => {
+          const sortedMatches = [...matches].sort((a, b) => (a.matchOrder || 0) - (b.matchOrder || 0))
+          const mid = Math.ceil(sortedMatches.length / 2)
+          const leftMatches = sortedMatches.slice(0, mid)
+          const rightMatches = sortedMatches.slice(mid)
+
+          // 左右のカラムを交互に並べてgridで表示
+          const interleavedMatches: MatchWithDetails[] = []
+          for (let i = 0; i < Math.max(leftMatches.length, rightMatches.length); i++) {
+            if (leftMatches[i]) interleavedMatches.push(leftMatches[i])
+            if (rightMatches[i]) interleavedMatches.push(rightMatches[i])
+          }
+          return interleavedMatches
+        })().map((match) => {
           const isHomeSelected = selectedTeam?.matchId === match.id && selectedTeam.position === 'home'
           const isAwaySelected = selectedTeam?.matchId === match.id && selectedTeam.position === 'away'
           const isDisabled = match.status === 'completed'
@@ -297,8 +320,9 @@ export default function DraggableMatchList({
                 : 'border-gray-200'
             }`}>
               <div className="flex items-center justify-between mb-3">
-                <div className="text-sm text-gray-500">
-                  #{match.matchOrder} {match.matchTime?.substring(0, 5)}
+                <div className="text-sm text-gray-500 flex items-center gap-2">
+                  <span className="w-6 text-right font-mono">#{match.matchOrder}</span>
+                  <span className="font-mono">{match.matchTime?.substring(0, 5)}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   {(homeHasConsecutiveError || awayHasConsecutiveError) && (

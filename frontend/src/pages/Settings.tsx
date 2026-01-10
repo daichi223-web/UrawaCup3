@@ -35,8 +35,15 @@ function Settings() {
     edition: 0,
     startDate: '',
     endDate: '',
+    // 予選リーグ設定
     matchDuration: 50,
     intervalMinutes: 15,
+    preliminaryStartTime: '09:00',
+    // 決勝トーナメント設定
+    finalsMatchDuration: 60,
+    finalsIntervalMinutes: 20,
+    finalsStartTime: '09:00',
+    // チーム構成
     groupCount: 4,
     teamsPerGroup: 4,
     advancingTeams: 1,
@@ -53,6 +60,8 @@ function Settings() {
     forPreliminary: true,
     forFinalDay: false,
     isFinalsVenue: false,
+    isMixedUse: false,
+    finalsMatchCount: 1,
   })
   const [showAddVenueModal, setShowAddVenueModal] = useState(false)
   const [addVenueForm, setAddVenueForm] = useState({
@@ -64,6 +73,8 @@ function Settings() {
     forPreliminary: true,
     forFinalDay: false,
     isFinalsVenue: false,
+    isMixedUse: false,
+    finalsMatchCount: 1,
   })
 
   // 新規大会作成モーダル
@@ -104,8 +115,15 @@ function Settings() {
         edition: tournament.edition || 0,
         startDate: tournament.startDate || '',
         endDate: tournament.endDate || '',
+        // 予選リーグ設定
         matchDuration: tournament.matchDuration || 50,
         intervalMinutes: tournament.intervalMinutes || 15,
+        preliminaryStartTime: (tournament as any).preliminaryStartTime || (tournament as any).preliminary_start_time || '09:00',
+        // 決勝トーナメント設定
+        finalsMatchDuration: (tournament as any).finalsMatchDuration || (tournament as any).finals_match_duration || 60,
+        finalsIntervalMinutes: (tournament as any).finalsIntervalMinutes || (tournament as any).finals_interval_minutes || 20,
+        finalsStartTime: (tournament as any).finalsStartTime || (tournament as any).finals_start_time || '09:00',
+        // チーム構成
         groupCount: tournament.groupCount || 4,
         teamsPerGroup: tournament.teamsPerGroup || 4,
         advancingTeams: tournament.advancingTeams || 1,
@@ -123,16 +141,33 @@ function Settings() {
       endDate: string;
       matchDuration: number;
       intervalMinutes: number;
+      preliminaryStartTime: string;
+      finalsMatchDuration: number;
+      finalsIntervalMinutes: number;
+      finalsStartTime: string;
       groupCount: number;
       teamsPerGroup: number;
       advancingTeams: number;
     }) => {
-      const updated = await tournamentsApi.update(tournamentId, {
-        name: data.name,
-        short_name: data.shortName,
-        start_date: data.startDate,
-        end_date: data.endDate,
-      })
+      const { data: updated, error } = await supabase
+        .from('tournaments')
+        .update({
+          name: data.name,
+          short_name: data.shortName,
+          start_date: data.startDate,
+          end_date: data.endDate,
+          match_duration: data.matchDuration,
+          interval_minutes: data.intervalMinutes,
+          preliminary_start_time: data.preliminaryStartTime,
+          finals_match_duration: data.finalsMatchDuration,
+          finals_interval_minutes: data.finalsIntervalMinutes,
+          finals_start_time: data.finalsStartTime,
+        })
+        .eq('id', tournamentId)
+        .select()
+        .single()
+
+      if (error) throw error
       return {
         ...updated,
         shortName: updated.short_name,
@@ -195,6 +230,8 @@ function Settings() {
       forPreliminary?: boolean;
       forFinalDay?: boolean;
       isFinalsVenue?: boolean;
+      isMixedUse?: boolean;
+      finalsMatchCount?: number;
     }) => {
       const { id, ...rest } = data
       // snake_case でSupabaseに送信
@@ -206,6 +243,8 @@ function Settings() {
         for_preliminary: rest.forPreliminary,
         for_final_day: rest.forFinalDay,
         is_finals_venue: rest.isFinalsVenue,
+        is_mixed_use: rest.isMixedUse,
+        finals_match_count: rest.finalsMatchCount,
       }
       console.log('[updateVenueMutation] Sending to Supabase:', updatePayload)
       const { data: venue, error } = await supabase
@@ -268,6 +307,8 @@ function Settings() {
       forPreliminary: venue.forPreliminary ?? venue.for_preliminary ?? true,
       forFinalDay: venue.forFinalDay ?? venue.for_final_day ?? false,
       isFinalsVenue: venue.isFinalsVenue ?? venue.is_finals_venue ?? false,
+      isMixedUse: (venue as any).isMixedUse ?? (venue as any).is_mixed_use ?? false,
+      finalsMatchCount: (venue as any).finalsMatchCount ?? (venue as any).finals_match_count ?? 1,
     })
     setShowVenueModal(true)
   }
@@ -286,6 +327,8 @@ function Settings() {
       forPreliminary: venueForm.forPreliminary,  // 予選会場フラグ
       forFinalDay: venueForm.forFinalDay,        // 最終日会場フラグ
       isFinalsVenue: venueForm.isFinalsVenue,    // 決勝会場フラグ
+      isMixedUse: venueForm.isMixedUse,          // 混合会場フラグ
+      finalsMatchCount: venueForm.finalsMatchCount, // 混合会場での決勝試合数
     }
     console.log('[handleSaveVenue] Sending payload:', payload)
 
@@ -355,12 +398,14 @@ function Settings() {
         forPreliminary: addVenueForm.forPreliminary,
         forFinalDay: addVenueForm.forFinalDay,
         isFinalsVenue: addVenueForm.isFinalsVenue,
+        isMixedUse: addVenueForm.isMixedUse,
+        finalsMatchCount: addVenueForm.finalsMatchCount,
       },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['venues', tournamentId] })
           setShowAddVenueModal(false)
-          setAddVenueForm({ name: '', shortName: '', address: '', groupId: '', pitchCount: 1, forPreliminary: true, forFinalDay: false, isFinalsVenue: false })
+          setAddVenueForm({ name: '', shortName: '', address: '', groupId: '', pitchCount: 1, forPreliminary: true, forFinalDay: false, isFinalsVenue: false, isMixedUse: false, finalsMatchCount: 1 })
           toast.success('会場を追加しました')
         },
         onError: (error: Error) => {
@@ -444,25 +489,88 @@ function Settings() {
                 onChange={(e) => handleDateChange('endDate', e.target.value)}
               />
             </div>
-            <div>
-              <label className="form-label">試合時間（分）</label>
-              <input
-                type="number"
-                className="form-input"
-                value={tournamentForm.matchDuration}
-                placeholder="50"
-                onChange={(e) => setTournamentForm(prev => ({ ...prev, matchDuration: parseInt(e.target.value) || 50 }))}
-              />
+          </div>
+
+          {/* 予選リーグ時間設定 */}
+          <div className="border-t pt-4 mt-4">
+            <h4 className="font-medium mb-3 text-gray-700">予選リーグ時間設定</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="form-label">第1試合開始時刻</label>
+                <input
+                  type="time"
+                  className="form-input"
+                  value={tournamentForm.preliminaryStartTime}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, preliminaryStartTime: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">試合時間（分）</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={tournamentForm.matchDuration}
+                  placeholder="50"
+                  min={10}
+                  max={120}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, matchDuration: parseInt(e.target.value) || 50 }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">試合間隔（分）<span className="text-xs text-gray-500 ml-1">(HT+入れ替え)</span></label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={tournamentForm.intervalMinutes}
+                  placeholder="15"
+                  min={5}
+                  max={60}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 15 }))}
+                />
+              </div>
             </div>
-            <div>
-              <label className="form-label">試合間隔（分）<span className="text-xs text-gray-500 ml-1">(HT+入れ替え)</span></label>
-              <input
-                type="number"
-                className="form-input"
-                value={tournamentForm.intervalMinutes}
-                placeholder="10"
-                onChange={(e) => setTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 10 }))}
-              />
+          </div>
+
+          {/* 決勝トーナメント時間設定 */}
+          <div className="border-t pt-4 mt-4">
+            <h4 className="font-medium mb-3 text-gray-700">決勝トーナメント時間設定</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              ※ 最終日の準決勝・3位決定戦・決勝に適用されます
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="form-label">第1試合開始時刻</label>
+                <input
+                  type="time"
+                  className="form-input"
+                  value={tournamentForm.finalsStartTime}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, finalsStartTime: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">試合時間（分）</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={tournamentForm.finalsMatchDuration}
+                  placeholder="60"
+                  min={10}
+                  max={120}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, finalsMatchDuration: parseInt(e.target.value) || 60 }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">試合間隔（分）<span className="text-xs text-gray-500 ml-1">(HT+入れ替え)</span></label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={tournamentForm.finalsIntervalMinutes}
+                  placeholder="20"
+                  min={5}
+                  max={60}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, finalsIntervalMinutes: parseInt(e.target.value) || 20 }))}
+                />
+              </div>
             </div>
           </div>
 
@@ -563,6 +671,8 @@ function Settings() {
                   const forPreliminary = venue.forPreliminary ?? venue.for_preliminary ?? true;
                   const forFinalDay = venue.forFinalDay ?? venue.for_final_day ?? false;
                   const isFinalsVenue = venue.isFinalsVenue ?? venue.is_finals_venue ?? false;
+                  const isMixedUse = (venue as any).isMixedUse ?? (venue as any).is_mixed_use ?? false;
+                  const finalsMatchCount = (venue as any).finalsMatchCount ?? (venue as any).finals_match_count ?? 1;
                   return (
                     <tr key={venue.id}>
                       <td>{venue.name}</td>
@@ -592,7 +702,12 @@ function Settings() {
                               決勝
                             </span>
                           )}
-                          {!forPreliminary && !forFinalDay && !isFinalsVenue && (
+                          {isMixedUse && (
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs rounded" title={`決勝${finalsMatchCount}試合後に研修`}>
+                              混合
+                            </span>
+                          )}
+                          {!forPreliminary && !forFinalDay && !isFinalsVenue && !isMixedUse && (
                             <span className="text-gray-400 text-xs">-</span>
                           )}
                         </div>
@@ -862,6 +977,31 @@ function Settings() {
                 />
                 <span className="text-sm">決勝トーナメント会場（3決・決勝戦）</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 text-primary-600 rounded"
+                  checked={addVenueForm.isMixedUse}
+                  onChange={(e) => setAddVenueForm(prev => ({ ...prev, isMixedUse: e.target.checked }))}
+                />
+                <span className="text-sm">混合会場（決勝＋研修を同一会場で行う）</span>
+              </label>
+              {addVenueForm.isMixedUse && (
+                <div className="ml-6 mt-2 p-3 bg-purple-50 rounded">
+                  <label className="block text-sm text-gray-700 mb-1">決勝トーナメント試合数</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      className="form-input w-20"
+                      min={1}
+                      max={4}
+                      value={addVenueForm.finalsMatchCount}
+                      onChange={(e) => setAddVenueForm(prev => ({ ...prev, finalsMatchCount: parseInt(e.target.value) || 1 }))}
+                    />
+                    <span className="text-sm text-gray-600">試合目まで決勝トーナメント、以降は研修試合</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-4">
@@ -962,6 +1102,31 @@ function Settings() {
                 />
                 <span className="text-sm">決勝トーナメント会場（3決・決勝戦）</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 text-primary-600 rounded"
+                  checked={venueForm.isMixedUse}
+                  onChange={(e) => setVenueForm(prev => ({ ...prev, isMixedUse: e.target.checked }))}
+                />
+                <span className="text-sm">混合会場（決勝＋研修を同一会場で行う）</span>
+              </label>
+              {venueForm.isMixedUse && (
+                <div className="ml-6 mt-2 p-3 bg-purple-50 rounded">
+                  <label className="block text-sm text-gray-700 mb-1">決勝トーナメント試合数</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      className="form-input w-20"
+                      min={1}
+                      max={4}
+                      value={venueForm.finalsMatchCount}
+                      onChange={(e) => setVenueForm(prev => ({ ...prev, finalsMatchCount: parseInt(e.target.value) || 1 }))}
+                    />
+                    <span className="text-sm text-gray-600">試合目まで決勝トーナメント、以降は研修試合</span>
+                  </div>
+                </div>
+              )}
             </div>
             <p className="text-xs text-gray-500 mt-2">
               ※ 決勝トーナメント会場は1つのみ選択してください

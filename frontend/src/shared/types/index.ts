@@ -70,6 +70,14 @@ export interface Tournament {
   halfDuration: number;
   /** 試合間インターバル（分）デフォルト: 15 */
   intervalMinutes: number;
+  /** 予選リーグ第1試合開始時刻 (HH:mm) デフォルト: 09:00 */
+  preliminaryStartTime?: string;
+  /** 決勝トーナメント第1試合開始時刻 (HH:mm) デフォルト: 09:00 */
+  finalsStartTime?: string;
+  /** 決勝トーナメント試合時間（分）デフォルト: 60 */
+  finalsMatchDuration?: number;
+  /** 決勝トーナメント試合間隔（分）デフォルト: 20 */
+  finalsIntervalMinutes?: number;
   /** グループ数（2/4/8）デフォルト: 4 */
   groupCount: number;
   /** グループ内チーム数（3-6）デフォルト: 4 */
@@ -311,6 +319,10 @@ export interface Venue {
   forFinalDay: boolean;
   /** 決勝会場フラグ（準決勝・3決・決勝用） */
   isFinalsVenue: boolean;
+  /** 混合会場フラグ（決勝＋研修を同一会場で行う） */
+  isMixedUse: boolean;
+  /** 混合会場での決勝試合数（デフォルト: 1） */
+  finalsMatchCount: number;
   /** 備考 */
   notes?: string;
   /** 作成日時 */
@@ -324,6 +336,8 @@ export interface Venue {
   for_preliminary?: boolean;
   for_final_day?: boolean;
   is_finals_venue?: boolean;
+  is_mixed_use?: boolean;
+  finals_match_count?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -338,6 +352,8 @@ export interface VenueCreate {
   forPreliminary?: boolean;
   forFinalDay?: boolean;
   isFinalsVenue?: boolean;
+  isMixedUse?: boolean;
+  finalsMatchCount?: number;
   notes?: string;
 }
 
@@ -350,6 +366,8 @@ export interface VenueUpdate {
   forPreliminary?: boolean;
   forFinalDay?: boolean;
   isFinalsVenue?: boolean;
+  isMixedUse?: boolean;
+  finalsMatchCount?: number;
   notes?: string;
 }
 
@@ -436,6 +454,8 @@ export interface Match {
 
   /** 備考 */
   notes?: string;
+  /** 試合時間（分）。NULL の場合は大会設定を使用 */
+  matchDurationMinutes?: number;
   /** 作成日時 */
   createdAt: string;
   /** 更新日時 */
@@ -468,6 +488,7 @@ export interface Match {
   approved_by?: number;
   approved_at?: string;
   rejection_reason?: string;
+  match_duration_minutes?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -1093,6 +1114,74 @@ export interface VenueDateMatchCount {
   date: string;
   totalMatches: number;
   completedMatches: number;
+}
+
+// ============================================
+// OutstandingPlayer（優秀選手）
+// ============================================
+
+/** 賞の種類 */
+export type AwardType = 'mvp' | 'outstanding';
+
+/** 優秀選手情報 */
+export interface OutstandingPlayer {
+  id: number;
+  tournamentId: number;
+  /** チームID（登録選手の場合） */
+  teamId?: number;
+  /** 選手ID（登録選手の場合） */
+  playerId?: number;
+  /** チーム名（手動入力用） */
+  teamName?: string;
+  /** 選手名 */
+  playerName: string;
+  /** 背番号 */
+  playerNumber?: number;
+  /** 賞の種類: mvp=最優秀選手, outstanding=優秀選手 */
+  awardType: AwardType;
+  /** 表示順序 */
+  displayOrder: number;
+  /** 作成日時 */
+  createdAt: string;
+  /** 更新日時 */
+  updatedAt: string;
+  // Fallback for snake_case
+  tournament_id?: number;
+  team_id?: number;
+  player_id?: number;
+  team_name?: string;
+  player_name?: string;
+  player_number?: number;
+  award_type?: AwardType;
+  display_order?: number;
+  created_at?: string;
+  updated_at?: string;
+  // 関連データ
+  team?: Team;
+  player?: Player;
+}
+
+/** 優秀選手作成リクエスト */
+export interface OutstandingPlayerCreate {
+  tournamentId: number;
+  teamId?: number;
+  playerId?: number;
+  teamName?: string;
+  playerName: string;
+  playerNumber?: number;
+  awardType: AwardType;
+  displayOrder?: number;
+}
+
+/** 優秀選手更新リクエスト */
+export interface OutstandingPlayerUpdate {
+  teamId?: number;
+  playerId?: number;
+  teamName?: string;
+  playerName?: string;
+  playerNumber?: number;
+  awardType?: AwardType;
+  displayOrder?: number;
 }
 
 // ============================================

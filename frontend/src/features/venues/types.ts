@@ -14,6 +14,8 @@ export interface Venue {
   forPreliminary: boolean; // 予選リーグ会場
   forFinalDay: boolean; // 最終日の順位リーグ会場
   isFinalsVenue: boolean; // 決勝トーナメント会場
+  isMixedUse: boolean; // 混合会場フラグ（決勝＋研修を同一会場で行う）
+  finalsMatchCount: number; // 混合会場での決勝試合数（デフォルト: 1）
   createdAt: string;
   updatedAt: string;
 
@@ -22,6 +24,8 @@ export interface Venue {
   for_preliminary?: boolean;
   for_final_day?: boolean;
   is_finals_venue?: boolean;
+  is_mixed_use?: boolean;
+  finals_match_count?: number;
   max_matches_per_day?: number;
   maxMatchesPerDay?: number;
   manager_team_id?: number | null;
@@ -42,6 +46,8 @@ export interface CreateVenueInput {
   forPreliminary?: boolean;
   forFinalDay?: boolean;
   isFinalsVenue?: boolean;
+  isMixedUse?: boolean;
+  finalsMatchCount?: number;
 }
 
 export interface UpdateVenueInput {
@@ -58,6 +64,8 @@ export interface UpdateVenueInput {
   for_preliminary?: boolean;
   for_final_day?: boolean;
   is_finals_venue?: boolean;
+  is_mixed_use?: boolean;
+  finals_match_count?: number;
 }
 
 export interface VenueStaff {
