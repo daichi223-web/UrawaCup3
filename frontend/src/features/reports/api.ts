@@ -1,11 +1,14 @@
 // src/features/reports/api.ts
 // 報告書API呼び出し - Supabase版
-// クライアントサイドでPDF/Excel生成
+// バックエンドAPI経由でPDF生成、フォールバックでクライアントサイド生成
 import { supabase } from '@/lib/supabase';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import type { ReportGenerateInput, ReportJob, ReportRecipient, SenderSettings, SenderSettingsUpdate } from './types';
+
+// バックエンドAPI URL（PDF生成・日程生成サーバー）
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
 
 // jsPDF autotable型定義
 declare module 'jspdf' {
@@ -119,16 +122,17 @@ export const reportApi = {
     return new Blob(['Report generation not implemented'], { type: 'text/plain' });
   },
 
-  // 日別報告書PDFダウンロード
+  // 日別報告書PDFダウンロード（バックエンドAPI経由）
   downloadPdf: async (params: { tournamentId: number; date: string; venueId?: number; format?: string }): Promise<Blob> => {
-    // 試合データを取得
+    // 試合データを取得（得点者データ含む）
     let query = supabase
       .from('matches')
       .select(`
         *,
-        home_team:teams!matches_home_team_id_fkey(name, short_name),
-        away_team:teams!matches_away_team_id_fkey(name, short_name),
-        venue:venues(name)
+        home_team:teams!matches_home_team_id_fkey(id, name, short_name),
+        away_team:teams!matches_away_team_id_fkey(id, name, short_name),
+        venue:venues(name),
+        goals(*)
       `)
       .eq('tournament_id', params.tournamentId)
       .eq('match_date', params.date)
@@ -141,7 +145,90 @@ export const reportApi = {
     const { data: matches, error } = await query;
     if (error) throw error;
 
-    // PDF生成
+    // 大会情報を取得
+    const { data: tournament } = await supabase
+      .from('tournaments')
+      .select('name, start_date, end_date')
+      .eq('id', params.tournamentId)
+      .single();
+
+    // 発信元設定を取得
+    const { data: senderSettings } = await supabase
+      .from('sender_settings')
+      .select('*')
+      .eq('tournament_id', params.tournamentId)
+      .single();
+
+    // 日付から第N日を計算
+    let day = 1;
+    if (tournament?.start_date) {
+      const startDate = new Date(tournament.start_date);
+      const currentDate = new Date(params.date);
+      day = Math.floor((currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    // 日付文字列を生成
+    const dateObj = new Date(params.date);
+    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+    const dateStr = `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日（${weekdays[dateObj.getDay()]}）`;
+
+    // 会場ごとにグループ化
+    const matchesByVenue: Record<string, any[]> = {};
+    for (const match of matches || []) {
+      const venueName = match.venue?.name || '未定';
+      if (!matchesByVenue[venueName]) {
+        matchesByVenue[venueName] = [];
+      }
+
+      // 得点者リストを作成
+      const scorers = (match.goals || [])
+        .sort((a: any, b: any) => (a.minute || 0) - (b.minute || 0))
+        .map((goal: any) => ({
+          time: String(goal.minute || ''),
+          team: goal.team_id === match.home_team_id
+            ? (match.home_team?.short_name || match.home_team?.name || '')
+            : (match.away_team?.short_name || match.away_team?.name || ''),
+          name: goal.player_name || '',
+        }));
+
+      matchesByVenue[venueName].push({
+        homeTeam: { name: match.home_team?.short_name || match.home_team?.name || '---' },
+        awayTeam: { name: match.away_team?.short_name || match.away_team?.name || '---' },
+        kickoff: match.match_time?.slice(0, 5) || '--:--',
+        homeScore1H: match.home_score_half1 ?? '',
+        homeScore2H: match.home_score_half2 ?? '',
+        awayScore1H: match.away_score_half1 ?? '',
+        awayScore2H: match.away_score_half2 ?? '',
+        scorers,
+      });
+    }
+
+    // バックエンドAPIを呼び出し
+    try {
+      const response = await fetch(`${CORE_API_URL}/daily-report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          day,
+          dateStr,
+          reportConfig: {
+            recipient: senderSettings?.recipient || '埼玉県サッカー協会 御中',
+            sender: senderSettings?.sender_name || '県立浦和高校',
+            contact: senderSettings?.contact || '',
+          },
+          matchData: matchesByVenue,
+        }),
+      });
+
+      if (response.ok) {
+        return await response.blob();
+      }
+      console.warn('Backend API failed, falling back to local generation');
+    } catch (e) {
+      console.warn('Backend API error, falling back to local generation:', e);
+    }
+
+    // フォールバック: ローカルでPDF生成
     const doc = new jsPDF();
     doc.setFont('helvetica');
     doc.setFontSize(16);

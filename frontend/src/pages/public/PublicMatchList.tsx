@@ -3,7 +3,10 @@ import { matchesApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { MapPin, Clock } from 'lucide-react';
+import { MapPin, Clock, List, LayoutGrid } from 'lucide-react';
+
+// ビューモード
+type ViewMode = 'timeline' | 'group';
 
 // Supabaseから取得するデータの型
 interface MatchData {
@@ -38,6 +41,8 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; header: string;
 
 export default function PublicMatchList() {
     const [matches, setMatches] = useState<MatchData[]>([]);
+    const [viewMode, setViewMode] = useState<ViewMode>('timeline');
+    const [selectedGroup, setSelectedGroup] = useState<string>('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -183,49 +188,205 @@ export default function PublicMatchList() {
     const completedMatches = sortedMatches.filter(m => m.status === 'completed');
     const scheduledMatches = sortedMatches.filter(m => m.status === 'scheduled');
 
+    // グループ一覧を取得
+    const groupKeys = ['all', 'A', 'B', 'C', 'D', 'finals', 'training'];
+    const groupLabels: Record<string, string> = {
+        all: 'すべて',
+        A: 'A組',
+        B: 'B組',
+        C: 'C組',
+        D: 'D組',
+        finals: '決勝T',
+        training: '研修',
+    };
+
+    // グループ別フィルタリング
+    const filterByGroup = (matchList: MatchData[]) => {
+        if (selectedGroup === 'all') return matchList;
+        return matchList.filter(m => getGroupKey(m) === selectedGroup);
+    };
+
+    // グループ別ビュー用: グループごとに試合を分類
+    const matchesByGroup = groupKeys.slice(1).reduce((acc, groupKey) => {
+        acc[groupKey] = sortedMatches.filter(m => getGroupKey(m) === groupKey);
+        return acc;
+    }, {} as Record<string, MatchData[]>);
+
     return (
         <div className="space-y-4 pb-20">
-            {/* 試合中 */}
-            {inProgressMatches.length > 0 && (
-                <div>
-                    <h2 className="text-sm font-bold text-red-600 mb-2 px-1 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                        試合中 ({inProgressMatches.length})
-                    </h2>
-                    <div className="space-y-2">
-                        {inProgressMatches.map(match => (
-                            <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
-                        ))}
-                    </div>
+            {/* ビュー切り替えボタン */}
+            <div className="flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-100 p-2">
+                <div className="flex gap-1">
+                    <button
+                        onClick={() => setViewMode('timeline')}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            viewMode === 'timeline'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                    >
+                        <List className="w-4 h-4" />
+                        時系列
+                    </button>
+                    <button
+                        onClick={() => setViewMode('group')}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            viewMode === 'group'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                    >
+                        <LayoutGrid className="w-4 h-4" />
+                        グループ別
+                    </button>
+                </div>
+                <div className="text-xs text-gray-500">
+                    {matches.length}試合
+                </div>
+            </div>
+
+            {/* グループ別ビュー: タブ */}
+            {viewMode === 'group' && (
+                <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
+                    {groupKeys.map(groupKey => {
+                        const count = groupKey === 'all'
+                            ? matches.length
+                            : matchesByGroup[groupKey]?.length || 0;
+                        const isActive = selectedGroup === groupKey;
+
+                        // グループ別カラー
+                        const tabColors: Record<string, string> = {
+                            all: isActive ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600',
+                            A: isActive ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700',
+                            B: isActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700',
+                            C: isActive ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700',
+                            D: isActive ? 'bg-yellow-500 text-white' : 'bg-yellow-50 text-yellow-700',
+                            finals: isActive ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700',
+                            training: isActive ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-600',
+                        };
+
+                        return (
+                            <button
+                                key={groupKey}
+                                onClick={() => setSelectedGroup(groupKey)}
+                                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${tabColors[groupKey]}`}
+                            >
+                                {groupLabels[groupKey]}
+                                <span className="ml-1 opacity-75">({count})</span>
+                            </button>
+                        );
+                    })}
                 </div>
             )}
 
-            {/* 終了した試合 */}
-            {completedMatches.length > 0 && (
-                <div>
-                    <h2 className="text-sm font-bold text-green-700 mb-2 px-1">
-                        終了 ({completedMatches.length})
-                    </h2>
-                    <div className="space-y-2">
-                        {completedMatches.map(match => (
-                            <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
-                        ))}
-                    </div>
-                </div>
-            )}
+            {viewMode === 'timeline' ? (
+                <>
+                    {/* 時系列ビュー: 試合中 */}
+                    {inProgressMatches.length > 0 && (
+                        <div>
+                            <h2 className="text-sm font-bold text-red-600 mb-2 px-1 flex items-center gap-2">
+                                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                                試合中 ({inProgressMatches.length})
+                            </h2>
+                            <div className="space-y-2">
+                                {inProgressMatches.map(match => (
+                                    <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
-            {/* 予定 */}
-            {scheduledMatches.length > 0 && (
-                <div>
-                    <h2 className="text-sm font-bold text-gray-500 mb-2 px-1">
-                        予定 ({scheduledMatches.length})
-                    </h2>
-                    <div className="space-y-2">
-                        {scheduledMatches.map(match => (
-                            <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
-                        ))}
-                    </div>
-                </div>
+                    {/* 時系列ビュー: 終了した試合 */}
+                    {completedMatches.length > 0 && (
+                        <div>
+                            <h2 className="text-sm font-bold text-green-700 mb-2 px-1">
+                                終了 ({completedMatches.length})
+                            </h2>
+                            <div className="space-y-2">
+                                {completedMatches.map(match => (
+                                    <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 時系列ビュー: 予定 */}
+                    {scheduledMatches.length > 0 && (
+                        <div>
+                            <h2 className="text-sm font-bold text-gray-500 mb-2 px-1">
+                                予定 ({scheduledMatches.length})
+                            </h2>
+                            <div className="space-y-2">
+                                {scheduledMatches.map(match => (
+                                    <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </>
+            ) : (
+                <>
+                    {/* グループ別ビュー */}
+                    {(() => {
+                        const filteredMatches = filterByGroup(sortedMatches);
+                        const filteredInProgress = filteredMatches.filter(m => m.status === 'in_progress');
+                        const filteredCompleted = filteredMatches.filter(m => m.status === 'completed');
+                        const filteredScheduled = filteredMatches.filter(m => m.status === 'scheduled');
+
+                        return (
+                            <>
+                                {/* 試合中 */}
+                                {filteredInProgress.length > 0 && (
+                                    <div>
+                                        <h2 className="text-sm font-bold text-red-600 mb-2 px-1 flex items-center gap-2">
+                                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                                            試合中 ({filteredInProgress.length})
+                                        </h2>
+                                        <div className="space-y-2">
+                                            {filteredInProgress.map(match => (
+                                                <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 終了した試合 */}
+                                {filteredCompleted.length > 0 && (
+                                    <div>
+                                        <h2 className="text-sm font-bold text-green-700 mb-2 px-1">
+                                            終了 ({filteredCompleted.length})
+                                        </h2>
+                                        <div className="space-y-2">
+                                            {filteredCompleted.map(match => (
+                                                <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 予定 */}
+                                {filteredScheduled.length > 0 && (
+                                    <div>
+                                        <h2 className="text-sm font-bold text-gray-500 mb-2 px-1">
+                                            予定 ({filteredScheduled.length})
+                                        </h2>
+                                        <div className="space-y-2">
+                                            {filteredScheduled.map(match => (
+                                                <PublicMatchCard key={match.id} match={match} groupKey={getGroupKey(match)} groupLabel={getGroupLabel(getGroupKey(match))} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {filteredMatches.length === 0 && (
+                                    <div className="text-center py-10 text-gray-500">
+                                        このグループの試合はありません
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
+                </>
             )}
         </div>
     );
