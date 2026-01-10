@@ -77,16 +77,15 @@ export default function FinalDaySchedule() {
   const swappingRef = useRef<Set<number>>(new Set());
 
   // 試合を会場別・種別別に分類
-  const { trainingVenues, knockoutMatches, knockoutVenueName } = useMemo(() => {
+  const { trainingVenues, knockoutVenues } = useMemo(() => {
     if (!allMatches) {
-      return { trainingVenues: [], knockoutMatches: [], knockoutVenueName: '' };
+      return { trainingVenues: [], knockoutVenues: [] };
     }
 
     // 研修試合（会場別）
     const trainingMap = new Map<number, VenueSchedule>();
-    // 決勝トーナメント
-    const knockout: FinalMatch[] = [];
-    let koVenue = '駒場スタジアム';
+    // 決勝トーナメント（会場別）
+    const knockoutMap = new Map<number, { name: string; matches: FinalMatch[] }>();
 
     allMatches.forEach((match) => {
       if (match.matchType === 'training') {
@@ -114,10 +113,15 @@ export default function FinalDaySchedule() {
         }
         trainingMap.get(venueId)!.matches.push(match);
       } else {
-        knockout.push(match);
-        if (match.venue.name) {
-          koVenue = match.venue.name;
+        // 決勝トーナメント（semifinal, third_place, final）
+        const venueId = match.venue.id;
+        if (!knockoutMap.has(venueId)) {
+          knockoutMap.set(venueId, {
+            name: match.venue.name || '駒場スタジアム',
+            matches: [],
+          });
         }
+        knockoutMap.get(venueId)!.matches.push(match);
       }
     });
 
@@ -125,11 +129,17 @@ export default function FinalDaySchedule() {
     trainingMap.forEach((venue) => {
       venue.matches.sort((a, b) => a.matchOrder - b.matchOrder);
     });
+    knockoutMap.forEach((venue) => {
+      venue.matches.sort((a, b) => a.matchOrder - b.matchOrder);
+    });
 
     return {
       trainingVenues: Array.from(trainingMap.values()),
-      knockoutMatches: knockout,
-      knockoutVenueName: koVenue,
+      knockoutVenues: Array.from(knockoutMap.entries()).map(([id, data]) => ({
+        id,
+        name: data.name,
+        matches: data.matches,
+      })),
     };
   }, [allMatches, venues, teams]);
 
@@ -389,15 +399,26 @@ export default function FinalDaySchedule() {
         <h2 className="text-lg font-semibold mb-3 pb-2 border-b">
           【3決・決勝戦】
         </h2>
-        <KnockoutCard
-          venueName={knockoutVenueName}
-          matches={knockoutMatches}
-          onMatchClick={setEditingMatch}
-          onUpdateBracket={handleUpdateBracket}
-          isUpdating={updateFinalsBracket.isPending}
-          selectedSlot={selectedSlot}
-          onSlotClick={handleSlotClick}
-        />
+        {knockoutVenues.length > 0 ? (
+          <div className="space-y-4">
+            {knockoutVenues.map((venue, idx) => (
+              <KnockoutCard
+                key={venue.id}
+                venueName={venue.name}
+                matches={venue.matches}
+                onMatchClick={setEditingMatch}
+                onUpdateBracket={idx === 0 ? handleUpdateBracket : undefined}
+                isUpdating={updateFinalsBracket.isPending}
+                selectedSlot={selectedSlot}
+                onSlotClick={handleSlotClick}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-lg p-8 text-center text-gray-500">
+            決勝トーナメントがありません。「自動生成」ボタンで生成してください。
+          </div>
+        )}
       </section>
 
       {/* 編集モーダル */}

@@ -950,7 +950,7 @@ export const reportApi = {
         venue:venues(name)
       `)
       .eq('tournament_id', tournamentId)
-      .eq('stage', 'group')
+      .eq('stage', 'preliminary')
       .eq('status', 'completed')
       .order('group_id')
       .order('match_time');

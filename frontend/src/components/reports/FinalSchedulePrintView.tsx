@@ -242,64 +242,81 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
       {/* 決勝トーナメント - 新しいページ */}
       <section className="mb-8 page-break-before">
         <h2 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
-          🏆 決勝トーナメント @ 駒場スタジアム
+          🏆 決勝トーナメント
         </h2>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-700 text-white">
-              <th className="px-3 py-2 w-16">時間</th>
-              <th className="px-3 py-2 w-24">種別</th>
-              <th className="px-3 py-2 text-right">ホーム</th>
-              <th className="px-3 py-2 w-10">vs</th>
-              <th className="px-3 py-2 text-left">アウェイ</th>
-              <th className="px-3 py-2 w-16">審判</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.tournament.map((match) => {
-              const isFinal = match.stage === 'final'
-              const isThird = match.stage === 'third_place'
-              const homeName = match.home_team?.short_name || match.home_team?.name || match.home_seed || '未定'
-              const awayName = match.away_team?.short_name || match.away_team?.name || match.away_seed || '未定'
-              const homeSeed = match.home_team
-                ? `${match.home_team.group_id || ''}1位`
-                : ''
-              const awaySeed = match.away_team
-                ? `${match.away_team.group_id || ''}1位`
-                : ''
+        {(() => {
+          // 会場ごとにグループ化
+          const tournamentByVenue = data.tournament.reduce((acc, match) => {
+            const venue = match.venue?.name || '駒場スタジアム'
+            if (!acc[venue]) acc[venue] = []
+            acc[venue].push(match)
+            return acc
+          }, {} as Record<string, Match[]>)
 
-              return (
-                <tr
-                  key={match.id}
-                  className={`border-b ${
-                    isFinal ? 'bg-yellow-50' : isThird ? 'bg-purple-50' : ''
-                  }`}
-                >
-                  <td className="px-3 py-2 text-gray-500">
-                    {match.match_time?.slice(0, 5)}
-                  </td>
-                  <td className={`px-3 py-2 font-bold ${
-                    isFinal ? 'text-yellow-700' : isThird ? 'text-purple-700' : 'text-blue-700'
-                  }`}>
-                    {getStageName(match.stage)}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="font-bold">{homeName}</div>
-                    {homeSeed && <div className="text-xs text-gray-500">{homeSeed}</div>}
-                  </td>
-                  <td className="px-3 py-2 text-center text-gray-400">vs</td>
-                  <td className="px-3 py-2 text-left">
-                    <div className="font-bold">{awayName}</div>
-                    {awaySeed && <div className="text-xs text-gray-500">{awaySeed}</div>}
-                  </td>
-                  <td className="px-3 py-2 text-center text-xs text-gray-500">
-                    派遣
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+          return Object.entries(tournamentByVenue).map(([venue, matches]) => (
+            <div key={venue} className="mb-4">
+              <div className="text-sm font-bold text-gray-600 bg-gray-100 px-3 py-1 rounded mb-2">
+                📍 {venue}
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-700 text-white">
+                    <th className="px-3 py-2 w-16">時間</th>
+                    <th className="px-3 py-2 w-24">種別</th>
+                    <th className="px-3 py-2 text-right">ホーム</th>
+                    <th className="px-3 py-2 w-10">vs</th>
+                    <th className="px-3 py-2 text-left">アウェイ</th>
+                    <th className="px-3 py-2 w-16">審判</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matches.map((match) => {
+                    const isFinal = match.stage === 'final'
+                    const isThird = match.stage === 'third_place'
+                    const homeName = match.home_team?.short_name || match.home_team?.name || match.home_seed || '未定'
+                    const awayName = match.away_team?.short_name || match.away_team?.name || match.away_seed || '未定'
+                    const homeSeed = match.home_team
+                      ? `${match.home_team.group_id || ''}1位`
+                      : ''
+                    const awaySeed = match.away_team
+                      ? `${match.away_team.group_id || ''}1位`
+                      : ''
+
+                    return (
+                      <tr
+                        key={match.id}
+                        className={`border-b ${
+                          isFinal ? 'bg-yellow-50' : isThird ? 'bg-purple-50' : ''
+                        }`}
+                      >
+                        <td className="px-3 py-2 text-gray-500">
+                          {match.match_time?.slice(0, 5)}
+                        </td>
+                        <td className={`px-3 py-2 font-bold ${
+                          isFinal ? 'text-yellow-700' : isThird ? 'text-purple-700' : 'text-blue-700'
+                        }`}>
+                          {getStageName(match.stage)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="font-bold">{homeName}</div>
+                          {homeSeed && <div className="text-xs text-gray-500">{homeSeed}</div>}
+                        </td>
+                        <td className="px-3 py-2 text-center text-gray-400">vs</td>
+                        <td className="px-3 py-2 text-left">
+                          <div className="font-bold">{awayName}</div>
+                          {awaySeed && <div className="text-xs text-gray-500">{awaySeed}</div>}
+                        </td>
+                        <td className="px-3 py-2 text-center text-xs text-gray-500">
+                          派遣
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))
+        })()}
       </section>
 
       {/* 研修試合 - 新しいページ */}

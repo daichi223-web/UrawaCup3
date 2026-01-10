@@ -1057,30 +1057,86 @@ function MatchSchedule() {
                   : '予選リーグが終了後、決勝トーナメントと研修試合を生成できます'}
               </p>
             </div>
-          ) : activeTab === 'day3' && finalsMatches.length > 0 ? (
-            // 決勝トーナメントのブラケット表示
+          ) : activeTab === 'day3' && (finalsMatches.length > 0 || hasTrainingMatches) ? (
+            // 決勝トーナメント + 研修試合の表示（会場別）
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900">決勝トーナメント</h3>
-                <button
-                  className="btn-secondary text-sm"
-                  onClick={() => updateBracketMutation.mutate()}
-                  disabled={updateBracketMutation.isPending}
-                >
-                  {updateBracketMutation.isPending ? '更新中...' : '組み合わせ更新'}
-                </button>
-              </div>
-              <FinalsBracket matches={finalsMatches} onSwapTeams={handleSwapTeams} />
+              {/* 決勝トーナメント（会場別にグループ化） */}
+              {finalsMatches.length > 0 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">決勝トーナメント</h3>
+                    <button
+                      className="btn-secondary text-sm"
+                      onClick={() => updateBracketMutation.mutate()}
+                      disabled={updateBracketMutation.isPending}
+                    >
+                      {updateBracketMutation.isPending ? '更新中...' : '組み合わせ更新'}
+                    </button>
+                  </div>
+                  {/* 会場ごとにグループ化して表示 */}
+                  {(() => {
+                    const matchesByVenue: Record<number, MatchWithDetails[]> = {}
+                    finalsMatches.forEach(m => {
+                      const vid = m.venueId || m.venue_id
+                      if (!matchesByVenue[vid]) matchesByVenue[vid] = []
+                      matchesByVenue[vid].push(m)
+                    })
+                    return Object.entries(matchesByVenue).map(([venueId, matches]) => {
+                      const venue = venues.find(v => v.id === Number(venueId))
+                      return (
+                        <div key={venueId} className="rounded-lg border-2 border-purple-200 bg-purple-50 overflow-hidden mb-4">
+                          <div className="px-4 py-2 bg-purple-100 text-purple-800 font-semibold flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full bg-purple-500" />
+                            <span>{venue?.name || `会場${venueId}`}</span>
+                            <span className="ml-auto text-xs font-normal opacity-75">{matches.length}試合</span>
+                          </div>
+                          <div className="p-3">
+                            <FinalsBracket matches={matches} onSwapTeams={handleSwapTeams} />
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </>
+              )}
 
-              {/* 研修試合の表示（ドラッグ&ドロップ対応） */}
+              {/* 研修試合の表示（会場＝順位リーグごとにグループ化） */}
               {hasTrainingMatches && (
-                <div className="mt-8">
-                  <DraggableMatchList
-                    matches={allMatches.filter(m => m.stage === 'training')}
-                    onSwapTeams={handleSwapTeams}
-                    title="研修試合"
-                    emptyMessage="研修試合がありません"
-                  />
+                <div className="mt-4">
+                  <h3 className="font-semibold text-gray-900 mb-3">順位リーグ（研修試合）</h3>
+                  {(() => {
+                    const trainingMatches = allMatches.filter(m => m.stage === 'training')
+                    const matchesByVenue: Record<number, MatchWithDetails[]> = {}
+                    trainingMatches.forEach(m => {
+                      const vid = m.venueId || m.venue_id
+                      if (!matchesByVenue[vid]) matchesByVenue[vid] = []
+                      matchesByVenue[vid].push(m)
+                    })
+                    // 試合順でソート
+                    Object.values(matchesByVenue).forEach(matches => {
+                      matches.sort((a, b) => (a.matchOrder || 0) - (b.matchOrder || 0))
+                    })
+                    return Object.entries(matchesByVenue).map(([venueId, matches]) => {
+                      const venue = venues.find(v => v.id === Number(venueId))
+                      return (
+                        <div key={venueId} className="rounded-lg border-2 border-gray-200 bg-gray-50 overflow-hidden mb-4">
+                          <div className="px-4 py-2 bg-gray-100 text-gray-800 font-semibold flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full bg-gray-500" />
+                            <span>{venue?.name || `会場${venueId}`}</span>
+                            <span className="ml-auto text-xs font-normal opacity-75">{matches.length}試合</span>
+                          </div>
+                          <div className="p-3">
+                            <DraggableMatchList
+                              matches={matches}
+                              onSwapTeams={handleSwapTeams}
+                              title=""
+                              emptyMessage="研修試合がありません"
+                            />
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
                 </div>
               )}
             </div>
