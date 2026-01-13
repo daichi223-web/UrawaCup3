@@ -18,7 +18,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, 
-    Spacer, PageBreak, KeepTogether
+    Spacer, PageBreak, KeepTogether, KeepInFrame
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -134,7 +134,8 @@ class DailyReportGenerator:
             page_content = self._create_venue_page(
                 venue, matches, 
                 recipient, sender, contact, 
-                day, date_str
+                day, date_str,
+                doc.width, doc.height
             )
             story.extend(page_content)
             
@@ -148,7 +149,8 @@ class DailyReportGenerator:
     def _create_venue_page(
         self, venue: str, matches: list,
         recipient: str, sender: str, contact: str,
-        day: int, date_str: str
+        day: int, date_str: str,
+        max_width: float, max_height: float
     ) -> list:
         """会場ごとのページ内容を生成"""
         content = []
@@ -204,7 +206,8 @@ class DailyReportGenerator:
                 content.append(divider)
                 content.append(Spacer(1, 3*mm))
         
-        return content
+        # Shrink the entire venue section to fit a single page if needed.
+        return [KeepInFrame(max_width, max_height, content, mode='shrink')]
     
     def _create_match_row(self, match: dict, match_num: int) -> Table:
         """試合結果 + 得点経過を横並びで生成"""
@@ -234,7 +237,7 @@ class DailyReportGenerator:
             [f'第{match_num}試合', '', f'KO {kickoff}', '', ''],
             [home_team, '', 'VS', away_team, ''],
             ['', '', '', '', ''],
-            [str(home_total), f'{h1_str}  前半  {a1_str}', '', str(away_total), ''],
+            [str(home_total), f'{h1_str}  前半  {a1_str}', '', '', str(away_total)],
             ['', f'{h2_str}  後半  {a2_str}', '', '', ''],
         ]
         
