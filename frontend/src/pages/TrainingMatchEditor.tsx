@@ -29,6 +29,7 @@ interface Match {
   stage: string
   match_date?: string
   match_time?: string
+  match_order?: number
   home_team?: Team
   away_team?: Team
   venue?: { id: number; name: string }
@@ -440,6 +441,16 @@ export default function TrainingMatchEditor() {
       const existingMatch = trainingMatches?.find(m => m.venue_id === venueId)
       const matchDate = existingMatch?.match_date || trainingMatches?.[0]?.match_date
 
+      if (!matchDate) {
+        throw new Error('試合日が設定されていません')
+      }
+
+      // match_order を算出（その会場の既存試合の最大値 + 1）
+      const matchesInVenue = trainingMatches?.filter(m => m.venue_id === venueId) || []
+      const nextOrder = matchesInVenue.length > 0
+        ? Math.max(...matchesInVenue.map(m => m.match_order || 0)) + 1
+        : 1
+
       const { error } = await supabase
         .from('matches')
         .insert({
@@ -450,6 +461,7 @@ export default function TrainingMatchEditor() {
           stage: 'training',
           match_date: matchDate,
           match_time: startTime || '09:00',
+          match_order: nextOrder,
         })
 
       if (error) throw error
