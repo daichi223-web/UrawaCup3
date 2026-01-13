@@ -647,4 +647,169 @@ export const finalDayApi = {
       matches: (updatedMatches || []) as MatchWithDetails[],
     };
   },
+
+  /**
+   * 研修試合（順位リーグ）を生成
+   * 決勝進出チーム以外を会場ごとにグループ分けして対戦
+   */
+  generateTrainingMatches: async (tournamentId: number): Promise<MatchWithDetails[]> => {
+    // 1. 大会設定を取得
+    const { data: tournament, error: tournamentError } = await supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new Error('大会設定が見つかりません');
+    }
+
+    const qualificationRule = tournament.qualification_rule || 'group_based';
+    const finalDate = tournament.end_date;
+    const matchDuration = tournament.match_duration || 50;
+    const intervalMinutes = tournament.interval_minutes || 15;
+    const startTime = tournament.preliminary_start_time || '09:00';
+
+    // 2. 決勝進出チームを取得
+    let qualifyingTeamIds: number[] = [];
+    if (qualificationRule === 'overall_ranking') {
+      const overallStandings = await standingApi.getOverallStandings(tournamentId);
+      qualifyingTeamIds = overallStandings.entries.slice(0, 4).map(e => e.teamId);
+    } else {
+      const { data: groupWinners } = await supabase
+        .from('standings')
+        .select('team_id')
+        .eq('tournament_id', tournamentId)
+        .eq('rank', 1);
+      qualifyingTeamIds = (groupWinners || []).map(s => s.team_id);
+    }
+
+    // 3. 会場を取得（forFinalDay = true の会場のみ）
+    const { data: venues, error: venuesError } = await supabase
+      .from('venues')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .eq('for_final_day', true)
+      .order('id');
+
+    if (venuesError || !venues || venues.length === 0) {
+      throw new Error('最終日用の会場がありません');
+    }
+
+    // 4. 研修試合用のチームを取得（決勝進出チーム以外）
+    const { data: allTeams, error: teamsError } = await supabase
+      .from('standings')
+      .select(`
+        *,
+        team:teams(id, name, short_name, group_id)
+      `)
+      .eq('tournament_id', tournamentId)
+      .not('team_id', 'in', `(${qualifyingTeamIds.join(',')})`)
+      .order('rank')
+      .order('group_id');
+
+    if (teamsError) throw teamsError;
+
+    // 5. 既存の研修試合を削除
+    await supabase
+      .from('matches')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'training');
+
+    // 6. 研修試合用チームをグループ化（順位ごとに4会場に分散）
+    // 例: 2位グループ、3位グループ、4位グループ、5位グループ、6位グループ
+    const teamsByRank: Record<number, any[]> = {};
+    for (const s of (allTeams || [])) {
+      if (!teamsByRank[s.rank]) teamsByRank[s.rank] = [];
+      teamsByRank[s.rank].push({
+        teamId: s.team_id,
+        teamName: s.team?.short_name || s.team?.name || '',
+        groupId: s.team?.group_id || s.group_id,
+        rank: s.rank,
+      });
+    }
+
+    // 7. 会場ごとに試合を生成
+    // 各会場には同順位のチームが集まる（2位リーグ、3位リーグなど）
+    const matchesToInsert = [];
+    let matchOrder = 200;
+
+    // 時間計算用ヘルパー
+    const addMinutes = (time: string, minutes: number): string => {
+      const [h, m] = time.split(':').map(Number);
+      const totalMinutes = h * 60 + m + minutes;
+      const newH = Math.floor(totalMinutes / 60);
+      const newM = totalMinutes % 60;
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    };
+
+    // 各会場のスケジュールを管理
+    const venueSchedule: Record<number, string> = {};
+    venues.forEach(v => {
+      venueSchedule[v.id] = startTime;
+    });
+
+    // 順位ごとに試合を生成（2位〜6位）
+    for (let rank = 2; rank <= 6; rank++) {
+      const teams = teamsByRank[rank] || [];
+      if (teams.length < 2) continue;
+
+      // この順位の会場を決定（ローテーション）
+      const venueIndex = (rank - 2) % venues.length;
+      const venue = venues[venueIndex];
+
+      // 総当たり対戦を生成
+      for (let i = 0; i < teams.length; i++) {
+        for (let j = i + 1; j < teams.length; j++) {
+          // 同じグループ同士は予選で対戦済みなのでスキップ
+          if (teams[i].groupId === teams[j].groupId) continue;
+
+          matchesToInsert.push({
+            tournament_id: tournamentId,
+            venue_id: venue.id,
+            home_team_id: teams[i].teamId,
+            away_team_id: teams[j].teamId,
+            match_date: finalDate,
+            match_time: venueSchedule[venue.id],
+            match_order: matchOrder++,
+            stage: 'training',
+            status: 'scheduled',
+            notes: `${rank}位リーグ`,
+          });
+
+          // 次の試合時間を計算
+          venueSchedule[venue.id] = addMinutes(venueSchedule[venue.id], matchDuration + intervalMinutes);
+        }
+      }
+    }
+
+    // 8. 試合をDBに挿入
+    if (matchesToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from('matches')
+        .insert(matchesToInsert);
+
+      if (insertError) {
+        console.error('Failed to insert training matches:', insertError);
+        throw new Error('研修試合の作成に失敗しました');
+      }
+    }
+
+    // 9. 作成した試合を取得して返す
+    const { data: createdMatches, error: fetchError } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(*),
+        away_team:teams!matches_away_team_id_fkey(*),
+        venue:venues(*)
+      `)
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'training')
+      .order('match_time');
+
+    if (fetchError) throw fetchError;
+    return (createdMatches || []) as MatchWithDetails[];
+  },
 };

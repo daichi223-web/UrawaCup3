@@ -15,10 +15,9 @@ import DraggableMatchList from '@/components/DraggableMatchList'
 import MatchScheduleEditor from '@/components/MatchScheduleEditor'
 import { Modal } from '@/components/ui/Modal'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
-import {
-  generateFinalDaySchedule,
-  checkCoreApiHealth,
-} from '@/lib/scheduleGenerator'
+import { checkCoreApiHealth } from '@/lib/scheduleGenerator'
+import { finalDayApi } from '@/features/final-day/api'
+import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 import {
   generateUrawaCupSchedule,
   validateSchedule,
@@ -393,12 +392,34 @@ function MatchSchedule() {
       const fetchedVenues = venuesResult || []
       console.log('[Schedule] 取得した会場:', fetchedVenues)
 
-      const venueList = fetchedVenues.map((v: any) => ({
+      // forPreliminary = true の会場のみフィルタリング
+      const preliminaryVenues = fetchedVenues.filter((v: any) =>
+        v.for_preliminary === true || v.forPreliminary === true
+      )
+
+      if (preliminaryVenues.length === 0) {
+        // フィルタ結果が空の場合は全会場を使用（後方互換性）
+        console.warn('[Schedule] 予選用会場が設定されていません。全会場を使用します。')
+      }
+
+      const targetVenues = preliminaryVenues.length > 0 ? preliminaryVenues : fetchedVenues
+
+      // maxMatchesPerDay チェック（浦和カップは1日6試合必要）
+      const venuesWithWarning = targetVenues.filter((v: any) => {
+        const maxMatches = v.max_matches_per_day || v.maxMatchesPerDay || 6
+        return maxMatches < 6
+      })
+      if (venuesWithWarning.length > 0) {
+        const names = venuesWithWarning.map((v: any) => v.name).join(', ')
+        console.warn(`[Schedule] 以下の会場は1日の最大試合数が6未満です: ${names}`)
+      }
+
+      const venueList = targetVenues.map((v: any) => ({
         id: v.id,
         name: v.name,
         groupId: v.group_id,
       }))
-      console.log('[Schedule] 会場リスト:', venueList)
+      console.log('[Schedule] 予選用会場リスト:', venueList)
 
       // 浦和カップ方式で日程生成（設定値を使用）
       const scheduleConfig = {
@@ -423,6 +444,45 @@ function MatchSchedule() {
       const consecutiveWarnings = checkConsecutiveMatches(result.matches)
       if (consecutiveWarnings.length > 0) {
         console.warn('[Schedule] 連戦警告:', consecutiveWarnings)
+      }
+
+      // 制約設定チェック
+      const constraintSettings = useConstraintSettingsStore.getState().settings
+      const constraintWarnings: string[] = []
+
+      // チーム情報をIDでマップ化
+      const teamInfoMap: Record<number, typeof teamInfoList[0]> = {}
+      teamInfoList.forEach(t => { teamInfoMap[t.id] = t })
+
+      for (const match of result.matches) {
+        const homeTeam = teamInfoMap[match.homeTeamId]
+        const awayTeam = teamInfoMap[match.awayTeamId]
+        if (!homeTeam || !awayTeam) continue
+
+        // 地元チーム同士の対戦チェック
+        if (constraintSettings.avoidLocalVsLocal) {
+          if (homeTeam.teamType === 'local' && awayTeam.teamType === 'local') {
+            constraintWarnings.push(`地元校同士: ${match.homeTeamName} vs ${match.awayTeamName}`)
+          }
+        }
+
+        // 同一地域チェック
+        if (constraintSettings.avoidSameRegion) {
+          if (homeTeam.region && awayTeam.region && homeTeam.region === awayTeam.region) {
+            constraintWarnings.push(`同一地域(${homeTeam.region}): ${match.homeTeamName} vs ${match.awayTeamName}`)
+          }
+        }
+
+        // 同一リーグチェック
+        if (constraintSettings.avoidSameLeague) {
+          if (homeTeam.leagueId && awayTeam.leagueId && homeTeam.leagueId === awayTeam.leagueId) {
+            constraintWarnings.push(`同一リーグ: ${match.homeTeamName} vs ${match.awayTeamName}`)
+          }
+        }
+      }
+
+      if (constraintWarnings.length > 0) {
+        console.warn('[Schedule] 制約違反:', constraintWarnings)
       }
 
       console.log('[Schedule] 生成結果:', result.stats)
@@ -454,7 +514,7 @@ function MatchSchedule() {
 
       return {
         created: matchesToInsert.length,
-        warnings: [...result.warnings, ...validationErrors, ...consecutiveWarnings],
+        warnings: [...result.warnings, ...validationErrors, ...consecutiveWarnings, ...constraintWarnings],
       }
     },
     onSuccess: (data) => {
@@ -470,116 +530,16 @@ function MatchSchedule() {
     },
   })
 
-  // 決勝トーナメント＋研修試合生成
+  // 決勝トーナメント生成（設定値を使用）
   const generateFinalsMutation = useMutation({
     mutationFn: async () => {
-      // Core API の接続確認
-      const isHealthy = await checkCoreApiHealth()
-      if (!isHealthy) {
-        throw new Error('日程生成サーバーに接続できません。サーバーが起動しているか確認してください。')
-      }
+      // finalDayApi を使用して決勝トーナメントを生成
+      // 大会設定（qualificationRule, finalsStartTime, finalsMatchDuration, finalsIntervalMinutes）が反映される
+      const createdMatches = await finalDayApi.generateFinalDaySchedule(tournamentId)
 
-      // 順位表を取得
-      const standingsData = await standingsApi.getByGroup(tournamentId)
-      if (!standingsData || standingsData.length === 0) {
-        throw new Error('順位表データがありません。予選リーグを先に完了してください。')
-      }
+      console.log('[Finals] Generated matches using tournament settings:', createdMatches.length)
 
-      // グループ別に整理（getByGroupはグループごとの配列を返す）
-      const standingsByGroup: Record<string, any[]> = {}
-      for (const groupData of standingsData) {
-        const groupId = groupData.groupId
-        if (!groupId) continue
-        standingsByGroup[groupId] = (groupData.standings || []).map((s: any) => ({
-          id: s.team_id,
-          name: s.team?.name || `Team ${s.team_id}`,
-          group: groupId,
-          rank: s.rank,
-          points: s.points,
-          goalDiff: s.goal_difference,
-          goalsFor: s.goals_for,
-        }))
-      }
-
-      // 対戦済みペアを取得（同グループ内）
-      const playedPairs: [number, number][] = []
-      for (const teams of Object.values(standingsByGroup)) {
-        for (let i = 0; i < teams.length; i++) {
-          for (let j = i + 1; j < teams.length; j++) {
-            playedPairs.push([teams[i].id, teams[j].id])
-          }
-        }
-      }
-
-      // Core API を呼び出して日程を生成
-      const result = await generateFinalDaySchedule(standingsByGroup, playedPairs)
-
-      if (!result.success) {
-        throw new Error('日程生成に失敗しました')
-      }
-
-      // 試合日（大会最終日）
-      const matchDate = tournament?.endDate || new Date().toISOString().split('T')[0]
-
-      // 決勝トーナメント会場の設定
-      // 1. 主会場（isFinalsVenue = true）：決勝、3位決定戦、準決勝1
-      // 2. 混合会場（isMixedUse = true）：準決勝2を分散可能
-      const mainFinalsVenue = venues.find(v => v.isFinalsVenue || v.is_finals_venue) || venues[0]
-      const mainFinalsVenueId = mainFinalsVenue?.id || 1
-
-      // 混合会場を取得（決勝試合を受け入れ可能な会場）
-      const mixedVenues = venues.filter(v => {
-        const isMixed = (v as any).isMixedUse ?? (v as any).is_mixed_use ?? false
-        const finalsCount = (v as any).finalsMatchCount ?? (v as any).finals_match_count ?? 0
-        return isMixed && finalsCount > 0 && v.id !== mainFinalsVenueId
-      })
-
-      // 準決勝2用の会場（混合会場があればそちら、なければ主会場）
-      const semifinal2VenueId = mixedVenues.length > 0 ? mixedVenues[0].id : mainFinalsVenueId
-
-      console.log('[Finals] Main venue:', mainFinalsVenue?.name, 'ID:', mainFinalsVenueId)
-      console.log('[Finals] Mixed venues:', mixedVenues.map(v => v.name))
-      console.log('[Finals] Semifinal2 venue ID:', semifinal2VenueId)
-
-      // 既存の決勝トーナメント試合を削除
-      await supabase
-        .from('matches')
-        .delete()
-        .eq('tournament_id', tournamentId)
-        .in('stage', ['finals', 'semifinal', 'third_place', 'final'])
-
-      // 決勝トーナメントの試合を保存（会場分散対応）
-      let created = 0
-      if (result.tournament && result.tournament.length > 0) {
-        const tournamentMatches = result.tournament.map((m, idx) => {
-          // 試合タイプに応じて会場を決定
-          let venueId = mainFinalsVenueId
-          if (m.match_type === 'semifinal2') {
-            venueId = semifinal2VenueId  // 準決勝2は混合会場へ分散
-          }
-          // semifinal1, third_place, final は主会場
-
-          return {
-            tournament_id: tournamentId,
-            home_team_id: m.home_team_id,
-            away_team_id: m.away_team_id,
-            venue_id: venueId,
-            match_date: matchDate,
-            match_time: m.kickoff,
-            match_order: 100 + idx + 1,
-            stage: m.match_type === 'semifinal1' || m.match_type === 'semifinal2' ? 'semifinal' :
-                   m.match_type === 'third_place' ? 'third_place' :
-                   m.match_type === 'final' ? 'final' : 'finals',
-            status: 'scheduled',
-          }
-        })
-
-        const { error: tournamentError } = await supabase.from('matches').insert(tournamentMatches)
-        if (tournamentError) console.error('Tournament insert error:', tournamentError)
-        created += tournamentMatches.length
-      }
-
-      return { created, warnings: result.warnings }
+      return { created: createdMatches.length, warnings: [] as string[] }
     },
     onSuccess: (data) => {
       toast.success(`決勝トーナメント ${data.created}試合を生成しました`)
@@ -594,96 +554,16 @@ function MatchSchedule() {
     },
   })
 
-  // 研修試合生成
+  // 研修試合生成（設定値を使用）
   const generateTrainingMutation = useMutation({
     mutationFn: async () => {
-      // Core API の接続確認
-      const isHealthy = await checkCoreApiHealth()
-      if (!isHealthy) {
-        throw new Error('日程生成サーバーに接続できません。サーバーが起動しているか確認してください。')
-      }
+      // finalDayApi を使用して研修試合を生成
+      // 大会設定（matchDuration, intervalMinutes, forFinalDay）が反映される
+      const createdMatches = await finalDayApi.generateTrainingMatches(tournamentId)
 
-      // 順位表を取得
-      const standingsData = await standingsApi.getByGroup(tournamentId)
-      if (!standingsData || standingsData.length === 0) {
-        throw new Error('順位表データがありません。予選リーグを先に完了してください。')
-      }
+      console.log('[Training] Generated matches using tournament settings:', createdMatches.length)
 
-      // グループ別に整理（getByGroupはグループごとの配列を返す）
-      const standingsByGroup: Record<string, any[]> = {}
-      for (const groupData of standingsData) {
-        const groupId = groupData.groupId
-        if (!groupId) continue
-        standingsByGroup[groupId] = (groupData.standings || []).map((s: any) => ({
-          id: s.team_id,
-          name: s.team?.name || `Team ${s.team_id}`,
-          group: groupId,
-          rank: s.rank,
-          points: s.points,
-          goalDiff: s.goal_difference,
-          goalsFor: s.goals_for,
-        }))
-      }
-
-      // 対戦済みペアを取得
-      const playedPairs: [number, number][] = []
-      for (const teams of Object.values(standingsByGroup)) {
-        for (let i = 0; i < teams.length; i++) {
-          for (let j = i + 1; j < teams.length; j++) {
-            playedPairs.push([teams[i].id, teams[j].id])
-          }
-        }
-      }
-
-      // Core API を呼び出して日程を生成
-      const result = await generateFinalDaySchedule(standingsByGroup, playedPairs)
-
-      if (!result.success) {
-        throw new Error('日程生成に失敗しました')
-      }
-
-      // 試合日（大会最終日）
-      const matchDate = tournament?.endDate || new Date().toISOString().split('T')[0]
-
-      // 既存の研修試合を削除
-      await supabase
-        .from('matches')
-        .delete()
-        .eq('tournament_id', tournamentId)
-        .eq('stage', 'training')
-
-      // 研修試合を保存
-      let created = 0
-      if (result.training && result.training.length > 0) {
-        // 会場名からIDを取得するマップを作成
-        const venueNameToId: Record<string, number> = {}
-        venues.forEach(v => {
-          venueNameToId[v.name] = v.id
-          // 部分一致も対応
-          if (v.name.includes('浦和南')) venueNameToId['浦和南高G'] = v.id
-          if (v.name.includes('市立浦和')) venueNameToId['市立浦和高G'] = v.id
-          if (v.name.includes('浦和学院')) venueNameToId['浦和学院高G'] = v.id
-          if (v.name.includes('武南')) venueNameToId['武南高G'] = v.id
-        })
-
-        const trainingMatches = result.training.map((m, idx) => ({
-          tournament_id: tournamentId,
-          home_team_id: m.home_team_id,
-          away_team_id: m.away_team_id,
-          venue_id: venueNameToId[m.venue] || venues[idx % venues.length]?.id || 1,
-          match_date: matchDate,
-          match_time: m.kickoff,
-          match_order: 200 + idx + 1,
-          stage: 'training',
-          status: 'scheduled',
-        }))
-
-        const { error: trainingError } = await supabase.from('matches').insert(trainingMatches)
-        if (trainingError) console.error('Training insert error:', trainingError)
-        created += trainingMatches.length
-      }
-
-      return { created, warnings: result.warnings }
+      return { created: createdMatches.length, warnings: [] as string[] }
     },
     onSuccess: (data) => {
       toast.success(`研修試合 ${data.created}試合を生成しました`)
