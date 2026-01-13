@@ -153,8 +153,17 @@ export const matchApi = {
 
   // スコア入力
   updateScore: async (id: number, data: MatchScoreInput): Promise<Match> => {
-    // スコアを入力したら自動的に'completed'に設定
-    const status = data.status || 'completed';
+    // スコアが実際に入力されているかチェック
+    // null/undefinedはスコア未入力、0は正当なスコア（0点）として扱う
+    const hasScoreInput =
+      data.homeScoreHalf1 !== null && data.homeScoreHalf1 !== undefined ||
+      data.homeScoreHalf2 !== null && data.homeScoreHalf2 !== undefined ||
+      data.awayScoreHalf1 !== null && data.awayScoreHalf1 !== undefined ||
+      data.awayScoreHalf2 !== null && data.awayScoreHalf2 !== undefined;
+
+    // スコア入力がある場合のみ'completed'に設定
+    // スコア未入力の場合は'scheduled'のまま（または既存のstatus維持）
+    const status = data.status || (hasScoreInput ? 'completed' : 'scheduled');
 
     const match = await matchesApi.updateScore(id, {
       home_score_half1: data.homeScoreHalf1,

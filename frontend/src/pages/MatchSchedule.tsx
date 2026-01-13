@@ -18,6 +18,7 @@ import { Modal } from '@/components/ui/Modal'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import { checkCoreApiHealth } from '@/lib/scheduleGenerator'
 import { finalDayApi } from '@/features/final-day/api'
+import { standingApi } from '@/features/standings/api'
 import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 import {
   generateUrawaCupSchedule,
@@ -499,6 +500,10 @@ function MatchSchedule() {
         .eq('tournament_id', tournamentId)
         .eq('stage', 'preliminary')
 
+      // 順位表もクリア（再生成時にリセット）
+      await standingApi.clearStandings(tournamentId)
+      console.log('[Generate] Standings cleared for regeneration:', tournamentId)
+
       // 試合をDBに保存
       const matchesToInsert = result.matches.map((m, index) => ({
         tournament_id: tournamentId,
@@ -602,6 +607,13 @@ function MatchSchedule() {
       const { error, count } = await deleteQuery
 
       if (error) throw error
+
+      // 予選リーグまたは全試合削除の場合は順位表もクリア
+      if (stage === 'preliminary' || stage === 'all') {
+        await standingApi.clearStandings(tournamentId)
+        console.log('[Delete] Standings cleared for tournament:', tournamentId)
+      }
+
       return { deleted: count || 0, stage }
     },
     onSuccess: (data) => {

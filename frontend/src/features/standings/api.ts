@@ -196,4 +196,32 @@ export const standingApi = {
       }
     }
   },
+
+  /**
+   * 順位表をクリア（全チーム0勝0敗0分にリセット）
+   * 予選試合削除時に呼び出す
+   */
+  clearStandings: async (tournamentId: number): Promise<void> => {
+    const { error } = await supabase
+      .from('standings')
+      .update({
+        played: 0,
+        won: 0,
+        drawn: 0,
+        lost: 0,
+        goals_for: 0,
+        goals_against: 0,
+        goal_difference: 0,
+        points: 0,
+        rank: 0,
+        overall_rank: null,
+        tiebreaker_resolved: false,
+      })
+      .eq('tournament_id', tournamentId);
+
+    if (error) {
+      console.error('Failed to clear standings:', error);
+      throw error;
+    }
+  },
 };
