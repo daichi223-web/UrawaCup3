@@ -4,7 +4,7 @@
  * Supabase版
  */
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Edit3, Eye } from 'lucide-react'
@@ -78,8 +78,11 @@ function MatchSchedule() {
   const queryClient = useQueryClient()
   const { currentTournament } = useAppStore()
   const tournamentId = currentTournament?.id || 1
+  const [searchParams] = useSearchParams()
 
-  const [activeTab, setActiveTab] = useState<TabKey>('day1')
+  // URLパラメータからタブを取得（?tab=day3 など）
+  const initialTab = (searchParams.get('tab') as TabKey) || 'day1'
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
   const [selectedMatch, setSelectedMatch] = useState<MatchWithDetails | null>(null)
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [generateType, setGenerateType] = useState<'preliminary' | 'finals' | 'training' | null>(null)

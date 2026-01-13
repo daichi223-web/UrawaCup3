@@ -782,41 +782,28 @@ export const finalDayApi = {
     const matchesPerVenue = Math.floor(teamsPerVenue / 2);
     console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${venues.length}, 会場あたり: ${teamsPerVenue}チーム, ${matchesPerVenue}試合`);
 
-    // 10. チームを会場に振り分け（異なるグループのチームが同じ会場に集まるように）
+    // 10. チームを順位ごとに会場に振り分け
+    // 2位チーム→会場1、3位チーム→会場2、...のように順位でグループ化
     const venueAssignments: Map<number, TeamInfo[]> = new Map();
     venues.forEach(v => venueAssignments.set(v.id, []));
 
-    // グループごとにチームを分類
-    const teamsByGroup: Record<string, TeamInfo[]> = {};
-    for (const teams of Object.values(teamsByRank)) {
-      for (const team of teams) {
-        const groupKey = team.groupId || 'unknown';
-        if (!teamsByGroup[groupKey]) teamsByGroup[groupKey] = [];
-        teamsByGroup[groupKey].push(team);
-      }
-    }
-
-    // 各グループのチームを順位順にソート
-    for (const groupTeams of Object.values(teamsByGroup)) {
-      groupTeams.sort((a, b) => a.rank - b.rank);
-    }
-
-    // グループごとに、チームを各会場に1つずつ配置
-    // 例: グループAの2位→会場1、3位→会場2、4位→会場3...
-    const groupIds = Object.keys(teamsByGroup).sort();
-    for (const groupId of groupIds) {
-      const groupTeams = teamsByGroup[groupId];
-      groupTeams.forEach((team, index) => {
-        const venueIndex = index % venues.length;
-        const venue = venues[venueIndex];
+    // 順位ごとに会場を割り当て
+    const ranks = Object.keys(teamsByRank).map(Number).sort((a, b) => a - b);
+    ranks.forEach((rank, index) => {
+      const teams = teamsByRank[rank] || [];
+      const venueIndex = index % venues.length;
+      const venue = venues[venueIndex];
+      teams.forEach(team => {
         venueAssignments.get(venue.id)!.push(team);
       });
-    }
+      console.log(`[Training] ${rank}位チーム(${teams.length}名) → 会場${venue.id}`);
+    });
 
     console.log('[Training] 会場割り当て完了:',
-      Array.from(venueAssignments.entries()).map(([vid, teams]) =>
-        `会場${vid}: ${teams.length}チーム (${[...new Set(teams.map(t => t.groupId))].join(',')})`
-      ).join(' | ')
+      Array.from(venueAssignments.entries()).map(([vid, teams]) => {
+        const groups = [...new Set(teams.map(t => t.groupId))];
+        return `会場${vid}: ${teams.length}チーム (グループ: ${groups.join(',') || 'なし'})`;
+      }).join(' | ')
     );
 
     // 11. 各会場でリーグ戦（総当たり）を生成

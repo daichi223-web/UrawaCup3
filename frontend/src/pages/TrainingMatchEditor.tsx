@@ -531,7 +531,7 @@ export default function TrainingMatchEditor() {
             チームをクリックして選択し、別のチームをクリックして入れ替えます
           </p>
         </div>
-        <Link to="/schedule" className="btn-secondary">
+        <Link to="/schedule?tab=day3" className="btn-secondary">
           日程管理に戻る
         </Link>
       </div>
