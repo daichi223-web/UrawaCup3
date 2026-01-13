@@ -133,16 +133,19 @@ function Reports() {
       const venue = venueId ? parseInt(venueId) : undefined;
 
       let blob: Blob;
+      let usedFallback = false;
       let filename = `report_${targetDate}`;
       if (venue) filename += `_venue${venue}`;
 
       if (format === 'pdf') {
-        blob = await reportApi.downloadPdf({
+        const result = await reportApi.downloadPdf({
           tournamentId,
           date: targetDate,
           venueId: venue,
           format: 'pdf'
         });
+        blob = result.blob;
+        usedFallback = result.usedFallback;
         filename += '.pdf';
       } else {
         blob = await reportApi.downloadExcel({
@@ -164,7 +167,15 @@ function Reports() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.success('ダウンロードを開始しました');
+      // フォールバック使用時は警告を表示
+      if (usedFallback) {
+        toast('簡易版PDFを生成しました（バックエンドAPI接続失敗）\n※日本語が正しく表示されない場合があります', {
+          icon: '⚠️',
+          duration: 5000,
+        });
+      } else {
+        toast.success('ダウンロードを開始しました');
+      }
     } catch (err: any) {
       console.error(err);
       toast.error('報告書の生成に失敗しました');

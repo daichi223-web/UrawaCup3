@@ -1,6 +1,19 @@
 // src/features/reports/api.ts
 // 報告書API呼び出し - Supabase版
-// バックエンドAPI経由でPDF生成、フォールバックでクライアントサイド生成
+//
+// =====================================================
+// PDF生成アーキテクチャ
+// =====================================================
+// 【正規】バックエンドAPI (Python ReportLab)
+//   - URL: VITE_CORE_API_URL/daily-report
+//   - 日本語フォント対応 (YuGothic/MSGothic)
+//   - 会場ごと1ページ、自動縮小対応
+//
+// 【緊急用】フロントエンドフォールバック (jsPDF)
+//   - バックエンドAPI障害時のみ使用
+//   - 制限: 日本語が文字化けする (Helveticaフォント)
+//   - UI警告: 「簡易版PDF」と表示
+// =====================================================
 import { supabase } from '@/lib/supabase';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
@@ -137,7 +150,8 @@ export const reportApi = {
   },
 
   // 日別報告書PDFダウンロード（バックエンドAPI経由）
-  downloadPdf: async (params: { tournamentId: number; date: string; venueId?: number; format?: string }): Promise<Blob> => {
+  // 戻り値: blob = PDFデータ, usedFallback = フォールバック使用フラグ
+  downloadPdf: async (params: { tournamentId: number; date: string; venueId?: number; format?: string }): Promise<{ blob: Blob; usedFallback: boolean }> => {
     // 試合データを取得（得点者データ含む）
     let query = supabase
       .from('matches')
@@ -251,14 +265,19 @@ export const reportApi = {
       });
 
       if (response.ok) {
-        return await response.blob();
+        console.log('[downloadPdf] Backend API success');
+        return { blob: await response.blob(), usedFallback: false };
       }
-      console.warn('Backend API failed, falling back to local generation');
+      console.warn('[downloadPdf] Backend API failed (status:', response.status, '), falling back to local generation');
     } catch (e) {
-      console.warn('Backend API error, falling back to local generation:', e);
+      console.warn('[downloadPdf] Backend API error, falling back to local generation:', e);
     }
 
     // フォールバック: ローカルでPDF生成（会場ごとに1ページ）
+    // ⚠️ 制限事項:
+    // - Helveticaフォントのため日本語が正しく表示されない
+    // - バックエンドAPI (ReportLab + 日本語フォント) が正規の出力先
+    // - このフォールバックはバックエンド障害時の緊急用
     const doc = new jsPDF();
     doc.setFont('helvetica');
 
@@ -348,7 +367,8 @@ export const reportApi = {
       doc.text('該当する試合データがありません', 14, 35);
     }
 
-    return doc.output('blob');
+    console.log('[downloadPdf] Using fallback PDF generation');
+    return { blob: doc.output('blob'), usedFallback: true };
   },
 
   // 日別報告書Excelダウンロード
