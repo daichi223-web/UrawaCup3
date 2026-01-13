@@ -18,6 +18,7 @@ interface GoalInput {
   teamType: 'home' | 'away';
   minute: number;
   half: 1 | 2;
+  scorerNumber: string;  // 背番号入力値
   scorerName: string;
   playerId: number | null;
   isOwnGoal: boolean;
@@ -213,6 +214,7 @@ function MatchResult() {
       teamType: g.teamId === match.homeTeamId ? 'home' : 'away',
       minute: g.minute,
       half: g.half,
+      scorerNumber: (g as any).playerNumber ? String((g as any).playerNumber) : '',
       scorerName: (g as any).scorerName || g.playerName || "",
       playerId: g.playerId ?? null,
       isOwnGoal: g.isOwnGoal ?? false,
@@ -231,6 +233,7 @@ function MatchResult() {
       teamType: 'home',
       minute: 1,
       half: 1,
+      scorerNumber: '',
       scorerName: '',
       playerId: null,
       isOwnGoal: false,
@@ -275,7 +278,11 @@ function MatchResult() {
 
   // サジェストを選択
   const selectSuggestion = (goalId: string, suggestion: PlayerSuggestion) => {
-    updateGoal(goalId, { scorerName: suggestion.name, playerId: suggestion.id });
+    updateGoal(goalId, {
+      scorerNumber: suggestion.number ? String(suggestion.number) : '',
+      scorerName: suggestion.name,
+      playerId: suggestion.id,
+    });
     setSuggestions([]);
     setActiveGoalId(null);
   };
@@ -632,10 +639,36 @@ function MatchResult() {
                         <option value="home">{selectedMatch?.homeTeam?.name}</option>
                         <option value="away">{selectedMatch?.awayTeam?.name}</option>
                       </select>
-                      <div className="flex-1 min-w-[120px] relative">
-                        <input type="text" className="form-input text-sm w-full" value={goal.scorerName}
-                          onChange={(e) => { updateGoal(goal.id, { scorerName: e.target.value, playerId: null }); searchPlayers(goal.id, e.target.value); }}
-                          placeholder="得点者名" />
+                      <div className="flex-1 min-w-[140px] relative">
+                        <div className="flex gap-1">
+                          {/* 背番号入力 */}
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            className="form-input text-sm w-14 text-center"
+                            value={goal.scorerNumber}
+                            onChange={(e) => {
+                              const next = e.target.value.replace(/\D/g, '').slice(0, 3);
+                              updateGoal(goal.id, { scorerNumber: next, playerId: null });
+                              if (next) searchPlayers(goal.id, next);
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            placeholder="#"
+                          />
+                          {/* 得点者名入力 */}
+                          <input
+                            type="text"
+                            className="form-input text-sm flex-1 min-w-0"
+                            value={goal.scorerName}
+                            onChange={(e) => {
+                              updateGoal(goal.id, { scorerName: e.target.value, playerId: null });
+                              // 背番号が空の場合のみ名前で検索
+                              if (!goal.scorerNumber) searchPlayers(goal.id, e.target.value);
+                            }}
+                            placeholder="得点者名"
+                          />
+                        </div>
                         {activeGoalId === goal.id && suggestions.length > 0 && (
                           <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                             {suggestions.map((s) => (
