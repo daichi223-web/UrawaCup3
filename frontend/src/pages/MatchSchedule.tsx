@@ -522,7 +522,7 @@ function MatchSchedule() {
       }
     },
     onSuccess: (data) => {
-      toast.success(`予選リーグ ${data.created}試合を生成しました（浦和カップ方式）`)
+      toast.success(`予選リーグ ${data.created}試合を生成しました`)
       if (data.warnings && data.warnings.length > 0) {
         data.warnings.forEach((w: string) => toast(w, { icon: '⚠️' }))
       }
@@ -1209,7 +1209,7 @@ function MatchSchedule() {
                           title=""
                           emptyMessage="試合がありません"
                           consecutiveMatchTeams={consecutiveMatchTeams}
-                          teams={allTeams}
+                          teams={allTeams.filter(t => t.groupId === groupId)}
                           enableConstraintCheck
                         />
                       </div>
@@ -1226,7 +1226,7 @@ function MatchSchedule() {
                           title=""
                           emptyMessage="試合がありません"
                           consecutiveMatchTeams={consecutiveMatchTeams}
-                          teams={allTeams}
+                          teams={allTeams.filter(t => t.groupId === groupId)}
                           enableConstraintCheck
                         />
                       </div>
@@ -1274,7 +1274,7 @@ function MatchSchedule() {
                         title=""
                         emptyMessage="試合がありません"
                         consecutiveMatchTeams={consecutiveMatchTeams}
-                        teams={allTeams}
+                        teams={venueGroupId ? allTeams.filter(t => t.groupId === venueGroupId) : allTeams}
                         enableConstraintCheck
                       />
                     </div>
@@ -1303,12 +1303,12 @@ function MatchSchedule() {
           <p className="text-gray-600">
             {generateType === 'preliminary' && (
               <>
-                <strong>浦和カップ方式</strong>で予選リーグの日程を自動生成します。
+                予選リーグの日程を自動生成します。
                 <br />
                 <span className="text-sm text-gray-500">
                   ※ 各グループ6チーム × 4試合（変則総当たり）<br />
                   ※ 対角線ペア（1-6, 2-5, 3-4）は対戦しない<br />
-                  ※ 連戦回避・審判ローテーション対応<br />
+                  ※ 連戦回避対応<br />
                   ※ 2日間で計48試合（4グループ × 12試合）
                 </span>
               </>

@@ -1,6 +1,6 @@
 /**
- * 星取表画面
- * グループ別の対戦結果マトリックス表示（リアルタイム更新対応）
+ * 星取表・総合順位表画面
+ * グループ別の対戦結果マトリックス表示と総合順位表（リアルタイム更新対応）
  *
  * リアルタイム更新対応:
  * - WebSocket経由で順位表の更新通知を受信
@@ -9,13 +9,15 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, AlertCircle, WifiOff, Clock, Printer } from 'lucide-react';
+import { RefreshCw, AlertCircle, WifiOff, Clock, Printer, Trophy, Grid3X3 } from 'lucide-react';
 import { standingApi, type GroupStandings } from '@/features/standings';
+import type { OverallStandings } from '@/features/standings/types';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import StarTable from '../components/StarTable';
 import { useAppStore } from '@/stores/appStore';
 import { matchesApi, teamsApi } from '@/lib/api';
+
 // 印刷用スタイル（2x2レイアウトで1ページに収める）
 const printStyles = `
 @media print {
@@ -76,11 +78,15 @@ const printStyles = `
 }
 `;
 
+type ViewMode = 'star' | 'overall';
 
 function Standings() {
   // appStoreから現在のトーナメントIDを取得
   const { currentTournament } = useAppStore();
   const tournamentId = currentTournament?.id;
+
+  // 表示モード（星取表 or 総合順位）
+  const [viewMode, setViewMode] = useState<ViewMode>('star');
 
   // アニメーション用の更新フラグ
   const [recentlyUpdated, setRecentlyUpdated] = useState(false);
@@ -128,13 +134,13 @@ function Standings() {
     enabled: !!tournamentId,
   });
 
-  // 総合順位を取得（総合順位ルールの場合に表示）
+  // 総合順位を取得（常に取得）
   const isOverallRanking = currentTournament?.qualification_rule === 'overall_ranking';
-  const { data: overallStandings } = useQuery({
+  const { data: overallStandings, isLoading: isLoadingOverall, refetch: refetchOverall } = useQuery<OverallStandings>({
     queryKey: ['overall-standings', tournamentId],
     queryFn: () => standingApi.getOverallStandings(tournamentId!),
     staleTime: 30000,
-    enabled: !!tournamentId && isOverallRanking,
+    enabled: !!tournamentId,
   });
 
   // 総合順位マップを作成
@@ -164,6 +170,12 @@ function Standings() {
   // 印刷ハンドラー
   const handlePrint = () => window.print();
 
+  // 更新ハンドラー
+  const handleRefresh = () => {
+    refetch();
+    refetchOverall();
+  };
+
   // tournamentIdがまだない場合やデータロード中はローディング表示
   if (!tournamentId || isLoading || isLoadingTeams || isLoadingMatches) return <LoadingSpinner />;
   if (isError) {
@@ -191,9 +203,13 @@ function Standings() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">星取表</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {viewMode === 'star' ? '星取表' : '総合順位表'}
+            </h1>
             <p className="text-gray-600 mt-1">
-              各グループの対戦結果を確認できます
+              {viewMode === 'star'
+                ? '各グループの対戦結果を確認できます'
+                : '全グループを通じた総合順位を確認できます'}
             </p>
           </div>
           {/* LIVE インジケーター */}
@@ -226,7 +242,7 @@ function Standings() {
             }`}>
               <Clock className="w-4 h-4" />
               最終更新: {lastUpdated}
-              {isFetching && !isLoading && (
+              {(isFetching || isLoadingOverall) && !isLoading && (
                 <span className="ml-2 text-primary-600">更新中...</span>
               )}
             </span>
@@ -241,85 +257,213 @@ function Standings() {
             </button>
             {/* 手動更新ボタン */}
           <button
-            onClick={() => refetch()}
-            disabled={isFetching}
+            onClick={handleRefresh}
+            disabled={isFetching || isLoadingOverall}
             className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${(isFetching || isLoadingOverall) ? 'animate-spin' : ''}`} />
             更新
           </button>
         </div>
+      </div>
+
+      {/* 表示切り替えタブ */}
+      <div className="flex gap-2 no-print">
+        <button
+          onClick={() => setViewMode('star')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+            viewMode === 'star'
+              ? 'bg-primary-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Grid3X3 className="w-4 h-4" />
+          星取表
+        </button>
+        <button
+          onClick={() => setViewMode('overall')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+            viewMode === 'overall'
+              ? 'bg-amber-500 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          } ${isOverallRanking ? 'ring-2 ring-amber-300 ring-offset-1' : ''}`}
+        >
+          <Trophy className="w-4 h-4" />
+          総合順位
+          {isOverallRanking && <span className="text-xs bg-amber-600 px-1.5 py-0.5 rounded">採用中</span>}
+        </button>
       </div>
 
       {/* 暫定順位の注意書き */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2 no-print">
         <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-amber-800">
-          <p className="font-medium">暫定星取表</p>
+          <p className="font-medium">暫定{viewMode === 'star' ? '星取表' : '順位表'}</p>
           <p className="text-amber-700">
             試合結果が入力されるとリアルタイムで更新されます。
           </p>
         </div>
       </div>
 
-      {/* グループ別星取表 */}
-      <div className={`standings-grid grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
-        recentlyUpdated ? 'opacity-80' : 'opacity-100'
-      }`}>
-        {groupStandings.map((groupData) => {
-          // グループのチームと試合を抽出
-          const groupTeams = (teamsData?.teams || []).filter(
-            t => (t.group_id || t.groupId) === groupData.groupId
-          )
-          const groupMatches = (matchesData?.matches || []).filter(
-            m => (m.group_id || m.groupId) === groupData.groupId
-          )
+      {viewMode === 'star' ? (
+        // 星取表表示
+        <>
+          {/* グループ別星取表 */}
+          <div className={`standings-grid grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
+            recentlyUpdated ? 'opacity-80' : 'opacity-100'
+          }`}>
+            {groupStandings.map((groupData) => {
+              // グループのチームと試合を抽出
+              const groupTeams = (teamsData?.teams || []).filter(
+                t => (t.group_id || t.groupId) === groupData.groupId
+              )
+              const groupMatches = (matchesData?.matches || []).filter(
+                m => (m.group_id || m.groupId) === groupData.groupId
+              )
 
-          return (
-            <div key={groupData.groupId} className={`card transition-shadow ${
-              recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
-            }`}>
-              <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
-                <h3 className="text-lg font-semibold">{groupData.groupId}グループ 星取表</h3>
-              </div>
-              <div className="card-body p-4">
-                {groupTeams.length > 0 ? (
-                  <StarTable
-                    teams={groupTeams}
-                    matches={groupMatches}
-                    groupId={groupData.groupId}
-                    overallRankings={overallRankingsMap}
-                    showOverallRank={isOverallRanking}
-                  />
-                ) : (
-                  <div className="text-center py-8 text-gray-400">
-                    チームデータを読み込み中...
+              return (
+                <div key={groupData.groupId} className={`card transition-shadow ${
+                  recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
+                }`}>
+                  <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
+                    <h3 className="text-lg font-semibold">{groupData.groupId}グループ 星取表</h3>
                   </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+                  <div className="card-body p-4">
+                    {groupTeams.length > 0 ? (
+                      <StarTable
+                        teams={groupTeams}
+                        matches={groupMatches}
+                        groupId={groupData.groupId}
+                        overallRankings={overallRankingsMap}
+                        showOverallRank={isOverallRanking}
+                      />
+                    ) : (
+                      <div className="text-center py-8 text-gray-400">
+                        チームデータを読み込み中...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
 
-      {/* 順位決定ルール説明 */}
-      <div className="card no-print">
-        <div className="card-header">
-          <h3 className="text-lg font-semibold">順位決定ルール</h3>
+          {/* 順位決定ルール説明 */}
+          <div className="card no-print">
+            <div className="card-header">
+              <h3 className="text-lg font-semibold">順位決定ルール</h3>
+            </div>
+            <div className="card-body">
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                <li>勝点（勝利=3点、引分=1点、敗北=0点）</li>
+                <li>得失点差（ゴールディファレンス）</li>
+                <li>総得点</li>
+                <li>当該チーム間の対戦成績</li>
+                <li>抽選</li>
+              </ol>
+              <p className="mt-3 text-xs text-gray-500">
+                {isOverallRanking
+                  ? '※ 総合順位で上位4チームが決勝トーナメントに進出します'
+                  : '※ 各グループ上位2チームが決勝トーナメントに進出します'}
+              </p>
+            </div>
+          </div>
+        </>
+      ) : (
+        // 総合順位表表示
+        <div className="card">
+          <div className="card-header bg-amber-500 text-white">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <Trophy className="w-5 h-5" />
+              総合順位表
+            </h3>
+          </div>
+          <div className="card-body p-0">
+            {overallStandings && overallStandings.entries.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b">
+                      <th className="px-3 py-3 text-center w-14">順位</th>
+                      <th className="px-3 py-3 text-left">チーム</th>
+                      <th className="px-3 py-3 text-center w-14">G</th>
+                      <th className="px-3 py-3 text-center w-12">試</th>
+                      <th className="px-3 py-3 text-center w-12">勝</th>
+                      <th className="px-3 py-3 text-center w-12">分</th>
+                      <th className="px-3 py-3 text-center w-12">負</th>
+                      <th className="px-3 py-3 text-center w-12">得</th>
+                      <th className="px-3 py-3 text-center w-12">失</th>
+                      <th className="px-3 py-3 text-center w-14">得失</th>
+                      <th className="px-3 py-3 text-center w-14 font-bold">勝点</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overallStandings.entries.map((entry) => {
+                      const isQualifying = entry.overallRank <= overallStandings.qualifyingCount;
+                      const groupColors: Record<string, string> = {
+                        A: 'bg-red-100',
+                        B: 'bg-blue-100',
+                        C: 'bg-green-100',
+                        D: 'bg-yellow-100',
+                      };
+                      return (
+                        <tr
+                          key={entry.teamId}
+                          className={`border-b hover:bg-gray-50 ${isQualifying ? 'bg-amber-50' : ''}`}
+                        >
+                          <td className="px-3 py-3 text-center font-bold">
+                            {isQualifying ? (
+                              <span className="inline-block w-7 h-7 bg-amber-500 text-white rounded-full leading-7 text-sm">
+                                {entry.overallRank}
+                              </span>
+                            ) : (
+                              entry.overallRank
+                            )}
+                          </td>
+                          <td className="px-3 py-3 font-medium">
+                            {entry.shortName || entry.teamName}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${groupColors[entry.groupId] || 'bg-gray-100'}`}>
+                              {entry.groupId}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-center">{entry.played}</td>
+                          <td className="px-3 py-3 text-center text-green-600 font-medium">{entry.won}</td>
+                          <td className="px-3 py-3 text-center text-gray-500">{entry.drawn}</td>
+                          <td className="px-3 py-3 text-center text-red-500">{entry.lost}</td>
+                          <td className="px-3 py-3 text-center">{entry.goalsFor}</td>
+                          <td className="px-3 py-3 text-center">{entry.goalsAgainst ?? (entry.goalsFor - entry.goalDifference)}</td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={entry.goalDifference > 0 ? 'text-green-600 font-medium' : entry.goalDifference < 0 ? 'text-red-500' : ''}>
+                              {entry.goalDifference > 0 ? '+' : ''}{entry.goalDifference}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-center font-bold text-lg">{entry.points}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                <div className="p-4 bg-gray-50 border-t">
+                  <p className="text-sm text-amber-600 font-medium">
+                    ※ 上位{overallStandings.qualifyingCount}チームが決勝トーナメント進出
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    順位決定: 勝点 → 得失点差 → 総得点
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-400">
+                <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>順位データがありません</p>
+                <p className="text-sm mt-1">試合結果が入力されると順位が表示されます</p>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="card-body">
-          <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-            <li>勝点（勝利=3点、引分=1点、敗北=0点）</li>
-            <li>得失点差（ゴールディファレンス）</li>
-            <li>総得点</li>
-            <li>当該チーム間の対戦成績</li>
-            <li>抽選</li>
-          </ol>
-          <p className="mt-3 text-xs text-gray-500">
-            ※ 各グループ上位2チームが決勝トーナメントに進出します
-          </p>
-        </div>
-      </div>
+      )}
       </div>
     </>
   )

@@ -78,15 +78,41 @@ export const playerApi = {
   },
 
   // 選手サジェスト（得点者入力用）
+  // 名前または背番号で検索可能
   suggest: async (teamId: number, query: string): Promise<PlayerSuggestion[]> => {
     // 検索クエリを正規化
     const normalizedQuery = normalizeForSearch(query);
-    const { data, error } = await supabase
-      .from('players')
-      .select('id, number, name')
-      .eq('team_id', teamId)
-      .ilike('name', `%${normalizedQuery}%`)
-      .limit(10);
+
+    // 数字のみの場合は背番号で検索
+    const isNumberQuery = /^\d+$/.test(normalizedQuery);
+
+    let data;
+    let error;
+
+    if (isNumberQuery) {
+      // 背番号検索（完全一致または前方一致）
+      const numberValue = parseInt(normalizedQuery, 10);
+      const result = await supabase
+        .from('players')
+        .select('id, number, name')
+        .eq('team_id', teamId)
+        .or(`number.eq.${numberValue},number.like.${normalizedQuery}%`)
+        .order('number')
+        .limit(10);
+      data = result.data;
+      error = result.error;
+    } else {
+      // 名前検索
+      const result = await supabase
+        .from('players')
+        .select('id, number, name')
+        .eq('team_id', teamId)
+        .ilike('name', `%${normalizedQuery}%`)
+        .order('number')
+        .limit(10);
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) throw error;
     return (data || []).map(p => ({

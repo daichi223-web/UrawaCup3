@@ -764,12 +764,13 @@ export const finalDayApi = {
       });
     }
 
-    // 8. 対戦ペアのスコアを計算（警告が少ないほど低スコア）
+    // 8. 対戦ペアのスコアを計算（警告が少ないほど低スコア、低スコア優先で対戦）
     const calculatePairScore = (teamA: TeamInfo, teamB: TeamInfo): number => {
       let score = 0;
 
-      // 同グループ（予選で対戦済み）→ 除外
-      if (teamA.groupId === teamB.groupId) return Infinity;
+      // 同グループ（予選で対戦済み）→ 高ペナルティ（除外ではなく優先度低）
+      // 会場内の総当たりを完成させるため、同グループも対戦可能とする
+      if (teamA.groupId === teamB.groupId) score += 200;
 
       // 過去に対戦済み → +100
       const pairKey = [teamA.teamId, teamB.teamId].sort().join('-');
@@ -876,11 +877,11 @@ export const finalDayApi = {
       for (let i = 0; i < teamsInVenue.length; i++) {
         for (let j = i + 1; j < teamsInVenue.length; j++) {
           const score = calculatePairScore(teamsInVenue[i], teamsInVenue[j]);
-          // 同グループ以外は全て対戦（リーグ戦）
-          if (score < Infinity) {
-            pairs.push({ teamA: teamsInVenue[i], teamB: teamsInVenue[j], score });
-          } else {
-            console.log(`[Training] スキップ: ${teamsInVenue[i].teamName} vs ${teamsInVenue[j].teamName} (同グループ: ${teamsInVenue[i].groupId})`);
+          // 全ペアを対戦として追加（同グループも含む総当たり）
+          pairs.push({ teamA: teamsInVenue[i], teamB: teamsInVenue[j], score });
+          // 同グループの場合はログ出力（対戦はするが優先度低）
+          if (teamsInVenue[i].groupId === teamsInVenue[j].groupId) {
+            console.log(`[Training] 同グループ対戦: ${teamsInVenue[i].teamName} vs ${teamsInVenue[j].teamName} (グループ${teamsInVenue[i].groupId})`);
           }
         }
       }

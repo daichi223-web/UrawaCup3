@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { matchesApi, teamsApi, tournamentsApi } from '@/lib/api';
 import { standingApi } from '@/features/standings/api';
-import type { OverallStandings } from '@/features/standings/types';
+import type { OverallStandings, GroupStandings } from '@/features/standings/types';
 import { supabase } from '@/lib/supabase';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import StarTable from '../../components/StarTable';
 
 export default function PublicStandings() {
     const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'overall'>('A');
@@ -13,24 +11,10 @@ export default function PublicStandings() {
 
     const tournamentId = 1; // デフォルトの大会ID
 
-    // チーム一覧を取得
-    const { data: teamsData, isLoading: isLoadingTeams, refetch: refetchTeams, error: teamsError } = useQuery({
-        queryKey: ['public-teams', tournamentId],
-        queryFn: async () => {
-            const data = await teamsApi.getAll(tournamentId);
-            return data?.teams || [];
-        },
-        staleTime: 30000,
-        retry: 2,
-    });
-
-    // 試合一覧を取得
-    const { data: matchesData, isLoading: isLoadingMatches, refetch: refetchMatches, error: matchesError } = useQuery({
-        queryKey: ['public-matches', tournamentId],
-        queryFn: async () => {
-            const data = await matchesApi.getAll(tournamentId);
-            return data?.matches || [];
-        },
+    // グループ別順位表を取得
+    const { data: groupStandings, isLoading: isLoadingStandings, refetch: refetchStandings, error: standingsError } = useQuery<GroupStandings[]>({
+        queryKey: ['public-standings', tournamentId],
+        queryFn: () => standingApi.getStandingsByGroup(tournamentId),
         staleTime: 30000,
         retry: 2,
     });
@@ -62,9 +46,9 @@ export default function PublicStandings() {
         enabled: activeTab === 'overall' || isOverallRanking,
     });
 
-    // 総合順位マップを作成
+    // 総合順位マップを作成（グループ別表示で総合順位を表示するため）
     const overallRankingsMap = useMemo(() => {
-        if (!overallStandings?.entries) return undefined;
+        if (!overallStandings?.entries) return new Map<number, number>();
         const map = new Map<number, number>();
         overallStandings.entries.forEach(entry => {
             map.set(entry.teamId, entry.overallRank);
@@ -74,19 +58,19 @@ export default function PublicStandings() {
 
     // データ更新関数
     const refreshData = useCallback(async () => {
-        await Promise.all([refetchTeams(), refetchMatches()]);
-        if (activeTab === 'overall') {
+        await refetchStandings();
+        if (activeTab === 'overall' || isOverallRanking) {
             await refetchOverall();
         }
         setLastUpdated(new Date());
-    }, [refetchTeams, refetchMatches, refetchOverall, activeTab]);
+    }, [refetchStandings, refetchOverall, activeTab, isOverallRanking]);
 
     // 初回読み込み時に更新時刻を設定
     useEffect(() => {
-        if (teamsData && matchesData) {
+        if (groupStandings) {
             setLastUpdated(new Date());
         }
-    }, [teamsData, matchesData]);
+    }, [groupStandings]);
 
     // 30秒ごとに自動更新
     useEffect(() => {
@@ -96,8 +80,8 @@ export default function PublicStandings() {
         return () => clearInterval(interval);
     }, [refreshData]);
 
-    const isLoading = isLoadingTeams || isLoadingMatches || (activeTab === 'overall' && isLoadingOverall);
-    const hasError = teamsError || matchesError;
+    const isLoading = isLoadingStandings || (activeTab === 'overall' && isLoadingOverall);
+    const hasError = standingsError;
 
     if (isLoading) {
         return <div className="flex justify-center py-10"><LoadingSpinner /></div>;
@@ -122,17 +106,22 @@ export default function PublicStandings() {
         );
     }
 
-    // グループごとのチームと試合を抽出
-    const groupTeams = activeTab !== 'overall'
-        ? (teamsData || []).filter((t: any) => (t.group_id || t.groupId) === activeTab)
-        : [];
-    const groupMatches = activeTab !== 'overall'
-        ? (matchesData || []).filter((m: any) => (m.group_id || m.groupId) === activeTab && m.stage === 'preliminary')
-        : [];
+    // 現在のグループの順位表を取得
+    const currentGroupStandings = activeTab !== 'overall'
+        ? groupStandings?.find(g => g.groupId === activeTab)
+        : null;
+
+    // グループ色設定
+    const groupColors: Record<string, { header: string; highlight: string }> = {
+        A: { header: 'bg-red-600', highlight: 'bg-red-50' },
+        B: { header: 'bg-blue-600', highlight: 'bg-blue-50' },
+        C: { header: 'bg-green-600', highlight: 'bg-green-50' },
+        D: { header: 'bg-yellow-500', highlight: 'bg-yellow-50' },
+    };
 
     return (
         <div className="space-y-4 pb-20">
-            <h1 className="text-xl font-bold text-gray-800 px-1">予選リーグ 星取表</h1>
+            <h1 className="text-xl font-bold text-gray-800 px-1">予選リーグ 順位表</h1>
 
             {/* Tabs */}
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
@@ -153,14 +142,14 @@ export default function PublicStandings() {
             </div>
 
             {/* コンテンツ */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 {activeTab === 'overall' ? (
                     // 総合順位表
                     overallStandings && overallStandings.entries.length > 0 ? (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="bg-gray-50 border-b">
+                                    <tr className="bg-amber-500 text-white">
                                         <th className="px-2 py-2 text-center w-12">順位</th>
                                         <th className="px-2 py-2 text-left">チーム</th>
                                         <th className="px-2 py-2 text-center w-12">G</th>
@@ -209,7 +198,7 @@ export default function PublicStandings() {
                                     })}
                                 </tbody>
                             </table>
-                            <p className="text-xs text-amber-600 mt-3 px-2">
+                            <p className="text-xs text-amber-600 mt-3 px-4 pb-3">
                                 ※ 上位{overallStandings.qualifyingCount}チームが決勝トーナメント進出
                             </p>
                         </div>
@@ -219,18 +208,88 @@ export default function PublicStandings() {
                         </div>
                     )
                 ) : (
-                    // グループ別星取表
-                    groupTeams.length > 0 ? (
-                        <StarTable
-                            teams={groupTeams}
-                            matches={groupMatches}
-                            groupId={activeTab}
-                            overallRankings={overallRankingsMap}
-                            showOverallRank={isOverallRanking}
-                        />
+                    // グループ別順位表
+                    currentGroupStandings && currentGroupStandings.standings.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className={`${groupColors[activeTab]?.header || 'bg-gray-600'} text-white`}>
+                                        <th className="px-2 py-2 text-center w-10">順位</th>
+                                        {isOverallRanking && (
+                                            <th className="px-2 py-2 text-center w-10">総合</th>
+                                        )}
+                                        <th className="px-2 py-2 text-left">チーム</th>
+                                        <th className="px-2 py-2 text-center w-10">試</th>
+                                        <th className="px-2 py-2 text-center w-10">勝</th>
+                                        <th className="px-2 py-2 text-center w-10">分</th>
+                                        <th className="px-2 py-2 text-center w-10">負</th>
+                                        <th className="px-2 py-2 text-center w-10">得</th>
+                                        <th className="px-2 py-2 text-center w-10">失</th>
+                                        <th className="px-2 py-2 text-center w-12">得失</th>
+                                        <th className="px-2 py-2 text-center w-12 font-bold">勝点</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {currentGroupStandings.standings.map((standing) => {
+                                        const isTop2 = standing.rank <= 2;
+                                        const overallRank = overallRankingsMap.get(standing.teamId);
+                                        return (
+                                            <tr
+                                                key={standing.teamId}
+                                                className={`border-b ${isTop2 ? groupColors[activeTab]?.highlight || 'bg-gray-50' : ''}`}
+                                            >
+                                                <td className="px-2 py-2 text-center font-bold">
+                                                    {isTop2 ? (
+                                                        <span className={`inline-block w-6 h-6 ${groupColors[activeTab]?.header || 'bg-gray-600'} text-white rounded-full leading-6 text-xs`}>
+                                                            {standing.rank}
+                                                        </span>
+                                                    ) : (
+                                                        standing.rank
+                                                    )}
+                                                </td>
+                                                {isOverallRanking && (
+                                                    <td className="px-2 py-2 text-center">
+                                                        {overallRank && overallRank <= 4 ? (
+                                                            <span className="inline-block w-5 h-5 bg-amber-500 text-white rounded-full leading-5 text-xs">
+                                                                {overallRank}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-gray-400 text-xs">{overallRank || '-'}</span>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                <td className="px-2 py-2 font-medium">{standing.teamName}</td>
+                                                <td className="px-2 py-2 text-center">{standing.played}</td>
+                                                <td className="px-2 py-2 text-center text-green-600">{standing.won}</td>
+                                                <td className="px-2 py-2 text-center text-gray-500">{standing.drawn}</td>
+                                                <td className="px-2 py-2 text-center text-red-500">{standing.lost}</td>
+                                                <td className="px-2 py-2 text-center">{standing.goalsFor}</td>
+                                                <td className="px-2 py-2 text-center">{standing.goalsAgainst}</td>
+                                                <td className="px-2 py-2 text-center">
+                                                    <span className={standing.goalDifference > 0 ? 'text-green-600' : standing.goalDifference < 0 ? 'text-red-500' : ''}>
+                                                        {standing.goalDifference > 0 ? '+' : ''}{standing.goalDifference}
+                                                    </span>
+                                                </td>
+                                                <td className="px-2 py-2 text-center font-bold">{standing.points}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                            {!isOverallRanking && (
+                                <p className="text-xs text-gray-500 mt-3 px-4 pb-3">
+                                    ※ 上位2チームが決勝トーナメント進出
+                                </p>
+                            )}
+                            {isOverallRanking && (
+                                <p className="text-xs text-amber-600 mt-3 px-4 pb-3">
+                                    ※ 総合順位で上位4チームが決勝トーナメント進出
+                                </p>
+                            )}
+                        </div>
                     ) : (
                         <div className="text-center py-8 text-gray-400">
-                            チームデータがありません
+                            順位データがありません
                         </div>
                     )
                 )}
@@ -244,9 +303,7 @@ export default function PublicStandings() {
             )}
 
             <p className="text-[10px] text-gray-400 px-2">
-                {activeTab === 'overall'
-                    ? '※ 順位決定: 勝点 → 得失点差 → 総得点'
-                    : '※ ○=勝利 △=引分 ●=敗北'}
+                ※ 順位決定: 勝点 → 得失点差 → 総得点
             </p>
         </div>
     );

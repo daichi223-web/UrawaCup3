@@ -397,33 +397,13 @@ export const standingsApi = {
 
       if (error) handleSupabaseError(error)
 
-      // 順位表が空の場合はチームテーブルから取得
+      // 順位表が空の場合は空配列を返す（試合入力前は順位表示しない）
+      // 以前はチームから暫定順位を生成していたが、総合順位に影響するため削除
       if (!standings || standings.length === 0) {
-        const { data: teams } = await supabase
-          .from('teams')
-          .select('*')
-          .eq('tournament_id', tournamentId)
-          .eq('group_id', group.id)
-          .order('group_order')
-
-        const fallbackStandings = (teams || []).map((team, index) => ({
-          team_id: team.id,
-          played: 0,
-          won: 0,
-          drawn: 0,
-          lost: 0,
-          goals_for: 0,
-          goals_against: 0,
-          goal_difference: 0,
-          points: 0,
-          rank: index + 1,
-          team: { id: team.id, name: team.name },
-        }))
-
         result.push({
           groupId: group.id,
           groupName: group.name,
-          standings: fallbackStandings
+          standings: []
         })
       } else {
         result.push({

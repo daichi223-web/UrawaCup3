@@ -134,22 +134,24 @@ export const standingApi = {
       ? 4 // 総合順位ルールでは上位4チーム
       : (tournament?.advancing_teams || 1) * 4; // グループルールではグループ数 × 進出数
 
-    // エントリに変換
-    const entries: OverallStandingEntry[] = (standings || []).map(s => ({
-      overallRank: 0, // 後で計算
-      groupId: s.group_id,
-      groupRank: s.rank,
-      teamId: s.team?.id || s.team_id,
-      teamName: s.team?.name || '',
-      shortName: s.team?.short_name || s.team?.name || '',
-      points: s.points,
-      goalDifference: s.goal_difference,
-      goalsFor: s.goals_for,
-      played: s.played,
-      won: s.won,
-      drawn: s.drawn,
-      lost: s.lost,
-    }));
+    // エントリに変換（試合数 > 0 のチームのみ対象）
+    const entries: OverallStandingEntry[] = (standings || [])
+      .filter(s => s.played > 0) // 試合入力前のチームは除外
+      .map(s => ({
+        overallRank: 0, // 後で計算
+        groupId: s.group_id,
+        groupRank: s.rank,
+        teamId: s.team?.id || s.team_id,
+        teamName: s.team?.name || '',
+        shortName: s.team?.short_name || s.team?.name || '',
+        points: s.points,
+        goalDifference: s.goal_difference,
+        goalsFor: s.goals_for,
+        played: s.played,
+        won: s.won,
+        drawn: s.drawn,
+        lost: s.lost,
+      }));
 
     // 総合順位でソート: 勝点 → 得失点差 → 総得点（グループ関係なく純粋に成績順）
     entries.sort((a, b) => {

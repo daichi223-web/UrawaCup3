@@ -9,6 +9,7 @@ import { MatchWithDetails, Goal } from '@shared/types';
 import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { playerApi, type PlayerSuggestion } from '@/features/players';
+import { Minus, Plus } from 'lucide-react';
 
 // 得点入力用の型
 interface GoalInput {
@@ -20,6 +21,72 @@ interface GoalInput {
   scorerName: string;
   playerId: number | null;
   isOwnGoal: boolean;
+}
+
+// モバイル対応スコア入力コンポーネント
+interface ScoreInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  label?: string;
+}
+
+function ScoreInput({ value, onChange, label }: ScoreInputProps) {
+  const numValue = parseInt(value) || 0;
+
+  const increment = () => {
+    onChange(String(Math.min(99, numValue + 1)));
+  };
+
+  const decrement = () => {
+    onChange(String(Math.max(0, numValue - 1)));
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    // 空欄または数字のみ許可
+    if (val === '' || /^\d{0,2}$/.test(val)) {
+      onChange(val);
+    }
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    // タップ時に全選択
+    e.target.select();
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {label && <span className="text-xs text-gray-500">{label}</span>}
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={decrement}
+          className="w-10 h-10 flex items-center justify-center bg-gray-200 hover:bg-gray-300 active:bg-gray-400 rounded-lg transition-colors touch-manipulation"
+          aria-label="減らす"
+        >
+          <Minus className="w-5 h-5" />
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          className="w-14 h-12 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-primary-500 focus:outline-none"
+          value={value}
+          onChange={handleInputChange}
+          onFocus={handleFocus}
+          onClick={(e) => (e.target as HTMLInputElement).select()}
+        />
+        <button
+          type="button"
+          onClick={increment}
+          className="w-10 h-10 flex items-center justify-center bg-primary-100 hover:bg-primary-200 active:bg-primary-300 text-primary-700 rounded-lg transition-colors touch-manipulation"
+          aria-label="増やす"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function MatchResult() {
@@ -40,13 +107,14 @@ function MatchResult() {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<MatchWithDetails | null>(null);
+  // スコアを文字列で管理（空欄許可）
   const [scoreForm, setScoreForm] = useState({
-    homeScoreHalf1: 0,
-    homeScoreHalf2: 0,
-    awayScoreHalf1: 0,
-    awayScoreHalf2: 0,
-    homePK: 0,
-    awayPK: 0,
+    homeScoreHalf1: '0',
+    homeScoreHalf2: '0',
+    awayScoreHalf1: '0',
+    awayScoreHalf2: '0',
+    homePK: '0',
+    awayPK: '0',
     hasPenaltyShootout: false,
   });
 
@@ -130,12 +198,12 @@ function MatchResult() {
   const openScoreModal = (match: MatchWithDetails) => {
     setSelectedMatch(match);
     setScoreForm({
-      homeScoreHalf1: match.homeScoreHalf1 ?? 0,
-      homeScoreHalf2: match.homeScoreHalf2 ?? 0,
-      awayScoreHalf1: match.awayScoreHalf1 ?? 0,
-      awayScoreHalf2: match.awayScoreHalf2 ?? 0,
-      homePK: match.homePK ?? 0,
-      awayPK: match.awayPK ?? 0,
+      homeScoreHalf1: String(match.homeScoreHalf1 ?? 0),
+      homeScoreHalf2: String(match.homeScoreHalf2 ?? 0),
+      awayScoreHalf1: String(match.awayScoreHalf1 ?? 0),
+      awayScoreHalf2: String(match.awayScoreHalf2 ?? 0),
+      homePK: String(match.homePK ?? 0),
+      awayPK: String(match.awayPK ?? 0),
       hasPenaltyShootout: match.hasPenaltyShootout ?? false,
     });
     // 既存の得点をGoalInput形式に変換
@@ -219,10 +287,10 @@ function MatchResult() {
     setSaving(true);
     try {
       const scoreData: MatchScoreInput = {
-        homeScoreHalf1: scoreForm.homeScoreHalf1,
-        homeScoreHalf2: scoreForm.homeScoreHalf2,
-        awayScoreHalf1: scoreForm.awayScoreHalf1,
-        awayScoreHalf2: scoreForm.awayScoreHalf2,
+        homeScoreHalf1: parseInt(scoreForm.homeScoreHalf1) || 0,
+        homeScoreHalf2: parseInt(scoreForm.homeScoreHalf2) || 0,
+        awayScoreHalf1: parseInt(scoreForm.awayScoreHalf1) || 0,
+        awayScoreHalf2: parseInt(scoreForm.awayScoreHalf2) || 0,
         hasPenaltyShootout: scoreForm.hasPenaltyShootout,
         goals: goals.map(g => ({
           teamId: g.teamId,
@@ -235,25 +303,30 @@ function MatchResult() {
       };
 
       if (scoreForm.hasPenaltyShootout) {
-        scoreData.homePk = scoreForm.homePK;
-        scoreData.awayPk = scoreForm.awayPK;
+        scoreData.homePk = parseInt(scoreForm.homePK) || 0;
+        scoreData.awayPk = parseInt(scoreForm.awayPK) || 0;
       }
 
       await matchApi.updateScore(selectedMatch.id, scoreData);
 
       // 試合リストを更新
+      const homeScoreHalf1 = parseInt(scoreForm.homeScoreHalf1) || 0;
+      const homeScoreHalf2 = parseInt(scoreForm.homeScoreHalf2) || 0;
+      const awayScoreHalf1 = parseInt(scoreForm.awayScoreHalf1) || 0;
+      const awayScoreHalf2 = parseInt(scoreForm.awayScoreHalf2) || 0;
+
       const updatedMatches = matches.map(m => {
         if (m.id === selectedMatch.id) {
           return {
             ...m,
-            homeScoreHalf1: scoreForm.homeScoreHalf1,
-            homeScoreHalf2: scoreForm.homeScoreHalf2,
-            awayScoreHalf1: scoreForm.awayScoreHalf1,
-            awayScoreHalf2: scoreForm.awayScoreHalf2,
-            homeScoreTotal: scoreForm.homeScoreHalf1 + scoreForm.homeScoreHalf2,
-            awayScoreTotal: scoreForm.awayScoreHalf1 + scoreForm.awayScoreHalf2,
-            homePK: scoreForm.homePK,
-            awayPK: scoreForm.awayPK,
+            homeScoreHalf1,
+            homeScoreHalf2,
+            awayScoreHalf1,
+            awayScoreHalf2,
+            homeScoreTotal: homeScoreHalf1 + homeScoreHalf2,
+            awayScoreTotal: awayScoreHalf1 + awayScoreHalf2,
+            homePK: parseInt(scoreForm.homePK) || 0,
+            awayPK: parseInt(scoreForm.awayPK) || 0,
             hasPenaltyShootout: scoreForm.hasPenaltyShootout,
             status: 'completed' as const,
           };
@@ -274,8 +347,8 @@ function MatchResult() {
   };
 
   // 合計得点を計算
-  const homeTotal = scoreForm.homeScoreHalf1 + scoreForm.homeScoreHalf2;
-  const awayTotal = scoreForm.awayScoreHalf1 + scoreForm.awayScoreHalf2;
+  const homeTotal = (parseInt(scoreForm.homeScoreHalf1) || 0) + (parseInt(scoreForm.homeScoreHalf2) || 0);
+  const awayTotal = (parseInt(scoreForm.awayScoreHalf1) || 0) + (parseInt(scoreForm.awayScoreHalf2) || 0);
 
   return (
     <div className="space-y-6">
@@ -466,69 +539,45 @@ function MatchResult() {
 
             {/* 前半スコア */}
             <div className="border rounded-lg p-4">
-              <h4 className="font-medium text-gray-700 mb-3">前半</h4>
+              <h4 className="font-medium text-gray-700 mb-3 text-center">前半</h4>
               <div className="flex items-center justify-center gap-4">
-                <div className="flex-1">
-                  <input
-                    type="number"
-                    min="0"
-                    max="99"
-                    className="form-input text-center text-xl font-bold w-full"
-                    value={scoreForm.homeScoreHalf1}
-                    onChange={(e) => setScoreForm(prev => ({ ...prev, homeScoreHalf1: parseInt(e.target.value) || 0 }))}
-                  />
-                </div>
-                <span className="text-gray-400">-</span>
-                <div className="flex-1">
-                  <input
-                    type="number"
-                    min="0"
-                    max="99"
-                    className="form-input text-center text-xl font-bold w-full"
-                    value={scoreForm.awayScoreHalf1}
-                    onChange={(e) => setScoreForm(prev => ({ ...prev, awayScoreHalf1: parseInt(e.target.value) || 0 }))}
-                  />
-                </div>
+                <ScoreInput
+                  value={scoreForm.homeScoreHalf1}
+                  onChange={(v) => setScoreForm(prev => ({ ...prev, homeScoreHalf1: v }))}
+                />
+                <span className="text-2xl text-gray-400">-</span>
+                <ScoreInput
+                  value={scoreForm.awayScoreHalf1}
+                  onChange={(v) => setScoreForm(prev => ({ ...prev, awayScoreHalf1: v }))}
+                />
               </div>
             </div>
 
             {/* 後半スコア */}
             <div className="border rounded-lg p-4">
-              <h4 className="font-medium text-gray-700 mb-3">後半</h4>
+              <h4 className="font-medium text-gray-700 mb-3 text-center">後半</h4>
               <div className="flex items-center justify-center gap-4">
-                <div className="flex-1">
-                  <input
-                    type="number"
-                    min="0"
-                    max="99"
-                    className="form-input text-center text-xl font-bold w-full"
-                    value={scoreForm.homeScoreHalf2}
-                    onChange={(e) => setScoreForm(prev => ({ ...prev, homeScoreHalf2: parseInt(e.target.value) || 0 }))}
-                  />
-                </div>
-                <span className="text-gray-400">-</span>
-                <div className="flex-1">
-                  <input
-                    type="number"
-                    min="0"
-                    max="99"
-                    className="form-input text-center text-xl font-bold w-full"
-                    value={scoreForm.awayScoreHalf2}
-                    onChange={(e) => setScoreForm(prev => ({ ...prev, awayScoreHalf2: parseInt(e.target.value) || 0 }))}
-                  />
-                </div>
+                <ScoreInput
+                  value={scoreForm.homeScoreHalf2}
+                  onChange={(v) => setScoreForm(prev => ({ ...prev, homeScoreHalf2: v }))}
+                />
+                <span className="text-2xl text-gray-400">-</span>
+                <ScoreInput
+                  value={scoreForm.awayScoreHalf2}
+                  onChange={(v) => setScoreForm(prev => ({ ...prev, awayScoreHalf2: v }))}
+                />
               </div>
             </div>
 
             {/* PK戦 */}
             <div className="border rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center justify-center gap-2 mb-3">
                 <input
                   type="checkbox"
                   id="hasPK"
                   checked={scoreForm.hasPenaltyShootout}
                   onChange={(e) => setScoreForm(prev => ({ ...prev, hasPenaltyShootout: e.target.checked }))}
-                  className="h-4 w-4 rounded border-gray-300 text-primary-600"
+                  className="h-5 w-5 rounded border-gray-300 text-primary-600"
                 />
                 <label htmlFor="hasPK" className="font-medium text-gray-700">
                   PK戦
@@ -536,27 +585,15 @@ function MatchResult() {
               </div>
               {scoreForm.hasPenaltyShootout && (
                 <div className="flex items-center justify-center gap-4">
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      min="0"
-                      max="99"
-                      className="form-input text-center text-xl font-bold w-full"
-                      value={scoreForm.homePK}
-                      onChange={(e) => setScoreForm(prev => ({ ...prev, homePK: parseInt(e.target.value) || 0 }))}
-                    />
-                  </div>
-                  <span className="text-gray-400">-</span>
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      min="0"
-                      max="99"
-                      className="form-input text-center text-xl font-bold w-full"
-                      value={scoreForm.awayPK}
-                      onChange={(e) => setScoreForm(prev => ({ ...prev, awayPK: parseInt(e.target.value) || 0 }))}
-                    />
-                  </div>
+                  <ScoreInput
+                    value={scoreForm.homePK}
+                    onChange={(v) => setScoreForm(prev => ({ ...prev, homePK: v }))}
+                  />
+                  <span className="text-2xl text-gray-400">-</span>
+                  <ScoreInput
+                    value={scoreForm.awayPK}
+                    onChange={(v) => setScoreForm(prev => ({ ...prev, awayPK: v }))}
+                  />
                 </div>
               )}
             </div>
@@ -565,29 +602,37 @@ function MatchResult() {
             <div className="border rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-gray-700">得点者</h4>
-                <button type="button" className="text-sm text-primary-600 hover:text-primary-800" onClick={addGoal}>+ 追加</button>
+                <button type="button" className="text-sm text-primary-600 hover:text-primary-800 px-3 py-1 bg-primary-50 rounded-lg" onClick={addGoal}>+ 追加</button>
               </div>
               {goals.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-2">得点者を追加してください</p>
               ) : (
                 <div className="space-y-3">
                   {goals.map((goal) => (
-                    <div key={goal.id} className="flex items-start gap-2 p-2 bg-gray-50 rounded">
-                      <div className="w-16">
-                        <input type="number" min="1" max="99" className="form-input text-center text-sm w-full" value={goal.minute}
-                          onChange={(e) => updateGoal(goal.id, { minute: parseInt(e.target.value) || 1 })} placeholder="分" />
+                    <div key={goal.id} className="flex flex-wrap items-start gap-2 p-2 bg-gray-50 rounded">
+                      <div className="w-14">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="form-input text-center text-sm w-full"
+                          value={goal.minute}
+                          onChange={(e) => updateGoal(goal.id, { minute: parseInt(e.target.value) || 1 })}
+                          onFocus={(e) => e.target.select()}
+                          placeholder="分"
+                        />
                       </div>
-                      <select className="form-input text-sm w-20" value={goal.half}
+                      <select className="form-input text-sm w-16" value={goal.half}
                         onChange={(e) => updateGoal(goal.id, { half: parseInt(e.target.value) as 1 | 2 })}>
                         <option value={1}>前半</option>
                         <option value={2}>後半</option>
                       </select>
-                      <select className="form-input text-sm flex-1" value={goal.teamType}
+                      <select className="form-input text-sm flex-1 min-w-[100px]" value={goal.teamType}
                         onChange={(e) => updateGoal(goal.id, { teamType: e.target.value as 'home' | 'away' })}>
                         <option value="home">{selectedMatch?.homeTeam?.name}</option>
                         <option value="away">{selectedMatch?.awayTeam?.name}</option>
                       </select>
-                      <div className="flex-1 relative">
+                      <div className="flex-1 min-w-[120px] relative">
                         <input type="text" className="form-input text-sm w-full" value={goal.scorerName}
                           onChange={(e) => { updateGoal(goal.id, { scorerName: e.target.value, playerId: null }); searchPlayers(goal.id, e.target.value); }}
                           placeholder="得点者名" />
@@ -605,7 +650,7 @@ function MatchResult() {
                           onChange={(e) => updateGoal(goal.id, { isOwnGoal: e.target.checked })}
                           className="h-4 w-4 rounded border-gray-300 text-primary-600" />OG
                       </label>
-                      <button type="button" className="text-red-500 hover:text-red-700 p-1" onClick={() => removeGoal(goal.id)}>×</button>
+                      <button type="button" className="text-red-500 hover:text-red-700 p-1 text-lg" onClick={() => removeGoal(goal.id)}>×</button>
                     </div>
                   ))}
                 </div>
