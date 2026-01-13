@@ -204,10 +204,11 @@ function Settings() {
 
   // 日付変更時の自動保存
   const handleDateChange = (field: 'startDate' | 'endDate', value: string) => {
-    setTournamentForm(prev => ({ ...prev, [field]: value }))
+    // 新しいフォーム値を作成（stale closure問題を回避）
+    const updatedForm = { ...tournamentForm, [field]: value }
+    setTournamentForm(updatedForm)
     // 即座に保存
     if (value) {
-      const updatedForm = { ...tournamentForm, [field]: value }
       updateTournamentMutation.mutate(updatedForm)
     }
   }

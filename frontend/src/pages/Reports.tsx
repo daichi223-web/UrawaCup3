@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { reportApi, type FinalResultData, type FinalScheduleData } from '@/features/reports';
 import { useSenderSettings, useUpdateSenderSettings } from '@/features/reports/hooks';
+import { useVenuesByTournament } from '@/features/venues/hooks';
 import { matchesApi, venuesApi } from '@/lib/api';
 import { FileText, Download, Trophy, Calendar, Table, Eye, X, Clock, Edit2, Save, Printer, Medal, Users } from 'lucide-react'
 import toast from 'react-hot-toast';
@@ -63,6 +64,9 @@ function Reports() {
   const { data: senderSettings, isLoading: senderLoading } = useSenderSettings(tournamentId);
   const updateSenderSettings = useUpdateSenderSettings();
 
+  // 会場データの取得
+  const { data: venues = [] } = useVenuesByTournament(tournamentId);
+
   // 発信元設定をフォームに反映
   useEffect(() => {
     if (senderSettings) {
@@ -89,23 +93,33 @@ function Reports() {
   };
 
   // 日付のマッピング（大会日程から動的に生成）
-  const getDateMap = (): Record<string, string> => {
+  const dateOptions = useMemo(() => {
+    const formatDateLabel = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    };
+
     if (currentTournament?.startDate) {
       const start = new Date(currentTournament.startDate);
+      const day1 = currentTournament.startDate;
+      const day2 = new Date(start.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const day3 = new Date(start.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       return {
-        'day1': currentTournament.startDate,
-        'day2': new Date(start.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        'day3': new Date(start.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        map: { 'day1': day1, 'day2': day2, 'day3': day3 },
+        labels: {
+          'day1': `Day1 (${formatDateLabel(day1)})`,
+          'day2': `Day2 (${formatDateLabel(day2)})`,
+          'day3': `Day3 (${formatDateLabel(day3)})`,
+        }
       };
     }
     // デフォルト（大会情報がない場合）
     return {
-      'day1': '2025-03-29',
-      'day2': '2025-03-30',
-      'day3': '2025-03-31',
+      map: { 'day1': '2025-03-29', 'day2': '2025-03-30', 'day3': '2025-03-31' },
+      labels: { 'day1': 'Day1', 'day2': 'Day2', 'day3': 'Day3' }
     };
-  };
-  const dateMap = getDateMap();
+  }, [currentTournament?.startDate]);
+  const dateMap = dateOptions.map;
 
   const handleDownload = async () => {
     if (!date) {
@@ -353,9 +367,9 @@ function Reports() {
                 onChange={(e) => setDate(e.target.value)}
               >
                 <option value="">日付を選択</option>
-                <option value="day1">Day1 (3/20)</option>
-                <option value="day2">Day2 (3/21)</option>
-                <option value="day3">Day3 (3/22)</option>
+                <option value="day1">{dateOptions.labels['day1']}</option>
+                <option value="day2">{dateOptions.labels['day2']}</option>
+                <option value="day3">{dateOptions.labels['day3']}</option>
               </select>
             </div>
             <div>
@@ -366,10 +380,11 @@ function Reports() {
                 onChange={(e) => setVenueId(e.target.value)}
               >
                 <option value="">全会場</option>
-                <option value="1">浦和南高G</option>
-                <option value="2">市立浦和高G</option>
-                <option value="3">浦和学院G</option>
-                <option value="4">武南高G</option>
+                {venues.map((venue: any) => (
+                  <option key={venue.id} value={venue.id}>
+                    {venue.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
