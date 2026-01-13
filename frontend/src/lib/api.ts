@@ -60,7 +60,26 @@ export const tournamentsApi = {
       .select('*')
       .order('year', { ascending: false })
     if (error) handleSupabaseError(error)
-    return data
+    // snake_case → camelCase 正規化
+    return data?.map(t => ({
+      ...t,
+      shortName: t.short_name,
+      startDate: t.start_date,
+      endDate: t.end_date,
+      matchDuration: t.match_duration,
+      halfDuration: t.half_duration,
+      intervalMinutes: t.interval_minutes,
+      preliminaryStartTime: t.preliminary_start_time,
+      finalsStartTime: t.finals_start_time,
+      finalsMatchDuration: t.finals_match_duration,
+      finalsIntervalMinutes: t.finals_interval_minutes,
+      groupCount: t.group_count,
+      teamsPerGroup: t.teams_per_group,
+      advancingTeams: t.advancing_teams,
+      senderOrganization: t.sender_organization,
+      senderName: t.sender_name,
+      senderContact: t.sender_contact,
+    })) ?? []
   },
 
   async getById(id: number) {
@@ -70,7 +89,26 @@ export const tournamentsApi = {
       .eq('id', id)
       .single()
     if (error) handleSupabaseError(error)
-    return data
+    // snake_case → camelCase 正規化
+    return data ? {
+      ...data,
+      shortName: data.short_name,
+      startDate: data.start_date,
+      endDate: data.end_date,
+      matchDuration: data.match_duration,
+      halfDuration: data.half_duration,
+      intervalMinutes: data.interval_minutes,
+      preliminaryStartTime: data.preliminary_start_time,
+      finalsStartTime: data.finals_start_time,
+      finalsMatchDuration: data.finals_match_duration,
+      finalsIntervalMinutes: data.finals_interval_minutes,
+      groupCount: data.group_count,
+      teamsPerGroup: data.teams_per_group,
+      advancingTeams: data.advancing_teams,
+      senderOrganization: data.sender_organization,
+      senderName: data.sender_name,
+      senderContact: data.sender_contact,
+    } : null
   },
 
   async update(id: number, updates: Partial<Tournament>) {
