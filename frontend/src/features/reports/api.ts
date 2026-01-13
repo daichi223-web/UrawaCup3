@@ -159,6 +159,16 @@ export const reportApi = {
     const { data: matches, error } = await query;
     if (error) throw error;
 
+    // デバッグ: 試合データと会場情報を確認
+    console.log('[downloadPdf] Matches count:', matches?.length || 0);
+    if (matches && matches.length > 0) {
+      console.log('[downloadPdf] First match venue data:', {
+        venue_id: matches[0].venue_id,
+        venue: matches[0].venue,
+        raw: JSON.stringify(matches[0]).substring(0, 500)
+      });
+    }
+
     // 大会情報を取得
     const { data: tournament } = await supabase
       .from('tournaments')
@@ -217,6 +227,12 @@ export const reportApi = {
       });
     }
 
+    // デバッグ: 会場別グループ化結果
+    console.log('[downloadPdf] Venues found:', Object.keys(matchesByVenue));
+    console.log('[downloadPdf] Matches per venue:', Object.fromEntries(
+      Object.entries(matchesByVenue).map(([k, v]) => [k, (v as any[]).length])
+    ));
+
     // バックエンドAPIを呼び出し
     try {
       const response = await fetch(`${CORE_API_URL}/daily-report`, {
@@ -242,28 +258,91 @@ export const reportApi = {
       console.warn('Backend API error, falling back to local generation:', e);
     }
 
-    // フォールバック: ローカルでPDF生成
+    // フォールバック: ローカルでPDF生成（会場ごとに1ページ）
     const doc = new jsPDF();
     doc.setFont('helvetica');
-    doc.setFontSize(16);
-    doc.text(`試合結果報告書 - ${params.date}`, 14, 20);
 
-    const tableData = (matches || []).map(m => [
-      m.match_time?.slice(0, 5) || '',
-      m.home_team?.short_name || m.home_team?.name || '未定',
-      m.status === 'completed' ? `${m.home_score_total ?? 0} - ${m.away_score_total ?? 0}` : 'vs',
-      m.away_team?.short_name || m.away_team?.name || '未定',
-      m.venue?.name || '',
-      m.status === 'completed' ? '終了' : m.status === 'in_progress' ? '試合中' : '予定'
-    ]);
+    const venueNames = Object.keys(matchesByVenue);
 
-    doc.autoTable({
-      startY: 30,
-      head: [['時間', 'ホーム', 'スコア', 'アウェイ', '会場', '状態']],
-      body: tableData,
-      styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: [66, 139, 202] },
+    // 会場ごとにページを生成
+    venueNames.forEach((venueName, venueIndex) => {
+      if (venueIndex > 0) {
+        doc.addPage();
+      }
+
+      const venueMatches = matchesByVenue[venueName];
+
+      // ヘッダー
+      doc.setFontSize(16);
+      doc.text(`試合結果報告書`, 14, 15);
+      doc.setFontSize(12);
+      doc.text(`${dateStr} - ${venueName}`, 14, 25);
+
+      // 発信元情報
+      doc.setFontSize(10);
+      doc.text(`発信: ${senderSettings?.sender_name || ''}`, 14, 33);
+
+      // 試合データをテーブル形式に変換
+      const tableData = venueMatches.map((m: any) => {
+        const homeScore = m.homeScore1H !== '' && m.homeScore2H !== ''
+          ? `${m.homeScore1H}-${m.homeScore2H}`
+          : '';
+        const awayScore = m.awayScore1H !== '' && m.awayScore2H !== ''
+          ? `${m.awayScore1H}-${m.awayScore2H}`
+          : '';
+        const totalHome = m.homeScore1H !== '' && m.homeScore2H !== ''
+          ? (m.homeScore1H ?? 0) + (m.homeScore2H ?? 0)
+          : '';
+        const totalAway = m.awayScore1H !== '' && m.awayScore2H !== ''
+          ? (m.awayScore1H ?? 0) + (m.awayScore2H ?? 0)
+          : '';
+
+        // 得点者リスト
+        const scorersList = (m.scorers || [])
+          .map((s: any) => `${s.time}' ${s.team} ${s.name}`)
+          .join(', ');
+
+        return [
+          m.kickoff,
+          m.homeTeam?.name || '---',
+          homeScore,
+          totalHome !== '' && totalAway !== '' ? `${totalHome} - ${totalAway}` : 'vs',
+          awayScore,
+          m.awayTeam?.name || '---',
+          scorersList || '-'
+        ];
+      });
+
+      doc.autoTable({
+        startY: 40,
+        head: [['時間', 'ホーム', '前後半', 'スコア', '前後半', 'アウェイ', '得点者']],
+        body: tableData,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [66, 139, 202] },
+        columnStyles: {
+          0: { cellWidth: 15 },  // 時間
+          1: { cellWidth: 30 },  // ホーム
+          2: { cellWidth: 15 },  // 前後半
+          3: { cellWidth: 20 },  // スコア
+          4: { cellWidth: 15 },  // 前後半
+          5: { cellWidth: 30 },  // アウェイ
+          6: { cellWidth: 55 },  // 得点者
+        },
+      });
+
+      // フッター
+      const pageHeight = doc.internal.pageSize.height;
+      doc.setFontSize(8);
+      doc.text(`${venueIndex + 1} / ${venueNames.length}`, 100, pageHeight - 10);
     });
+
+    // 会場データがない場合の処理
+    if (venueNames.length === 0) {
+      doc.setFontSize(14);
+      doc.text(`試合結果報告書 - ${params.date}`, 14, 20);
+      doc.setFontSize(10);
+      doc.text('該当する試合データがありません', 14, 35);
+    }
 
     return doc.output('blob');
   },
