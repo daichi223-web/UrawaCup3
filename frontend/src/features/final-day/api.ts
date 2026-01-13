@@ -668,6 +668,17 @@ export const finalDayApi = {
     const qualificationRule = tournament.qualification_rule || 'group_based';
     const finalDate = tournament.end_date;
     const startTime = tournament.preliminary_start_time || '09:00';
+    const matchDuration = tournament.preliminary_match_duration || 40; // 試合時間（分）
+    const intervalMinutes = tournament.preliminary_interval_minutes || 5; // 試合間隔（分）
+
+    // 時間計算用ヘルパー
+    const addMinutes = (time: string, minutes: number): string => {
+      const [h, m] = time.split(':').map(Number);
+      const totalMinutes = h * 60 + m + minutes;
+      const newH = Math.floor(totalMinutes / 60);
+      const newM = totalMinutes % 60;
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    };
 
     // 2. 決勝進出チームを取得
     let qualifyingTeamIds: number[] = [];
@@ -877,7 +888,10 @@ export const finalDayApi = {
       // スコア順にソート（警告が少ない試合を先に配置）
       pairs.sort((a, b) => a.score - b.score);
 
-      // 全ペアを試合として生成
+      // 会場ごとのキックオフ時間を計算
+      let currentTime = startTime;
+
+      // 全ペアを試合として生成（時間を順次割り当て）
       for (const pair of pairs) {
         matchesToInsert.push({
           tournament_id: tournamentId,
@@ -885,15 +899,17 @@ export const finalDayApi = {
           home_team_id: pair.teamA.teamId,
           away_team_id: pair.teamB.teamId,
           match_date: finalDate,
-          match_time: startTime,
+          match_time: currentTime,
           match_order: matchOrder++,
           stage: 'training',
           status: 'scheduled',
           notes: `${avgRank}位リーグ`,
         });
+        // 次の試合の時間を計算
+        currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
       }
 
-      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${pairs.length}試合 (${avgRank}位リーグ)`);
+      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${pairs.length}試合 (${avgRank}位リーグ, ${startTime}〜${currentTime})`);
     }
 
     // 10. 試合をDBに挿入
