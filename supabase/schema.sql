@@ -105,6 +105,26 @@ CREATE TABLE IF NOT EXISTS venues (
     FOREIGN KEY (tournament_id, group_id) REFERENCES groups(tournament_id, id) ON DELETE SET NULL
 );
 
+-- リーグテーブル（制約設定用）
+CREATE TABLE IF NOT EXISTS leagues (
+    id SERIAL PRIMARY KEY,
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    short_name VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(tournament_id, name)
+);
+
+-- 地域テーブル（制約設定用）
+CREATE TABLE IF NOT EXISTS regions (
+    id SERIAL PRIMARY KEY,
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    name VARCHAR(50) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(tournament_id, name)
+);
+
 -- チームテーブル
 CREATE TABLE IF NOT EXISTS teams (
     id SERIAL PRIMARY KEY,
@@ -116,6 +136,8 @@ CREATE TABLE IF NOT EXISTS teams (
     group_id VARCHAR(1),
     group_order INTEGER,
     prefecture VARCHAR(20),
+    region VARCHAR(50),  -- 地域（制約チェック用）
+    league_id INTEGER REFERENCES leagues(id) ON DELETE SET NULL,  -- リーグ（制約チェック用）
     notes VARCHAR(500),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),

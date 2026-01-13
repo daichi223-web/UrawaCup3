@@ -94,6 +94,11 @@ function Settings() {
   // マスタ登録用
   const [newRegion, setNewRegion] = useState('')
   const [newLeague, setNewLeague] = useState('')
+
+  // 制約設定用モーダル
+  const [showLocalTeamModal, setShowLocalTeamModal] = useState(false)
+  const [showRegionModal, setShowRegionModal] = useState(false)
+  const [showLeagueModal, setShowLeagueModal] = useState(false)
   const [newTournamentForm, setNewTournamentForm] = useState({
     name: '',
     shortName: '',
@@ -104,6 +109,57 @@ function Settings() {
     matchDuration: 50,
     halfDuration: 25,
     intervalMinutes: 15,
+  })
+
+  // チーム一覧を取得（制約設定用）
+  const { data: teamsData, refetch: refetchTeams } = useQuery({
+    queryKey: ['settings-teams', tournamentId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('teams')
+        .select('id, name, short_name, team_type, region, league_id, group_id')
+        .eq('tournament_id', tournamentId)
+        .order('group_id')
+        .order('name')
+      if (error) throw error
+      return data || []
+    },
+  })
+
+  // リーグ一覧を取得
+  const { data: leaguesData, refetch: refetchLeagues } = useQuery({
+    queryKey: ['settings-leagues', tournamentId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leagues')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('name')
+      if (error) {
+        // テーブルが存在しない場合は空配列を返す
+        console.warn('leagues table may not exist:', error)
+        return []
+      }
+      return data || []
+    },
+  })
+
+  // 地域一覧を取得（DBから）
+  const { data: regionsData, refetch: refetchRegions } = useQuery({
+    queryKey: ['settings-regions', tournamentId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('regions')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('name')
+      if (error) {
+        // テーブルが存在しない場合は空配列を返す
+        console.warn('regions table may not exist:', error)
+        return []
+      }
+      return data || []
+    },
   })
 
   // 大会情報を取得
@@ -304,6 +360,144 @@ function Settings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues', tournamentId] })
       toast.success('会場を削除しました')
+    },
+    onError: (error: Error) => {
+      toast.error(`削除に失敗しました: ${error.message}`)
+    },
+  })
+
+  // チームのteam_type更新
+  const updateTeamTypeMutation = useMutation({
+    mutationFn: async ({ teamId, teamType }: { teamId: number; teamType: 'local' | 'invited' }) => {
+      const { error } = await supabase
+        .from('teams')
+        .update({ team_type: teamType })
+        .eq('id', teamId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      refetchTeams()
+    },
+    onError: (error: Error) => {
+      toast.error(`更新に失敗しました: ${error.message}`)
+    },
+  })
+
+  // チームのregion更新
+  const updateTeamRegionMutation = useMutation({
+    mutationFn: async ({ teamId, region }: { teamId: number; region: string | null }) => {
+      const { error } = await supabase
+        .from('teams')
+        .update({ region })
+        .eq('id', teamId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      refetchTeams()
+    },
+    onError: (error: Error) => {
+      toast.error(`更新に失敗しました: ${error.message}`)
+    },
+  })
+
+  // チームのleague_id更新
+  const updateTeamLeagueMutation = useMutation({
+    mutationFn: async ({ teamId, leagueId }: { teamId: number; leagueId: number | null }) => {
+      const { error } = await supabase
+        .from('teams')
+        .update({ league_id: leagueId })
+        .eq('id', teamId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      refetchTeams()
+    },
+    onError: (error: Error) => {
+      toast.error(`更新に失敗しました: ${error.message}`)
+    },
+  })
+
+  // リーグ追加
+  const addLeagueMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase
+        .from('leagues')
+        .insert({ tournament_id: tournamentId, name })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      refetchLeagues()
+      toast.success('リーグを追加しました')
+    },
+    onError: (error: Error) => {
+      toast.error(`追加に失敗しました: ${error.message}`)
+    },
+  })
+
+  // リーグ削除
+  const deleteLeagueMutation = useMutation({
+    mutationFn: async (leagueId: number) => {
+      const { error } = await supabase
+        .from('leagues')
+        .delete()
+        .eq('id', leagueId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      refetchLeagues()
+      refetchTeams() // チームのleague_idがnullになる可能性
+      toast.success('リーグを削除しました')
+    },
+    onError: (error: Error) => {
+      toast.error(`削除に失敗しました: ${error.message}`)
+    },
+  })
+
+  // 地域追加（DB）
+  const addRegionMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase
+        .from('regions')
+        .insert({ tournament_id: tournamentId, name })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      refetchRegions()
+      toast.success('地域を追加しました')
+    },
+    onError: (error: Error) => {
+      toast.error(`追加に失敗しました: ${error.message}`)
+    },
+  })
+
+  // 地域削除（DB）
+  const deleteRegionMutation = useMutation({
+    mutationFn: async (regionId: number) => {
+      const { data: region } = await supabase
+        .from('regions')
+        .select('name')
+        .eq('id', regionId)
+        .single()
+
+      if (region) {
+        // チームの地域をクリア
+        await supabase
+          .from('teams')
+          .update({ region: null })
+          .eq('tournament_id', tournamentId)
+          .eq('region', region.name)
+      }
+
+      const { error } = await supabase
+        .from('regions')
+        .delete()
+        .eq('id', regionId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      refetchRegions()
+      refetchTeams()
+      toast.success('地域を削除しました')
     },
     onError: (error: Error) => {
       toast.error(`削除に失敗しました: ${error.message}`)
@@ -820,42 +1014,90 @@ function Settings() {
             <div className="border rounded-lg p-4">
               <h4 className="font-medium mb-3 text-gray-700">チーム属性による回避</h4>
               <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 text-primary-600 rounded"
-                    checked={constraintSettings.avoidLocalVsLocal}
-                    onChange={(e) => setConstraintSettings({ avoidLocalVsLocal: e.target.checked })}
-                  />
-                  <div>
-                    <span className="text-sm font-medium">地元チーム同士の対戦を避ける</span>
-                    <p className="text-xs text-gray-500">地元校（local）同士の対戦を警告</p>
-                  </div>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 text-primary-600 rounded"
-                    checked={constraintSettings.avoidSameRegion}
-                    onChange={(e) => setConstraintSettings({ avoidSameRegion: e.target.checked })}
-                  />
-                  <div>
-                    <span className="text-sm font-medium">同一地域チームの対戦を避ける</span>
-                    <p className="text-xs text-gray-500">同じ地域（例: 埼玉、東京）のチーム同士の対戦を警告</p>
-                  </div>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 text-primary-600 rounded"
-                    checked={constraintSettings.avoidSameLeague}
-                    onChange={(e) => setConstraintSettings({ avoidSameLeague: e.target.checked })}
-                  />
-                  <div>
-                    <span className="text-sm font-medium">同一リーグチームの対戦を避ける</span>
-                    <p className="text-xs text-gray-500">同じリーグ（別大会）に所属するチーム同士の対戦を警告</p>
-                  </div>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-3 cursor-pointer flex-1">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-primary-600 rounded"
+                      checked={constraintSettings.avoidLocalVsLocal}
+                      onChange={(e) => setConstraintSettings({ avoidLocalVsLocal: e.target.checked })}
+                    />
+                    <div>
+                      <span className="text-sm font-medium">地元チーム同士の対戦を避ける</span>
+                      <p className="text-xs text-gray-500">
+                        地元校（local）同士の対戦を警告
+                        {teamsData && (
+                          <span className="ml-2 text-primary-600">
+                            （{teamsData.filter(t => t.team_type === 'local').length}チーム登録済）
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs px-3 py-1"
+                    onClick={() => setShowLocalTeamModal(true)}
+                  >
+                    設定
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-3 cursor-pointer flex-1">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-primary-600 rounded"
+                      checked={constraintSettings.avoidSameRegion}
+                      onChange={(e) => setConstraintSettings({ avoidSameRegion: e.target.checked })}
+                    />
+                    <div>
+                      <span className="text-sm font-medium">同一地域チームの対戦を避ける</span>
+                      <p className="text-xs text-gray-500">
+                        同じ地域（例: 埼玉、東京）のチーム同士の対戦を警告
+                        {regionsData && regionsData.length > 0 && (
+                          <span className="ml-2 text-primary-600">
+                            （{regionsData.length}地域登録済）
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs px-3 py-1"
+                    onClick={() => setShowRegionModal(true)}
+                  >
+                    設定
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-3 cursor-pointer flex-1">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 text-primary-600 rounded"
+                      checked={constraintSettings.avoidSameLeague}
+                      onChange={(e) => setConstraintSettings({ avoidSameLeague: e.target.checked })}
+                    />
+                    <div>
+                      <span className="text-sm font-medium">同一リーグチームの対戦を避ける</span>
+                      <p className="text-xs text-gray-500">
+                        同じリーグ（別大会）に所属するチーム同士の対戦を警告
+                        {leaguesData && leaguesData.length > 0 && (
+                          <span className="ml-2 text-primary-600">
+                            （{leaguesData.length}リーグ登録済）
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs px-3 py-1"
+                    onClick={() => setShowLeagueModal(true)}
+                  >
+                    設定
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1413,6 +1655,275 @@ function Settings() {
                 {updateVenueMutation.isPending ? '保存中...' : '保存'}
               </button>
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 地元チーム設定モーダル */}
+      <Modal
+        isOpen={showLocalTeamModal}
+        onClose={() => setShowLocalTeamModal(false)}
+        title="地元チーム設定"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            地元チーム（local）に設定するチームを選択してください。
+            選択されたチーム同士の対戦が警告対象になります。
+          </p>
+          <div className="max-h-96 overflow-y-auto border rounded-lg divide-y">
+            {teamsData && teamsData.length > 0 ? (
+              teamsData.map(team => (
+                <div
+                  key={team.id}
+                  className={`flex items-center justify-between p-3 hover:bg-gray-50 ${
+                    team.team_type === 'local' ? 'bg-amber-50' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 text-xs rounded ${
+                      GROUP_COLORS[team.group_id || ''] || 'bg-gray-100'
+                    }`}>
+                      {team.group_id || '-'}
+                    </span>
+                    <span className="font-medium">{team.short_name || team.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`px-3 py-1 text-sm rounded ${
+                      team.team_type === 'local'
+                        ? 'bg-amber-500 text-white hover:bg-amber-600'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                    onClick={() => updateTeamTypeMutation.mutate({
+                      teamId: team.id,
+                      teamType: team.team_type === 'local' ? 'invited' : 'local'
+                    })}
+                  >
+                    {team.team_type === 'local' ? '地元校' : '招待校'}
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p className="p-4 text-center text-gray-500">チームが登録されていません</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              className="btn-primary"
+              onClick={() => setShowLocalTeamModal(false)}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 地域設定モーダル */}
+      <Modal
+        isOpen={showRegionModal}
+        onClose={() => setShowRegionModal(false)}
+        title="地域設定"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            地域マスタの登録と、チームへの地域割り当てを行います。
+          </p>
+
+          {/* 地域マスタ追加 */}
+          <div className="border rounded-lg p-3 bg-gray-50">
+            <h4 className="text-sm font-medium mb-2">地域を追加</h4>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="form-input flex-1"
+                value={newRegion}
+                onChange={(e) => setNewRegion(e.target.value)}
+                placeholder="例: 埼玉、東京、神奈川"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newRegion.trim()) {
+                    addRegionMutation.mutate(newRegion.trim())
+                    setNewRegion('')
+                  }
+                }}
+              />
+              <button
+                className="btn-secondary text-sm"
+                onClick={() => {
+                  if (newRegion.trim()) {
+                    addRegionMutation.mutate(newRegion.trim())
+                    setNewRegion('')
+                  }
+                }}
+              >
+                追加
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {regionsData && regionsData.map((region: { id: number; name: string }) => (
+                <span
+                  key={region.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded"
+                >
+                  {region.name}
+                  <button
+                    onClick={() => deleteRegionMutation.mutate(region.id)}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* チーム別地域設定 */}
+          <div className="max-h-72 overflow-y-auto border rounded-lg divide-y">
+            {teamsData && teamsData.length > 0 ? (
+              teamsData.map(team => (
+                <div
+                  key={team.id}
+                  className="flex items-center justify-between p-3 hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 text-xs rounded ${
+                      GROUP_COLORS[team.group_id || ''] || 'bg-gray-100'
+                    }`}>
+                      {team.group_id || '-'}
+                    </span>
+                    <span className="font-medium text-sm">{team.short_name || team.name}</span>
+                  </div>
+                  <select
+                    className="form-input text-sm py-1 w-28"
+                    value={team.region || ''}
+                    onChange={(e) => updateTeamRegionMutation.mutate({
+                      teamId: team.id,
+                      region: e.target.value || null
+                    })}
+                  >
+                    <option value="">未設定</option>
+                    {regionsData && regionsData.map((r: { id: number; name: string }) => (
+                      <option key={r.id} value={r.name}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ))
+            ) : (
+              <p className="p-4 text-center text-gray-500">チームが登録されていません</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              className="btn-primary"
+              onClick={() => setShowRegionModal(false)}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* リーグ設定モーダル */}
+      <Modal
+        isOpen={showLeagueModal}
+        onClose={() => setShowLeagueModal(false)}
+        title="リーグ設定"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            リーグマスタの登録と、チームへのリーグ割り当てを行います。
+          </p>
+
+          {/* リーグマスタ追加 */}
+          <div className="border rounded-lg p-3 bg-gray-50">
+            <h4 className="text-sm font-medium mb-2">リーグを追加</h4>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="form-input flex-1"
+                value={newLeague}
+                onChange={(e) => setNewLeague(e.target.value)}
+                placeholder="例: S1リーグ、S2リーグ、県1部"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newLeague.trim()) {
+                    addLeagueMutation.mutate(newLeague.trim())
+                    setNewLeague('')
+                  }
+                }}
+              />
+              <button
+                className="btn-secondary text-sm"
+                onClick={() => {
+                  if (newLeague.trim()) {
+                    addLeagueMutation.mutate(newLeague.trim())
+                    setNewLeague('')
+                  }
+                }}
+              >
+                追加
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {leaguesData && leaguesData.map((league: { id: number; name: string }) => (
+                <span
+                  key={league.id}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-sm rounded"
+                >
+                  {league.name}
+                  <button
+                    onClick={() => deleteLeagueMutation.mutate(league.id)}
+                    className="text-green-600 hover:text-green-800"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* チーム別リーグ設定 */}
+          <div className="max-h-72 overflow-y-auto border rounded-lg divide-y">
+            {teamsData && teamsData.length > 0 ? (
+              teamsData.map(team => (
+                <div
+                  key={team.id}
+                  className="flex items-center justify-between p-3 hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 text-xs rounded ${
+                      GROUP_COLORS[team.group_id || ''] || 'bg-gray-100'
+                    }`}>
+                      {team.group_id || '-'}
+                    </span>
+                    <span className="font-medium text-sm">{team.short_name || team.name}</span>
+                  </div>
+                  <select
+                    className="form-input text-sm py-1 w-28"
+                    value={team.league_id || ''}
+                    onChange={(e) => updateTeamLeagueMutation.mutate({
+                      teamId: team.id,
+                      leagueId: e.target.value ? parseInt(e.target.value) : null
+                    })}
+                  >
+                    <option value="">未設定</option>
+                    {leaguesData && leaguesData.map((l: { id: number; name: string }) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ))
+            ) : (
+              <p className="p-4 text-center text-gray-500">チームが登録されていません</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              className="btn-primary"
+              onClick={() => setShowLeagueModal(false)}
+            >
+              閉じる
+            </button>
           </div>
         </div>
       </Modal>
