@@ -353,8 +353,23 @@ export default function DraggableMatchList({
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* 試合順でソートして表示（モバイルでも正しい順序で表示） */}
+      {/*
+        PCでは2列表示で縦優先（1,2,3 | 4,5,6）
+        スマホでは1列表示で順番通り（1,2,3,4,5,6）
+        md:grid-flow-col で縦方向に流れるようにし、
+        md:grid-rows-N で行数を指定
+      */}
+      <div
+        className={`grid gap-4 md:grid-cols-2 md:grid-flow-col ${
+          matches.length <= 2 ? '' :
+          matches.length <= 4 ? 'md:grid-rows-2' :
+          matches.length <= 6 ? 'md:grid-rows-3' :
+          matches.length <= 8 ? 'md:grid-rows-4' :
+          matches.length <= 10 ? 'md:grid-rows-5' :
+          'md:grid-rows-6'
+        }`}
+      >
+        {/* 試合順でソートして表示 */}
         {[...matches]
           .sort((a, b) => (a.matchOrder || a.match_order || 0) - (b.matchOrder || b.match_order || 0))
           .map((match) => {
