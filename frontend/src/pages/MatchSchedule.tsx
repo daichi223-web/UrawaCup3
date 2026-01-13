@@ -106,6 +106,9 @@ function MatchSchedule() {
         ...data,
         startDate: data.start_date,
         endDate: data.end_date,
+        matchDuration: data.match_duration,
+        intervalMinutes: data.interval_minutes,
+        preliminaryStartTime: data.preliminary_start_time,
       } as Tournament
     },
     enabled: !!tournamentId,
@@ -397,8 +400,14 @@ function MatchSchedule() {
       }))
       console.log('[Schedule] 会場リスト:', venueList)
 
-      // 浦和カップ方式で日程生成
-      const result = generateUrawaCupSchedule(teamInfoList, venueList, day1Date, day2Date)
+      // 浦和カップ方式で日程生成（設定値を使用）
+      const scheduleConfig = {
+        startTime: tournament.preliminaryStartTime || (tournament as any).preliminary_start_time || '09:00',
+        matchDuration: tournament.matchDuration || (tournament as any).match_duration || 50,
+        intervalMinutes: tournament.intervalMinutes || (tournament as any).interval_minutes || 15,
+      }
+      console.log('[Schedule] Config:', scheduleConfig)
+      const result = generateUrawaCupSchedule(teamInfoList, venueList, day1Date, day2Date, scheduleConfig)
 
       if (!result.success || result.matches.length === 0) {
         throw new Error('日程生成に失敗しました: ' + result.warnings.join(', '))
