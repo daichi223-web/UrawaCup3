@@ -355,61 +355,6 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
         )}
       </section>
 
-      {/* 優秀選手 */}
-      {data.outstandingPlayers && data.outstandingPlayers.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
-            🏅 優秀選手
-          </h2>
-          <div className="space-y-4">
-            {/* 最優秀選手 */}
-            {(() => {
-              const mvp = data.outstandingPlayers?.find(p => p.awardType === 'mvp')
-              if (!mvp) return null
-              return (
-                <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">🏆</span>
-                    <div>
-                      <div className="text-sm font-bold text-yellow-700">最優秀選手（MVP）</div>
-                      <div className="text-lg font-bold">
-                        {mvp.playerName}
-                        {mvp.playerNumber && <span className="text-gray-500 ml-1">#{mvp.playerNumber}</span>}
-                        {mvp.teamName && <span className="text-gray-600 ml-2 text-sm">({mvp.teamName})</span>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
-
-            {/* 優秀選手 */}
-            {(() => {
-              const outstanding = data.outstandingPlayers?.filter(p => p.awardType === 'outstanding') || []
-              if (outstanding.length === 0) return null
-              return (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="text-sm font-bold text-blue-700 mb-3 flex items-center gap-2">
-                    <span className="text-xl">🥇</span>
-                    優秀選手（{outstanding.length}名）
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {outstanding.map((player, index) => (
-                      <div key={player.id} className="bg-white rounded p-2 border border-blue-100">
-                        <span className="text-gray-400 text-xs mr-1">{index + 1}.</span>
-                        <span className="font-medium">{player.playerName}</span>
-                        {player.playerNumber && <span className="text-gray-500 text-sm ml-1">#{player.playerNumber}</span>}
-                        {player.teamName && <div className="text-gray-500 text-xs">({player.teamName})</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
-          </div>
-        </section>
-      )}
-
       {/* フッター */}
       <div className="text-center text-xs text-gray-400 mt-8 pt-4 border-t">
         浦和カップ運営委員会

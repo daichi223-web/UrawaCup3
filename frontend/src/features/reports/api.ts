@@ -943,7 +943,14 @@ export const reportApi = {
       displayOrder: p.display_order,
     }));
 
-    const players: Player[] = [];
+    // outstandingPlayersからplayers配列を生成（後方互換性のため）
+    const players: Player[] = (outstandingPlayersData || []).map((p: any) => ({
+      type: p.award_type === 'mvp' ? '最優秀選手' : '優秀選手',
+      name: p.player_name,
+      team: p.team_name || p.team?.short_name || p.team?.name || '',
+    }));
+
+    console.log('Players for display:', players.length);
 
     return {
       tournamentName: tournament?.name || '浦和カップ',
