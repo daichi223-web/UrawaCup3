@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS tournaments (
     group_count INTEGER DEFAULT 4,
     teams_per_group INTEGER DEFAULT 4,
     advancing_teams INTEGER DEFAULT 1,
+    qualification_rule VARCHAR(20) DEFAULT 'group_based',  -- 'group_based' or 'overall_ranking'
     sender_organization VARCHAR(100),
     sender_name VARCHAR(100),
     sender_contact VARCHAR(100),
@@ -223,6 +224,7 @@ CREATE TABLE IF NOT EXISTS standings (
     goals_against INTEGER NOT NULL DEFAULT 0,
     goal_difference INTEGER NOT NULL DEFAULT 0,
     points INTEGER NOT NULL DEFAULT 0,
+    overall_rank INTEGER,  -- 総合順位（全グループ通しての順位）
     rank_reason VARCHAR(100),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (tournament_id, group_id) REFERENCES groups(tournament_id, id) ON DELETE CASCADE

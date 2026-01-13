@@ -57,6 +57,7 @@ function Settings() {
     groupCount: 4,
     teamsPerGroup: 4,
     advancingTeams: 1,
+    qualificationRule: 'group_based' as 'group_based' | 'overall_ranking',
   })
 
   // 会場編集モーダル
@@ -141,6 +142,7 @@ function Settings() {
         groupCount: tournament.groupCount || 4,
         teamsPerGroup: tournament.teamsPerGroup || 4,
         advancingTeams: tournament.advancingTeams || 1,
+        qualificationRule: (tournament as any).qualificationRule || (tournament as any).qualification_rule || 'group_based',
       })
     }
   }, [tournament])
@@ -162,6 +164,7 @@ function Settings() {
       groupCount: number;
       teamsPerGroup: number;
       advancingTeams: number;
+      qualificationRule: 'group_based' | 'overall_ranking';
     }) => {
       const { data: updated, error } = await supabase
         .from('tournaments')
@@ -176,6 +179,10 @@ function Settings() {
           finals_match_duration: data.finalsMatchDuration,
           finals_interval_minutes: data.finalsIntervalMinutes,
           finals_start_time: data.finalsStartTime,
+          group_count: data.groupCount,
+          teams_per_group: data.teamsPerGroup,
+          advancing_teams: data.advancingTeams,
+          qualification_rule: data.qualificationRule,
         })
         .eq('id', tournamentId)
         .select()
@@ -623,20 +630,40 @@ function Settings() {
                 </select>
               </div>
               <div>
-                <label className="form-label">決勝T進出チーム数</label>
+                <label className="form-label">決勝進出ルール</label>
                 <select
                   className="form-input"
-                  value={tournamentForm.advancingTeams}
-                  onChange={(e) => setTournamentForm(prev => ({ ...prev, advancingTeams: parseInt(e.target.value) || 1 }))}
+                  value={tournamentForm.qualificationRule}
+                  onChange={(e) => setTournamentForm(prev => ({
+                    ...prev,
+                    qualificationRule: e.target.value as 'group_based' | 'overall_ranking',
+                    // 総合順位ルールの場合は進出数を4に固定
+                    advancingTeams: e.target.value === 'overall_ranking' ? 1 : prev.advancingTeams
+                  }))}
                 >
-                  <option value={1}>各グループ1位のみ</option>
-                  <option value={2}>各グループ1・2位</option>
+                  <option value="group_based">グループ順位（各グループ上位）</option>
+                  <option value="overall_ranking">総合順位（上位4チーム）</option>
                 </select>
               </div>
+              {tournamentForm.qualificationRule === 'group_based' && (
+                <div>
+                  <label className="form-label">決勝T進出チーム数</label>
+                  <select
+                    className="form-input"
+                    value={tournamentForm.advancingTeams}
+                    onChange={(e) => setTournamentForm(prev => ({ ...prev, advancingTeams: parseInt(e.target.value) || 1 }))}
+                  >
+                    <option value={1}>各グループ1位のみ</option>
+                    <option value={2}>各グループ1・2位</option>
+                  </select>
+                </div>
+              )}
             </div>
             <p className="text-xs text-gray-500 mt-2">
               総チーム数: {tournamentForm.groupCount * tournamentForm.teamsPerGroup}チーム /
-              決勝T参加: {tournamentForm.groupCount * tournamentForm.advancingTeams}チーム
+              決勝T参加: {tournamentForm.qualificationRule === 'overall_ranking'
+                ? '4チーム（総合1〜4位）'
+                : `${tournamentForm.groupCount * tournamentForm.advancingTeams}チーム`}
             </p>
           </div>
 

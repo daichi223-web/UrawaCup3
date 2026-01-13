@@ -19,6 +19,7 @@ export interface GroupStandings {
     groupId: string;
     teamId: number;
     rank: number;
+    overallRank?: number; // 総合順位
     played: number;
     won: number;
     drawn: number;
@@ -38,6 +39,30 @@ export interface GroupStandings {
   }>;
   needsTiebreaker: boolean;
   tiedTeams?: { teamId: number; teamName: string }[];
+}
+
+/** 総合順位表のエントリ */
+export interface OverallStandingEntry {
+  overallRank: number;
+  groupId: string;
+  groupRank: number;
+  teamId: number;
+  teamName: string;
+  shortName: string;
+  points: number;
+  goalDifference: number;
+  goalsFor: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+}
+
+/** 総合順位表 */
+export interface OverallStandings {
+  tournamentId: number;
+  entries: OverallStandingEntry[];
+  qualifyingCount: number; // 決勝進出チーム数
 }
 
 /** 得点ランキング */

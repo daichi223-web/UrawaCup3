@@ -1,6 +1,8 @@
 // src/features/tournaments/types.ts
 // 大会管理型定義
 
+export type QualificationRule = 'group_based' | 'overall_ranking';
+
 export interface Tournament {
   id: number;
   name: string;
@@ -12,6 +14,7 @@ export interface Tournament {
   groupCount: number;
   teamsPerGroup: number;
   advancingTeams: number; // 決勝T進出チーム数（1-2）
+  qualificationRule: QualificationRule; // 決勝進出ルール
   description: string | null;
   createdAt: string;
   updatedAt: string;

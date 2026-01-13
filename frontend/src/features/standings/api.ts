@@ -2,7 +2,7 @@
 // 順位表API呼び出し - Supabase版
 import { standingsApi } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import type { GroupStandings, TopScorer, ResolveTiebreakerInput } from './types';
+import type { GroupStandings, TopScorer, ResolveTiebreakerInput, OverallStandings, OverallStandingEntry } from './types';
 
 export const standingApi = {
   // グループ別順位表取得
@@ -103,5 +103,97 @@ export const standingApi = {
       teamName: s.teamName,
       goals: s.goals,
     }));
+  },
+
+  /**
+   * 総合順位表を取得
+   * 全グループの順位を統合し、総合順位を計算
+   * ソート順: グループ内順位 → 勝点 → 得失点差 → 総得点
+   */
+  getOverallStandings: async (tournamentId: number): Promise<OverallStandings> => {
+    // 全順位データをチーム情報付きで取得
+    const { data: standings, error } = await supabase
+      .from('standings')
+      .select(`
+        *,
+        team:teams(id, name, short_name)
+      `)
+      .eq('tournament_id', tournamentId)
+      .order('rank', { ascending: true });
+
+    if (error) throw error;
+
+    // 大会設定を取得（決勝進出チーム数）
+    const { data: tournament } = await supabase
+      .from('tournaments')
+      .select('advancing_teams, qualification_rule')
+      .eq('id', tournamentId)
+      .single();
+
+    const qualifyingCount = tournament?.qualification_rule === 'overall_ranking'
+      ? 4 // 総合順位ルールでは上位4チーム
+      : (tournament?.advancing_teams || 1) * 4; // グループルールではグループ数 × 進出数
+
+    // エントリに変換
+    const entries: OverallStandingEntry[] = (standings || []).map(s => ({
+      overallRank: 0, // 後で計算
+      groupId: s.group_id,
+      groupRank: s.rank,
+      teamId: s.team?.id || s.team_id,
+      teamName: s.team?.name || '',
+      shortName: s.team?.short_name || s.team?.name || '',
+      points: s.points,
+      goalDifference: s.goal_difference,
+      goalsFor: s.goals_for,
+      played: s.played,
+      won: s.won,
+      drawn: s.drawn,
+      lost: s.lost,
+    }));
+
+    // 総合順位でソート: グループ内順位 → 勝点 → 得失点差 → 総得点
+    entries.sort((a, b) => {
+      // 1. グループ内順位
+      if (a.groupRank !== b.groupRank) return a.groupRank - b.groupRank;
+      // 2. 勝点
+      if (a.points !== b.points) return b.points - a.points;
+      // 3. 得失点差
+      if (a.goalDifference !== b.goalDifference) return b.goalDifference - a.goalDifference;
+      // 4. 総得点
+      if (a.goalsFor !== b.goalsFor) return b.goalsFor - a.goalsFor;
+      // 同点の場合はグループID順（安定ソート）
+      return a.groupId.localeCompare(b.groupId);
+    });
+
+    // 総合順位を付与
+    entries.forEach((entry, index) => {
+      entry.overallRank = index + 1;
+    });
+
+    return {
+      tournamentId,
+      entries,
+      qualifyingCount,
+    };
+  },
+
+  /**
+   * 総合順位をDBに保存
+   */
+  saveOverallRanks: async (tournamentId: number): Promise<void> => {
+    const overall = await standingApi.getOverallStandings(tournamentId);
+
+    // 各チームのoverall_rankを更新
+    for (const entry of overall.entries) {
+      const { error } = await supabase
+        .from('standings')
+        .update({ overall_rank: entry.overallRank })
+        .eq('tournament_id', tournamentId)
+        .eq('team_id', entry.teamId);
+
+      if (error) {
+        console.error('Failed to update overall_rank:', error);
+      }
+    }
   },
 };
