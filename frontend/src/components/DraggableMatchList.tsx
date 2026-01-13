@@ -47,7 +47,7 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
       onClick={onClick}
       disabled={disabled}
       className={`
-        flex items-center gap-2 p-2 rounded border-2 w-full text-left transition-all
+        flex items-center gap-2 p-2 rounded border-2 w-full text-left transition-all overflow-hidden
         ${hasConsecutiveError
           ? 'border-red-400 bg-red-50'
           : isSelected
@@ -121,8 +121,8 @@ function MatchCardWithSwap({ match, onSwapTeams }: MatchCardWithSwapProps) {
 
       <div className="flex items-center gap-2">
         {/* ホームチーム */}
-        <div className="flex-1 p-2 bg-gray-50 rounded text-center">
-          <span className="font-medium">
+        <div className="flex-1 min-w-0 p-2 bg-gray-50 rounded text-center">
+          <span className="font-medium truncate block">
             {match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
           </span>
         </div>
@@ -132,7 +132,7 @@ function MatchCardWithSwap({ match, onSwapTeams }: MatchCardWithSwapProps) {
           onClick={handleSwap}
           disabled={match.status === 'completed'}
           className={`
-            p-2 rounded-full transition-colors
+            p-2 rounded-full transition-colors flex-shrink-0
             ${match.status === 'completed'
               ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
               : 'bg-primary-100 text-primary-600 hover:bg-primary-200 cursor-pointer'
@@ -144,8 +144,8 @@ function MatchCardWithSwap({ match, onSwapTeams }: MatchCardWithSwapProps) {
         </button>
 
         {/* アウェイチーム */}
-        <div className="flex-1 p-2 bg-gray-50 rounded text-center">
-          <span className="font-medium">
+        <div className="flex-1 min-w-0 p-2 bg-gray-50 rounded text-center">
+          <span className="font-medium truncate block">
             {match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
           </span>
         </div>
@@ -413,7 +413,7 @@ export default function DraggableMatchList({
 
               <div className="flex items-center gap-2">
                 {/* ホームチーム（クリック可能） */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <ClickableTeamSlot
                     match={match}
                     position="home"
@@ -425,10 +425,10 @@ export default function DraggableMatchList({
                   />
                 </div>
 
-                <div className="text-gray-400 font-bold">vs</div>
+                <div className="text-gray-400 font-bold flex-shrink-0">vs</div>
 
                 {/* アウェイチーム（クリック可能） */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <ClickableTeamSlot
                     match={match}
                     position="away"
