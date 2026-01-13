@@ -57,6 +57,7 @@ export function OutstandingPlayersModal({
   const { data: teams } = useQuery({
     queryKey: ['teams', tournamentId],
     queryFn: () => teamsApi.getAll(tournamentId),
+    select: (data) => data.teams || [],  // { teams: [...], total: n } から配列を抽出
     enabled: isOpen,
   })
 
