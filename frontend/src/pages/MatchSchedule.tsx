@@ -532,9 +532,11 @@ function MatchSchedule() {
         data.warnings.forEach((w: string) => toast(w, { icon: '⚠️' }))
       }
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
-      // standings も再生成後にクリアされるので無効化
+      // standings系を全て無効化
       queryClient.invalidateQueries({ queryKey: ['standings'] })
       queryClient.invalidateQueries({ queryKey: ['public-standings'] })
+      queryClient.invalidateQueries({ queryKey: ['overall-standings'] })
+      queryClient.invalidateQueries({ queryKey: ['public-overall-standings'] })
       setShowGenerateModal(false)
     },
     onError: (error: any) => {
@@ -611,10 +613,13 @@ function MatchSchedule() {
 
       if (error) throw error
 
-      // 予選リーグまたは全試合削除の場合は順位表もクリア
+      // 予選リーグまたは全試合削除の場合は順位表をクリア→再計算
       if (stage === 'preliminary' || stage === 'all') {
         await standingApi.clearStandings(tournamentId)
         console.log('[Delete] Standings cleared for tournament:', tournamentId)
+        // 残りの完了済み試合から再計算（通常は0になるが安全のため）
+        const result = await standingApi.recalculateAll(tournamentId)
+        console.log('[Delete] Standings recalculated:', result)
       }
 
       return { deleted: count || 0, stage }
@@ -626,10 +631,12 @@ function MatchSchedule() {
         data.stage === 'training' ? '研修試合' : '全試合'
       toast.success(`${stageLabel}の日程を削除しました`)
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
-      // 予選/全体削除時はstandingsも無効化
+      // 予選/全体削除時はstandings系を全て無効化
       if (data.stage === 'preliminary' || data.stage === 'all') {
         queryClient.invalidateQueries({ queryKey: ['standings'] })
         queryClient.invalidateQueries({ queryKey: ['public-standings'] })
+        queryClient.invalidateQueries({ queryKey: ['overall-standings'] })
+        queryClient.invalidateQueries({ queryKey: ['public-overall-standings'] })
       }
       setShowDeleteModal(false)
       setDeleteType(null)
