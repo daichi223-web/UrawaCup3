@@ -2,9 +2,10 @@
  * クリック選択で組み合わせ変更可能な試合リスト
  * 予選リーグ・研修試合・決勝トーナメントで使用
  */
-import { useState } from 'react'
-import { ArrowLeftRight, Check } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { ArrowLeftRight, Check, AlertCircle, AlertTriangle } from 'lucide-react'
 import type { MatchWithDetails } from '@/types'
+import { validateMatches, getViolationsForMatch, type ConstraintViolation, type MatchForValidation } from '@/lib/matchConstraints'
 
 // 選択状態の型
 interface SelectedTeam {
@@ -169,6 +170,10 @@ interface ClickableMatchListProps {
   title?: string
   emptyMessage?: string
   consecutiveMatchTeams?: Set<number>
+  /** 制約チェック用のチーム情報（指定すると即時チェック有効） */
+  teams?: { id: number; name: string; groupId: string }[]
+  /** 制約チェックを有効にする（デフォルト: true） */
+  enableConstraintCheck?: boolean
 }
 
 /**
@@ -185,8 +190,54 @@ export default function DraggableMatchList({
   title = '試合一覧',
   emptyMessage = '試合がありません',
   consecutiveMatchTeams,
+  teams = [],
+  enableConstraintCheck = true,
 }: ClickableMatchListProps) {
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
+
+  // 制約チェック（即時実行）
+  const violations = useMemo(() => {
+    if (!enableConstraintCheck || teams.length === 0) return []
+
+    const matchesForValidation: MatchForValidation[] = matches.map(m => ({
+      id: m.id,
+      matchDate: m.matchDate || m.match_date || '',
+      matchTime: m.matchTime || m.match_time || '',
+      homeTeamId: m.homeTeamId || m.home_team_id || 0,
+      awayTeamId: m.awayTeamId || m.away_team_id || 0,
+      homeTeamName: m.homeTeam?.shortName || m.homeTeam?.name || '',
+      awayTeamName: m.awayTeam?.shortName || m.awayTeam?.name || '',
+      groupId: m.groupId || m.group_id || undefined,
+    }))
+
+    return validateMatches(matchesForValidation, teams)
+  }, [matches, teams, enableConstraintCheck])
+
+  // 試合ごとの違反を取得
+  const getMatchViolations = (matchId: number): ConstraintViolation[] => {
+    return getViolationsForMatch(matchId, violations)
+  }
+
+  // 違反タイプに応じたバッジ
+  const ViolationBadge = ({ violation }: { violation: ConstraintViolation }) => {
+    const isError = violation.level === 'error'
+    const isWarning = violation.level === 'warning'
+    return (
+      <span
+        className={`px-1.5 py-0.5 text-xs rounded-full inline-flex items-center gap-1 ${
+          isError
+            ? 'bg-red-100 text-red-700'
+            : isWarning
+              ? 'bg-yellow-100 text-yellow-700'
+              : 'bg-blue-100 text-blue-700'
+        }`}
+        title={violation.description}
+      >
+        {isError ? <AlertCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+        {violation.label}
+      </span>
+    )
+  }
 
   // チームクリック処理
   const handleTeamClick = (match: MatchWithDetails, position: 'home' | 'away') => {
@@ -255,6 +306,10 @@ export default function DraggableMatchList({
     )
   }
 
+  // 違反サマリー
+  const errorCount = violations.filter(v => v.level === 'error').length
+  const warningCount = violations.filter(v => v.level === 'warning').length
+
   return (
     <div className="space-y-4">
       {title && (
@@ -277,6 +332,27 @@ export default function DraggableMatchList({
               チームをクリックして選択
             </div>
           )}
+        </div>
+      )}
+
+      {/* 制約違反サマリー */}
+      {enableConstraintCheck && violations.length > 0 && (
+        <div className={`p-3 rounded-lg flex items-center gap-4 ${
+          errorCount > 0 ? 'bg-red-50 border border-red-200' : 'bg-yellow-50 border border-yellow-200'
+        }`}>
+          {errorCount > 0 && (
+            <div className="flex items-center gap-1 text-red-700">
+              <AlertCircle className="w-4 h-4" />
+              <span className="text-sm font-medium">エラー: {errorCount}件</span>
+            </div>
+          )}
+          {warningCount > 0 && (
+            <div className="flex items-center gap-1 text-yellow-700">
+              <AlertTriangle className="w-4 h-4" />
+              <span className="text-sm font-medium">警告: {warningCount}件</span>
+            </div>
+          )}
+          <span className="text-xs text-gray-500">各試合カードにバッジ表示</span>
         </div>
       )}
 
@@ -308,19 +384,32 @@ export default function DraggableMatchList({
           const homeHasConsecutiveError = consecutiveMatchTeams?.has(homeTeamId) ?? false
           const awayHasConsecutiveError = consecutiveMatchTeams?.has(awayTeamId) ?? false
 
+          // 制約違反をチェック
+          const matchViolations = getMatchViolations(match.id)
+          const hasError = matchViolations.some(v => v.level === 'error')
+          const hasWarning = matchViolations.some(v => v.level === 'warning')
+
           return (
             <div key={match.id} className={`bg-white rounded-lg border-2 p-4 ${
-              homeHasConsecutiveError || awayHasConsecutiveError
-                ? 'border-red-300'
-                : 'border-gray-200'
+              hasError
+                ? 'border-red-400 bg-red-50'
+                : hasWarning || homeHasConsecutiveError || awayHasConsecutiveError
+                  ? 'border-yellow-300 bg-yellow-50'
+                  : 'border-gray-200'
             }`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-gray-500 flex items-center gap-2">
                   <span className="w-6 text-right font-mono">#{match.matchOrder}</span>
                   <span className="font-mono">{match.matchTime?.substring(0, 5)}</span>
                 </div>
-                <div className="flex items-center gap-1">
-                  {(homeHasConsecutiveError || awayHasConsecutiveError) && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {/* 制約違反バッジ */}
+                  {getMatchViolations(match.id).map((v, i) => (
+                    <ViolationBadge key={i} violation={v} />
+                  ))}
+                  {/* 連戦バッジ（従来の方式も維持） */}
+                  {(homeHasConsecutiveError || awayHasConsecutiveError) &&
+                   !getMatchViolations(match.id).some(v => v.type === 'consecutive') && (
                     <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
                       連戦
                     </span>

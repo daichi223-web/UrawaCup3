@@ -190,7 +190,7 @@ export default function Login() {
               閲覧のみの場合は
               <button
                 type="button"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/public/matches')}
                 className="text-red-600 hover:text-red-700 font-medium ml-1"
               >
                 こちらからどうぞ

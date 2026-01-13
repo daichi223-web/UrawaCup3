@@ -1131,6 +1131,8 @@ function MatchSchedule() {
                               onSwapTeams={handleSwapTeams}
                               title=""
                               emptyMessage="研修試合がありません"
+                              teams={allTeams}
+                              enableConstraintCheck
                             />
                           </div>
                         </div>
@@ -1275,6 +1277,8 @@ function MatchSchedule() {
                           title=""
                           emptyMessage="試合がありません"
                           consecutiveMatchTeams={consecutiveMatchTeams}
+                          teams={allTeams}
+                          enableConstraintCheck
                         />
                       </div>
                     </div>
@@ -1290,6 +1294,8 @@ function MatchSchedule() {
                           title=""
                           emptyMessage="試合がありません"
                           consecutiveMatchTeams={consecutiveMatchTeams}
+                          teams={allTeams}
+                          enableConstraintCheck
                         />
                       </div>
                     </div>
@@ -1336,6 +1342,8 @@ function MatchSchedule() {
                         title=""
                         emptyMessage="試合がありません"
                         consecutiveMatchTeams={consecutiveMatchTeams}
+                        teams={allTeams}
+                        enableConstraintCheck
                       />
                     </div>
                   </div>
