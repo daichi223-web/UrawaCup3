@@ -650,7 +650,8 @@ export const finalDayApi = {
 
   /**
    * 研修試合（順位リーグ）を生成
-   * 決勝進出チーム以外を会場ごとにグループ分けして対戦
+   * 決勝進出チーム以外を順位ごとに会場割り当てして対戦
+   * 制約（同地域、同リーグ、地元同士）を考慮して最適な組み合わせを生成
    */
   generateTrainingMatches: async (tournamentId: number): Promise<MatchWithDetails[]> => {
     // 1. 大会設定を取得
@@ -666,8 +667,6 @@ export const finalDayApi = {
 
     const qualificationRule = tournament.qualification_rule || 'group_based';
     const finalDate = tournament.end_date;
-    const matchDuration = tournament.match_duration || 50;
-    const intervalMinutes = tournament.interval_minutes || 15;
     const startTime = tournament.preliminary_start_time || '09:00';
 
     // 2. 決勝進出チームを取得
@@ -696,12 +695,12 @@ export const finalDayApi = {
       throw new Error('最終日用の会場がありません');
     }
 
-    // 4. 研修試合用のチームを取得（決勝進出チーム以外）
+    // 4. 研修試合用のチームを取得（決勝進出チーム以外、制約情報も含む）
     const { data: allTeams, error: teamsError } = await supabase
       .from('standings')
       .select(`
         *,
-        team:teams(id, name, short_name, group_id)
+        team:teams(id, name, short_name, group_id, region, league_id, team_type)
       `)
       .eq('tournament_id', tournamentId)
       .not('team_id', 'in', `(${qualifyingTeamIds.join(',')})`)
@@ -710,16 +709,37 @@ export const finalDayApi = {
 
     if (teamsError) throw teamsError;
 
-    // 5. 既存の研修試合を削除
+    // 5. 過去の対戦履歴を取得
+    const { data: pastMatches } = await supabase
+      .from('matches')
+      .select('home_team_id, away_team_id')
+      .eq('tournament_id', tournamentId)
+      .neq('stage', 'training');
+
+    const playedPairs = new Set<string>();
+    (pastMatches || []).forEach(m => {
+      const key = [m.home_team_id, m.away_team_id].sort().join('-');
+      playedPairs.add(key);
+    });
+
+    // 6. 既存の研修試合を削除
     await supabase
       .from('matches')
       .delete()
       .eq('tournament_id', tournamentId)
       .eq('stage', 'training');
 
-    // 6. 研修試合用チームをグループ化（順位ごとに4会場に分散）
-    // 例: 2位グループ、3位グループ、4位グループ、5位グループ、6位グループ
-    const teamsByRank: Record<number, any[]> = {};
+    // 7. チームを順位ごとにグループ化
+    interface TeamInfo {
+      teamId: number;
+      teamName: string;
+      groupId: string;
+      rank: number;
+      region?: string;
+      leagueId?: number;
+      teamType?: string;
+    }
+    const teamsByRank: Record<number, TeamInfo[]> = {};
     for (const s of (allTeams || [])) {
       if (!teamsByRank[s.rank]) teamsByRank[s.rank] = [];
       teamsByRank[s.rank].push({
@@ -727,64 +747,104 @@ export const finalDayApi = {
         teamName: s.team?.short_name || s.team?.name || '',
         groupId: s.team?.group_id || s.group_id,
         rank: s.rank,
+        region: s.team?.region,
+        leagueId: s.team?.league_id,
+        teamType: s.team?.team_type,
       });
     }
 
-    // 7. 会場ごとに試合を生成
-    // 各会場には同順位のチームが集まる（2位リーグ、3位リーグなど）
-    const matchesToInsert = [];
-    let matchOrder = 200;
+    // 8. 対戦ペアのスコアを計算（警告が少ないほど低スコア）
+    const calculatePairScore = (teamA: TeamInfo, teamB: TeamInfo): number => {
+      let score = 0;
 
-    // 時間計算用ヘルパー
-    const addMinutes = (time: string, minutes: number): string => {
-      const [h, m] = time.split(':').map(Number);
-      const totalMinutes = h * 60 + m + minutes;
-      const newH = Math.floor(totalMinutes / 60);
-      const newM = totalMinutes % 60;
-      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+      // 同グループ（予選で対戦済み）→ 除外
+      if (teamA.groupId === teamB.groupId) return Infinity;
+
+      // 過去に対戦済み → +100
+      const pairKey = [teamA.teamId, teamB.teamId].sort().join('-');
+      if (playedPairs.has(pairKey)) score += 100;
+
+      // 地元同士 → +50
+      if (teamA.teamType === 'local' && teamB.teamType === 'local') score += 50;
+
+      // 同地域 → +30
+      if (teamA.region && teamB.region && teamA.region === teamB.region) score += 30;
+
+      // 同リーグ → +20
+      if (teamA.leagueId && teamB.leagueId && teamA.leagueId === teamB.leagueId) score += 20;
+
+      return score;
     };
 
-    // 各会場のスケジュールを管理
-    const venueSchedule: Record<number, string> = {};
-    venues.forEach(v => {
-      venueSchedule[v.id] = startTime;
-    });
+    // 9. 会場ごとの試合数を計算: (参加校数 - 4) / 会場数
+    const totalTrainingTeams = (allTeams || []).length;
+    const teamsPerVenue = Math.ceil(totalTrainingTeams / venues.length);
+    const matchesPerVenue = Math.floor(teamsPerVenue / 2);
+    console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${venues.length}, 会場あたり: ${teamsPerVenue}チーム, ${matchesPerVenue}試合`);
 
-    // 順位ごとに試合を生成（2位〜6位）
-    for (let rank = 2; rank <= 6; rank++) {
+    // 10. 全チームを順位順にソートして会場に振り分け
+    const allTrainingTeams: TeamInfo[] = [];
+    for (let rank = 2; rank <= 10; rank++) {
       const teams = teamsByRank[rank] || [];
-      if (teams.length < 2) continue;
-
-      // この順位の会場を決定（ローテーション）
-      const venueIndex = (rank - 2) % venues.length;
-      const venue = venues[venueIndex];
-
-      // 総当たり対戦を生成
-      for (let i = 0; i < teams.length; i++) {
-        for (let j = i + 1; j < teams.length; j++) {
-          // 同じグループ同士は予選で対戦済みなのでスキップ
-          if (teams[i].groupId === teams[j].groupId) continue;
-
-          matchesToInsert.push({
-            tournament_id: tournamentId,
-            venue_id: venue.id,
-            home_team_id: teams[i].teamId,
-            away_team_id: teams[j].teamId,
-            match_date: finalDate,
-            match_time: venueSchedule[venue.id],
-            match_order: matchOrder++,
-            stage: 'training',
-            status: 'scheduled',
-            notes: `${rank}位リーグ`,
-          });
-
-          // 次の試合時間を計算
-          venueSchedule[venue.id] = addMinutes(venueSchedule[venue.id], matchDuration + intervalMinutes);
-        }
-      }
+      allTrainingTeams.push(...teams);
     }
 
-    // 8. 試合をDBに挿入
+    // 会場ごとにチームを割り当て（順位順で均等に）
+    const venueAssignments: Map<number, TeamInfo[]> = new Map();
+    venues.forEach(v => venueAssignments.set(v.id, []));
+
+    allTrainingTeams.forEach((team, index) => {
+      const venueIndex = index % venues.length;
+      const venue = venues[venueIndex];
+      venueAssignments.get(venue.id)!.push(team);
+    });
+
+    // 11. 各会場でリーグ戦（総当たり）を生成
+    const matchesToInsert: any[] = [];
+    let matchOrder = 200;
+
+    for (const venue of venues) {
+      const teamsInVenue = venueAssignments.get(venue.id) || [];
+      if (teamsInVenue.length < 2) continue;
+
+      // 会場内の平均順位（リーグ名用）
+      const avgRank = Math.round(teamsInVenue.reduce((sum, t) => sum + t.rank, 0) / teamsInVenue.length);
+
+      // 全ペアを生成（リーグ戦 = 総当たり）
+      const pairs: { teamA: TeamInfo; teamB: TeamInfo; score: number }[] = [];
+      for (let i = 0; i < teamsInVenue.length; i++) {
+        for (let j = i + 1; j < teamsInVenue.length; j++) {
+          const score = calculatePairScore(teamsInVenue[i], teamsInVenue[j]);
+          // 同グループ以外は全て対戦（リーグ戦）
+          if (score < Infinity) {
+            pairs.push({ teamA: teamsInVenue[i], teamB: teamsInVenue[j], score });
+          }
+        }
+      }
+
+      // スコア順にソート（警告が少ない試合を先に配置）
+      pairs.sort((a, b) => a.score - b.score);
+
+      // 全ペアを試合として生成
+      for (const pair of pairs) {
+        matchesToInsert.push({
+          tournament_id: tournamentId,
+          venue_id: venue.id,
+          home_team_id: pair.teamA.teamId,
+          away_team_id: pair.teamB.teamId,
+          match_date: finalDate,
+          start_time: startTime,
+          match_order: matchOrder++,
+          stage: 'training',
+          status: 'scheduled',
+          notes: `${avgRank}位リーグ`,
+        });
+      }
+
+      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${pairs.length}試合 (${avgRank}位リーグ)`);
+    }
+
+    // 10. 試合をDBに挿入
     if (matchesToInsert.length > 0) {
       const { error: insertError } = await supabase
         .from('matches')
@@ -796,7 +856,7 @@ export const finalDayApi = {
       }
     }
 
-    // 9. 作成した試合を取得して返す
+    // 11. 作成した試合を取得して返す
     const { data: createdMatches, error: fetchError } = await supabase
       .from('matches')
       .select(`
@@ -807,7 +867,7 @@ export const finalDayApi = {
       `)
       .eq('tournament_id', tournamentId)
       .eq('stage', 'training')
-      .order('match_time');
+      .order('start_time');
 
     if (fetchError) throw fetchError;
     return (createdMatches || []) as MatchWithDetails[];
