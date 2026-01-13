@@ -284,17 +284,21 @@ export const reportApi = {
 
       // 試合データをテーブル形式に変換
       const tableData = venueMatches.map((m: any) => {
-        const homeScore = m.homeScore1H !== '' && m.homeScore2H !== ''
+        // 数値かどうかをチェック（0も有効な値として扱う）
+        const hasHomeScore = typeof m.homeScore1H === 'number' && typeof m.homeScore2H === 'number';
+        const hasAwayScore = typeof m.awayScore1H === 'number' && typeof m.awayScore2H === 'number';
+
+        const homeScore = hasHomeScore
           ? `${m.homeScore1H}-${m.homeScore2H}`
           : '';
-        const awayScore = m.awayScore1H !== '' && m.awayScore2H !== ''
+        const awayScore = hasAwayScore
           ? `${m.awayScore1H}-${m.awayScore2H}`
           : '';
-        const totalHome = m.homeScore1H !== '' && m.homeScore2H !== ''
-          ? (m.homeScore1H ?? 0) + (m.homeScore2H ?? 0)
+        const totalHome = hasHomeScore
+          ? m.homeScore1H + m.homeScore2H
           : '';
-        const totalAway = m.awayScore1H !== '' && m.awayScore2H !== ''
-          ? (m.awayScore1H ?? 0) + (m.awayScore2H ?? 0)
+        const totalAway = hasAwayScore
+          ? m.awayScore1H + m.awayScore2H
           : '';
 
         // 得点者リスト
