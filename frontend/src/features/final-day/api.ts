@@ -858,13 +858,16 @@ export const finalDayApi = {
       }).join(' | ')
     );
 
-    // 11. 各会場でリーグ戦（総当たり）を生成
+    // 11. 各会場でリーグ戦（総当たり）を生成（最大6試合に制限）
     const matchesToInsert: any[] = [];
-    let matchOrder = 200;
+    const MAX_MATCHES_PER_VENUE = 6;
 
     for (const venue of venues) {
       const teamsInVenue = venueAssignments.get(venue.id) || [];
-      if (teamsInVenue.length < 2) continue;
+      if (teamsInVenue.length < 2) {
+        console.warn(`[Training] 会場${venue.id}: チーム数不足（${teamsInVenue.length}チーム）`);
+        continue;
+      }
 
       // デバッグ: チーム情報を出力
       console.log(`[Training] 会場${venue.id}のチーム:`, teamsInVenue.map(t => ({ id: t.teamId, name: t.teamName, group: t.groupId })));
@@ -889,11 +892,18 @@ export const finalDayApi = {
       // スコア順にソート（警告が少ない試合を先に配置）
       pairs.sort((a, b) => a.score - b.score);
 
-      // 会場ごとのキックオフ時間を計算
-      let currentTime = startTime;
+      // 6試合に制限（警告が少ないペアを優先）
+      const limitedPairs = pairs.slice(0, MAX_MATCHES_PER_VENUE);
+      if (pairs.length > MAX_MATCHES_PER_VENUE) {
+        console.log(`[Training] 会場${venue.id}: ${MAX_MATCHES_PER_VENUE}試合に制限 (${pairs.length}→${MAX_MATCHES_PER_VENUE})`);
+      }
 
-      // 全ペアを試合として生成（時間を順次割り当て）
-      for (const pair of pairs) {
+      // 会場ごとのキックオフ時間とmatch_orderを計算（1から開始）
+      let currentTime = startTime;
+      let matchOrder = 1;
+
+      // 制限されたペアを試合として生成
+      for (const pair of limitedPairs) {
         matchesToInsert.push({
           tournament_id: tournamentId,
           venue_id: venue.id,
@@ -910,7 +920,7 @@ export const finalDayApi = {
         currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
       }
 
-      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${pairs.length}試合 (${avgRank}位リーグ, ${startTime}〜${currentTime})`);
+      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${limitedPairs.length}試合 (${avgRank}位リーグ, ${startTime}〜${currentTime})`);
     }
 
     // 10. 試合をDBに挿入
