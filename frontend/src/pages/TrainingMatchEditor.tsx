@@ -754,7 +754,8 @@ export default function TrainingMatchEditor() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )
