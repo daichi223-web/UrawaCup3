@@ -1,6 +1,7 @@
 /**
  * 制約設定ストア
  * 対戦回避条件の有効/無効を管理
+ * 地域・リーグのマスタデータも管理
  */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -20,10 +21,24 @@ export interface ConstraintSettings {
   warnTotalGameLimit: boolean
 }
 
+/** マスタデータ */
+export interface MasterData {
+  /** 地域一覧 */
+  regions: string[]
+  /** リーグ一覧 */
+  leagues: string[]
+}
+
 interface ConstraintSettingsState {
   settings: ConstraintSettings
+  masterData: MasterData
   setSettings: (settings: Partial<ConstraintSettings>) => void
   resetToDefaults: () => void
+  // マスタデータ操作
+  addRegion: (region: string) => void
+  removeRegion: (region: string) => void
+  addLeague: (league: string) => void
+  removeLeague: (league: string) => void
 }
 
 const defaultSettings: ConstraintSettings = {
@@ -35,16 +50,55 @@ const defaultSettings: ConstraintSettings = {
   warnTotalGameLimit: true,
 }
 
+const defaultMasterData: MasterData = {
+  regions: [],
+  leagues: [],
+}
+
 export const useConstraintSettingsStore = create<ConstraintSettingsState>()(
   persist(
     (set) => ({
       settings: { ...defaultSettings },
+      masterData: { ...defaultMasterData },
       setSettings: (newSettings) =>
         set((state) => ({
           settings: { ...state.settings, ...newSettings },
         })),
       resetToDefaults: () =>
         set({ settings: { ...defaultSettings } }),
+      // マスタデータ操作
+      addRegion: (region) =>
+        set((state) => ({
+          masterData: {
+            ...state.masterData,
+            regions: state.masterData.regions.includes(region)
+              ? state.masterData.regions
+              : [...state.masterData.regions, region],
+          },
+        })),
+      removeRegion: (region) =>
+        set((state) => ({
+          masterData: {
+            ...state.masterData,
+            regions: state.masterData.regions.filter((r) => r !== region),
+          },
+        })),
+      addLeague: (league) =>
+        set((state) => ({
+          masterData: {
+            ...state.masterData,
+            leagues: state.masterData.leagues.includes(league)
+              ? state.masterData.leagues
+              : [...state.masterData.leagues, league],
+          },
+        })),
+      removeLeague: (league) =>
+        set((state) => ({
+          masterData: {
+            ...state.masterData,
+            leagues: state.masterData.leagues.filter((l) => l !== league),
+          },
+        })),
     }),
     {
       name: 'constraint-settings',

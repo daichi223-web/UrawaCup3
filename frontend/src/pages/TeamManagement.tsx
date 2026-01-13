@@ -57,8 +57,8 @@ function TeamManagement() {
   const { currentTournament } = useAppStore();
   const tournamentId = currentTournament?.id;
 
-  // 制約設定を取得
-  const { settings: constraintSettings } = useConstraintSettingsStore();
+  // 制約設定とマスタデータを取得
+  const { settings: constraintSettings, masterData } = useConstraintSettingsStore();
 
   useEffect(() => {
     // tournamentIdが確定するまで待機
@@ -468,26 +468,32 @@ function TeamManagement() {
           {(constraintSettings.avoidSameRegion || constraintSettings.avoidLocalVsLocal) && (
             <div>
               <label className="form-label">地域</label>
-              <input
-                type="text"
+              <select
                 className="form-input"
                 value={editForm.region}
                 onChange={(e) => setEditForm(prev => ({ ...prev, region: e.target.value }))}
-                placeholder="例: 埼玉、東京"
-              />
+              >
+                <option value="">未設定</option>
+                {masterData.regions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
               <p className="text-xs text-gray-500 mt-1">同地域チームの対戦回避に使用</p>
             </div>
           )}
           {constraintSettings.avoidSameLeague && (
             <div>
-              <label className="form-label">所属リーグID</label>
-              <input
-                type="text"
+              <label className="form-label">所属リーグ</label>
+              <select
                 className="form-input"
                 value={editForm.leagueId}
                 onChange={(e) => setEditForm(prev => ({ ...prev, leagueId: e.target.value }))}
-                placeholder="例: U18リーグA、S1リーグ"
-              />
+              >
+                <option value="">未設定</option>
+                {masterData.leagues.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
               <p className="text-xs text-gray-500 mt-1">同リーグチームの対戦回避に使用</p>
             </div>
           )}
@@ -569,26 +575,32 @@ function TeamManagement() {
           {(constraintSettings.avoidSameRegion || constraintSettings.avoidLocalVsLocal) && (
             <div>
               <label className="form-label">地域</label>
-              <input
-                type="text"
+              <select
                 className="form-input"
                 value={addForm.region}
                 onChange={(e) => setAddForm(prev => ({ ...prev, region: e.target.value }))}
-                placeholder="例: 埼玉、東京"
-              />
+              >
+                <option value="">未設定</option>
+                {masterData.regions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
               <p className="text-xs text-gray-500 mt-1">同地域チームの対戦回避に使用</p>
             </div>
           )}
           {constraintSettings.avoidSameLeague && (
             <div>
-              <label className="form-label">所属リーグID</label>
-              <input
-                type="text"
+              <label className="form-label">所属リーグ</label>
+              <select
                 className="form-input"
                 value={addForm.leagueId}
                 onChange={(e) => setAddForm(prev => ({ ...prev, leagueId: e.target.value }))}
-                placeholder="例: U18リーグA、S1リーグ"
-              />
+              >
+                <option value="">未設定</option>
+                {masterData.leagues.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
               <p className="text-xs text-gray-500 mt-1">同リーグチームの対戦回避に使用</p>
             </div>
           )}

@@ -26,7 +26,15 @@ const GROUP_COLORS: Record<string, string> = {
 function Settings() {
   const queryClient = useQueryClient()
   const { currentTournament, setCurrentTournament } = useAppStore()
-  const { settings: constraintSettings, setSettings: setConstraintSettings } = useConstraintSettingsStore()
+  const {
+    settings: constraintSettings,
+    setSettings: setConstraintSettings,
+    masterData,
+    addRegion,
+    removeRegion,
+    addLeague,
+    removeLeague,
+  } = useConstraintSettingsStore()
   // appStoreから現在のトーナメントIDを取得
   const tournamentId = currentTournament?.id || 1
 
@@ -81,6 +89,10 @@ function Settings() {
 
   // 新規大会作成モーダル
   const [showNewTournamentModal, setShowNewTournamentModal] = useState(false)
+
+  // マスタ登録用
+  const [newRegion, setNewRegion] = useState('')
+  const [newLeague, setNewLeague] = useState('')
   const [newTournamentForm, setNewTournamentForm] = useState({
     name: '',
     shortName: '',
@@ -860,6 +872,111 @@ function Settings() {
                     <p className="text-xs text-gray-500">予選リーグ2日間で合計5試合以上ある場合を警告</p>
                   </div>
                 </label>
+              </div>
+            </div>
+          </div>
+
+          {/* マスタデータ登録 */}
+          <div className="space-y-4 mt-6 pt-6 border-t">
+            <h4 className="font-medium text-gray-700">マスタデータ登録</h4>
+
+            {/* 地域マスタ */}
+            <div className="border rounded-lg p-4">
+              <h5 className="text-sm font-medium mb-2">地域</h5>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  className="form-input flex-1"
+                  value={newRegion}
+                  onChange={(e) => setNewRegion(e.target.value)}
+                  placeholder="例: 埼玉、東京、神奈川"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newRegion.trim()) {
+                      addRegion(newRegion.trim())
+                      setNewRegion('')
+                    }
+                  }}
+                />
+                <button
+                  className="btn-secondary text-sm"
+                  onClick={() => {
+                    if (newRegion.trim()) {
+                      addRegion(newRegion.trim())
+                      setNewRegion('')
+                    }
+                  }}
+                >
+                  追加
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {masterData.regions.map((region) => (
+                  <span
+                    key={region}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded"
+                  >
+                    {region}
+                    <button
+                      onClick={() => removeRegion(region)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {masterData.regions.length === 0 && (
+                  <span className="text-gray-400 text-sm">登録なし</span>
+                )}
+              </div>
+            </div>
+
+            {/* リーグマスタ */}
+            <div className="border rounded-lg p-4">
+              <h5 className="text-sm font-medium mb-2">リーグ</h5>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  className="form-input flex-1"
+                  value={newLeague}
+                  onChange={(e) => setNewLeague(e.target.value)}
+                  placeholder="例: S1リーグ、S2リーグ、県1部"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newLeague.trim()) {
+                      addLeague(newLeague.trim())
+                      setNewLeague('')
+                    }
+                  }}
+                />
+                <button
+                  className="btn-secondary text-sm"
+                  onClick={() => {
+                    if (newLeague.trim()) {
+                      addLeague(newLeague.trim())
+                      setNewLeague('')
+                    }
+                  }}
+                >
+                  追加
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {masterData.leagues.map((league) => (
+                  <span
+                    key={league}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-sm rounded"
+                  >
+                    {league}
+                    <button
+                      onClick={() => removeLeague(league)}
+                      className="text-green-600 hover:text-green-800"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {masterData.leagues.length === 0 && (
+                  <span className="text-gray-400 text-sm">登録なし</span>
+                )}
               </div>
             </div>
           </div>

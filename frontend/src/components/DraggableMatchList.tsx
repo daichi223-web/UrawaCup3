@@ -203,6 +203,30 @@ export default function DraggableMatchList({
   // 制約設定を取得
   const { settings: constraintSettings } = useConstraintSettingsStore()
 
+  // グループ内通し番号を計算
+  const groupMatchNumbers = useMemo(() => {
+    const numberMap = new Map<number, number>()
+    // グループ別に分類
+    const groupedMatches = new Map<string, MatchWithDetails[]>()
+    matches.forEach(match => {
+      const groupId = match.groupId || (match as any).group_id || 'default'
+      if (!groupedMatches.has(groupId)) {
+        groupedMatches.set(groupId, [])
+      }
+      groupedMatches.get(groupId)!.push(match)
+    })
+    // 各グループ内でmatchOrderでソートし、グループ内番号を付与
+    groupedMatches.forEach((groupMatches) => {
+      const sorted = [...groupMatches].sort(
+        (a, b) => (a.matchOrder || a.match_order || 0) - (b.matchOrder || b.match_order || 0)
+      )
+      sorted.forEach((match, idx) => {
+        numberMap.set(match.id, idx + 1)
+      })
+    })
+    return numberMap
+  }, [matches])
+
   // 制約チェック（即時実行）
   const violations = useMemo(() => {
     console.log('[DraggableMatchList] Constraint check:', {
@@ -433,7 +457,7 @@ export default function DraggableMatchList({
             }`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-gray-500 flex items-center gap-2">
-                  <span className="w-6 text-right font-mono">#{match.matchOrder || match.match_order}</span>
+                  <span className="w-6 text-right font-mono">#{groupMatchNumbers.get(match.id) || 1}</span>
                   <span className="font-mono">{(match.matchTime || match.match_time)?.substring(0, 5)}</span>
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">

@@ -63,7 +63,7 @@ const ERROR_CONSTRAINTS = {
     description: '同じチームが同じ時間枠に2試合入っている',
   },
   duplicateMatch: {
-    label: '同一カード重複',
+    label: '対戦済',
     description: '同じ対戦カードが2日間で2回以上ある',
   },
   selfMatch: {
