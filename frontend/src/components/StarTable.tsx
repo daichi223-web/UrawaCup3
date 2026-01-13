@@ -11,6 +11,8 @@ interface StarTableProps {
   matches: MatchWithDetails[]
   groupId: string
   byePairs?: [number, number][]  // 対戦しないペア
+  overallRankings?: Map<number, number>  // チームID → 総合順位
+  showOverallRank?: boolean  // 総合順位を表示するか
 }
 
 interface TeamStats {
@@ -27,7 +29,7 @@ interface TeamStats {
   headToHead: Map<number, { result: 'win' | 'draw' | 'loss' | null; score: string; opponentScore: string }>
 }
 
-export default function StarTable({ teams, matches, groupId, byePairs = [] }: StarTableProps) {
+export default function StarTable({ teams, matches, groupId, byePairs = [], overallRankings, showOverallRank = false }: StarTableProps) {
   // 完了した予選試合のみをフィルタ
   const completedMatches = useMemo(() => {
     return matches.filter(m =>
@@ -202,6 +204,9 @@ export default function StarTable({ teams, matches, groupId, byePairs = [] }: St
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">失点</th>
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">差</th>
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-green-100 w-8">順</th>
+            {showOverallRank && (
+              <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-amber-100 w-8" title="総合順位">総合</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -284,6 +289,15 @@ export default function StarTable({ teams, matches, groupId, byePairs = [] }: St
               }`}>
                 {rowStats.rank}
               </td>
+              {showOverallRank && (
+                <td className={`border border-gray-300 px-1 py-1 text-center font-bold ${
+                  overallRankings?.get(rowStats.teamId) && overallRankings.get(rowStats.teamId)! <= 4
+                    ? 'text-amber-600 bg-amber-50'
+                    : 'bg-amber-50'
+                }`}>
+                  {overallRankings?.get(rowStats.teamId) ?? '-'}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

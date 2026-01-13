@@ -7,7 +7,7 @@
  * - React Queryと連携して自動的にデータを再取得
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw, AlertCircle, WifiOff, Clock, Printer } from 'lucide-react';
 import { standingApi, type GroupStandings } from '@/features/standings';
@@ -127,6 +127,25 @@ function Standings() {
     staleTime: 30000,
     enabled: !!tournamentId,
   });
+
+  // 総合順位を取得（総合順位ルールの場合に表示）
+  const isOverallRanking = currentTournament?.qualification_rule === 'overall_ranking';
+  const { data: overallStandings } = useQuery({
+    queryKey: ['overall-standings', tournamentId],
+    queryFn: () => standingApi.getOverallStandings(tournamentId!),
+    staleTime: 30000,
+    enabled: !!tournamentId && isOverallRanking,
+  });
+
+  // 総合順位マップを作成
+  const overallRankingsMap = useMemo(() => {
+    if (!overallStandings?.entries) return undefined;
+    const map = new Map<number, number>();
+    overallStandings.entries.forEach(entry => {
+      map.set(entry.teamId, entry.overallRank);
+    });
+    return map;
+  }, [overallStandings]);
 
   // データ更新時のアニメーション
   useEffect(() => {
@@ -269,6 +288,8 @@ function Standings() {
                     teams={groupTeams}
                     matches={groupMatches}
                     groupId={groupData.groupId}
+                    overallRankings={overallRankingsMap}
+                    showOverallRank={isOverallRanking}
                   />
                 ) : (
                   <div className="text-center py-8 text-gray-400">

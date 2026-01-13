@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { matchesApi, teamsApi } from '@/lib/api';
+import { matchesApi, teamsApi, tournamentsApi } from '@/lib/api';
 import { standingApi } from '@/features/standings/api';
 import type { OverallStandings } from '@/features/standings/types';
+import { supabase } from '@/lib/supabase';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StarTable from '../../components/StarTable';
 
@@ -34,14 +35,42 @@ export default function PublicStandings() {
         retry: 2,
     });
 
-    // 総合順位を取得
+    // 大会設定を取得
+    const { data: tournament } = useQuery({
+        queryKey: ['public-tournament', tournamentId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('tournaments')
+                .select('*')
+                .eq('id', tournamentId)
+                .single();
+            if (error) throw error;
+            return data;
+        },
+        staleTime: 60000,
+        retry: 2,
+    });
+
+    const isOverallRanking = tournament?.qualification_rule === 'overall_ranking';
+
+    // 総合順位を取得（総合タブまたは総合順位ルールの場合）
     const { data: overallStandings, isLoading: isLoadingOverall, refetch: refetchOverall } = useQuery<OverallStandings>({
         queryKey: ['public-overall-standings', tournamentId],
         queryFn: () => standingApi.getOverallStandings(tournamentId),
         staleTime: 30000,
         retry: 2,
-        enabled: activeTab === 'overall',
+        enabled: activeTab === 'overall' || isOverallRanking,
     });
+
+    // 総合順位マップを作成
+    const overallRankingsMap = useMemo(() => {
+        if (!overallStandings?.entries) return undefined;
+        const map = new Map<number, number>();
+        overallStandings.entries.forEach(entry => {
+            map.set(entry.teamId, entry.overallRank);
+        });
+        return map;
+    }, [overallStandings]);
 
     // データ更新関数
     const refreshData = useCallback(async () => {
@@ -196,6 +225,8 @@ export default function PublicStandings() {
                             teams={groupTeams}
                             matches={groupMatches}
                             groupId={activeTab}
+                            overallRankings={overallRankingsMap}
+                            showOverallRank={isOverallRanking}
                         />
                     ) : (
                         <div className="text-center py-8 text-gray-400">
