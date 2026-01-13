@@ -776,27 +776,67 @@ export const finalDayApi = {
       return score;
     };
 
-    // 9. 会場ごとの試合数を計算: (参加校数 - 4) / 会場数
+    // 9. 会場ごとのチーム数を計算: (参加校数 - 4) / 会場数
     const totalTrainingTeams = (allTeams || []).length;
     const teamsPerVenue = Math.ceil(totalTrainingTeams / venues.length);
-    const matchesPerVenue = Math.floor(teamsPerVenue / 2);
-    console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${venues.length}, 会場あたり: ${teamsPerVenue}チーム, ${matchesPerVenue}試合`);
+    console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${venues.length}, 会場あたり: ${teamsPerVenue}チーム`);
 
-    // 10. チームを順位ごとに会場に振り分け
-    // 2位チーム→会場1、3位チーム→会場2、...のように順位でグループ化
+    // 10. チームを順位順に並べて会場に均等分配
+    // 各会場に teamsPerVenue チームずつ、同じ順位のチームを異なる会場に分散
     const venueAssignments: Map<number, TeamInfo[]> = new Map();
     venues.forEach(v => venueAssignments.set(v.id, []));
 
-    // 順位ごとに会場を割り当て
+    // 全チームを順位順にフラットに並べる
+    const allTeamsSorted: TeamInfo[] = [];
     const ranks = Object.keys(teamsByRank).map(Number).sort((a, b) => a - b);
-    ranks.forEach((rank, index) => {
+    ranks.forEach(rank => {
       const teams = teamsByRank[rank] || [];
-      const venueIndex = index % venues.length;
-      const venue = venues[venueIndex];
-      teams.forEach(team => {
-        venueAssignments.get(venue.id)!.push(team);
-      });
-      console.log(`[Training] ${rank}位チーム(${teams.length}名) → 会場${venue.id}`);
+      allTeamsSorted.push(...teams);
+    });
+
+    // 各チームを順番に会場に振り分け（会場の上限を超えないように）
+    allTeamsSorted.forEach((team, index) => {
+      // 空きがある会場を探す（循環して均等に）
+      for (let attempt = 0; attempt < venues.length; attempt++) {
+        const venueIndex = (index + attempt) % venues.length;
+        const venue = venues[venueIndex];
+        const currentTeams = venueAssignments.get(venue.id)!;
+
+        // この会場にチームを追加できるか（上限チェック）
+        if (currentTeams.length < teamsPerVenue) {
+          // 同じグループのチームがいないかチェック
+          const hasSameGroup = currentTeams.some(t => t.groupId === team.groupId);
+          if (!hasSameGroup) {
+            currentTeams.push(team);
+            break;
+          }
+        }
+      }
+
+      // どの会場にも入れなかった場合、最も少ない会場に強制追加
+      const assigned = Array.from(venueAssignments.values()).some(teams =>
+        teams.includes(team)
+      );
+      if (!assigned) {
+        // 最も少ない会場に追加
+        let minVenue = venues[0];
+        let minCount = Infinity;
+        venues.forEach(v => {
+          const count = venueAssignments.get(v.id)!.length;
+          if (count < minCount) {
+            minCount = count;
+            minVenue = v;
+          }
+        });
+        venueAssignments.get(minVenue.id)!.push(team);
+        console.log(`[Training] 強制追加: ${team.teamName} → 会場${minVenue.id}`);
+      }
+    });
+
+    // 各会場のチーム数をログ出力
+    venues.forEach(v => {
+      const teams = venueAssignments.get(v.id)!;
+      console.log(`[Training] 会場${v.id}: ${teams.length}チーム (${teams.map(t => `${t.rank}位:${t.teamName}`).join(', ')})`);
     });
 
     console.log('[Training] 会場割り当て完了:',
