@@ -28,7 +28,7 @@ interface Match {
   venue_id: number
   stage: string
   match_date?: string
-  start_time?: string
+  match_time?: string
   home_team?: Team
   away_team?: Team
   venue?: { id: number; name: string }
@@ -399,7 +399,7 @@ export default function TrainingMatchEditor() {
 
       const { error } = await supabase
         .from('matches')
-        .update({ start_time: startTime })
+        .update({ match_time: startTime })
         .eq('tournament_id', tournamentId)
         .eq('venue_id', venueId)
         .eq('stage', 'training')
@@ -444,7 +444,7 @@ export default function TrainingMatchEditor() {
           venue_id: venueId,
           stage: 'training',
           match_date: matchDate,
-          start_time: startTime || '09:00',
+          match_time: startTime || '09:00',
         })
 
       if (error) throw error
@@ -638,13 +638,13 @@ export default function TrainingMatchEditor() {
                     <Clock className="w-3 h-3 text-gray-500" />
                     <input
                       type="time"
-                      value={venueTimeEdits[venueId] ?? matches[0]?.start_time?.slice(0, 5) ?? '09:00'}
+                      value={venueTimeEdits[venueId] ?? matches[0]?.match_time?.slice(0, 5) ?? '09:00'}
                       onChange={(e) => setVenueTimeEdits(prev => ({ ...prev, [venueId]: e.target.value }))}
                       className="text-xs px-1 py-0.5 border rounded w-20"
                     />
                     <button
                       onClick={() => {
-                        const time = venueTimeEdits[venueId] ?? matches[0]?.start_time?.slice(0, 5) ?? '09:00'
+                        const time = venueTimeEdits[venueId] ?? matches[0]?.match_time?.slice(0, 5) ?? '09:00'
                         updateVenueTimeMutation.mutate({ venueId, startTime: time })
                       }}
                       disabled={updateVenueTimeMutation.isPending}
@@ -667,7 +667,7 @@ export default function TrainingMatchEditor() {
                     </button>
                     <button
                       onClick={() => {
-                        const time = venueTimeEdits[venueId] ?? matches[0]?.start_time?.slice(0, 5) ?? '09:00'
+                        const time = venueTimeEdits[venueId] ?? matches[0]?.match_time?.slice(0, 5) ?? '09:00'
                         addMatchMutation.mutate({ venueId, startTime: time })
                       }}
                       disabled={addMatchMutation.isPending}
@@ -689,7 +689,7 @@ export default function TrainingMatchEditor() {
                     return (
                     <div key={match.id} className={`bg-white rounded p-2 text-sm ${warnings.length > 0 ? 'ring-2 ring-orange-300' : ''}`}>
                       <div className="text-xs text-gray-400 mb-1">
-                        {match.start_time?.slice(0, 5) || '--:--'}
+                        {match.match_time?.slice(0, 5) || '--:--'}
                       </div>
                       {/* 警告バッジ */}
                       {warnings.length > 0 && (

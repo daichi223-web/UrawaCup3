@@ -101,7 +101,7 @@ function MatchApproval() {
                                     承認待ち
                                 </div>
                                 <div className="text-sm text-gray-500">
-                                    {match.match_order}試合目 ({match.match_time}) @ {match.venue?.name}
+                                    {match.match_order}試合目 ({match.match_time?.substring(0, 5)}) @ {match.venue?.name}
                                 </div>
                             </div>
 

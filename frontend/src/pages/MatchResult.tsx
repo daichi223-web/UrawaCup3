@@ -354,7 +354,7 @@ function MatchResult() {
                 <div className="card-body p-4">
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-500">
-                      {match.matchOrder}試合目 {match.matchTime} @ {match.venue?.name}
+                      {match.matchOrder}試合目 {match.matchTime?.substring(0, 5)} @ {match.venue?.name}
                     </div>
                     <div className={`px-2 py-1 rounded text-xs font-medium ${match.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                       {match.status === 'completed' ? '完了' : '未入力'}
@@ -444,7 +444,7 @@ function MatchResult() {
           <div className="space-y-6">
             {/* 試合情報 */}
             <div className="text-center text-sm text-gray-500">
-              {selectedMatch.matchDate} {selectedMatch.matchTime} @ {selectedMatch.venue?.name}
+              {selectedMatch.matchDate} {selectedMatch.matchTime?.substring(0, 5)} @ {selectedMatch.venue?.name}
             </div>
 
             {/* チーム名とスコア表示 */}

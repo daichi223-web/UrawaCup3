@@ -1434,7 +1434,7 @@ function MatchSchedule() {
           <div className="space-y-4">
             <div className="text-center">
               <div className="text-sm text-gray-500 mb-2">
-                {selectedMatch.matchDate} {selectedMatch.matchTime} @ {getVenueName(selectedMatch.venueId)}
+                {selectedMatch.matchDate} {selectedMatch.matchTime?.substring(0, 5)} @ {getVenueName(selectedMatch.venueId)}
               </div>
               <div className="flex items-center justify-center gap-4">
                 <div className="text-center">
