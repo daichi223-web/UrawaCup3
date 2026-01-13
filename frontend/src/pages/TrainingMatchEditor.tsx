@@ -202,6 +202,7 @@ export default function TrainingMatchEditor() {
         .eq('tournament_id', tournamentId)
         .eq('stage', 'training')
         .order('venue_id')
+        .order('match_time')
       if (error) {
         console.error('[TrainingMatchEditor] Query error:', error)
         throw error
@@ -235,13 +236,17 @@ export default function TrainingMatchEditor() {
     },
   })
 
-  // 会場（順位リーグ）ごとにグループ化
+  // 会場（順位リーグ）ごとにグループ化（時間順でソート）
   const matchesByVenue = useMemo(() => {
     if (!trainingMatches) return {}
     const grouped: Record<number, Match[]> = {}
     trainingMatches.forEach(m => {
       if (!grouped[m.venue_id]) grouped[m.venue_id] = []
       grouped[m.venue_id].push(m)
+    })
+    // 各会場内で時間順にソート
+    Object.values(grouped).forEach(matches => {
+      matches.sort((a, b) => (a.match_time || '').localeCompare(b.match_time || ''))
     })
     return grouped
   }, [trainingMatches])
