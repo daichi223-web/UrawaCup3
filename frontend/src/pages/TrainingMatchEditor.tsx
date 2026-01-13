@@ -522,7 +522,7 @@ export default function TrainingMatchEditor() {
   const venueIds = Object.keys(matchesByVenue).map(Number).sort((a, b) => a - b)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-none">
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
         <div>
@@ -607,7 +607,7 @@ export default function TrainingMatchEditor() {
           <p className="text-sm mt-2">日程管理画面から研修試合を生成してください</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="flex gap-3 overflow-x-auto pb-2" style={{ minWidth: '100%' }}>
           {venueIds.map((venueId, index) => {
             const matches = matchesByVenue[venueId]
             const venueName = matches[0]?.venue?.name || `会場${venueId}`
@@ -624,7 +624,7 @@ export default function TrainingMatchEditor() {
             return (
               <div
                 key={venueId}
-                className={`border-2 rounded-lg overflow-hidden ${leagueInfo?.color || 'bg-gray-100 border-gray-300'}`}
+                className={`border-2 rounded-lg overflow-hidden flex-1 min-w-[200px] max-w-[280px] ${leagueInfo?.color || 'bg-gray-100 border-gray-300'}`}
               >
                 {/* リーグヘッダー */}
                 <div className="px-3 py-2 bg-white bg-opacity-50 border-b">
