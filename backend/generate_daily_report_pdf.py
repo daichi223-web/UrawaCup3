@@ -105,10 +105,10 @@ class DailyReportGenerator:
         doc = SimpleDocTemplate(
             output_path,
             pagesize=A4,
-            topMargin=12*mm,
-            bottomMargin=12*mm,
-            leftMargin=15*mm,
-            rightMargin=15*mm
+            topMargin=8*mm,
+            bottomMargin=8*mm,
+            leftMargin=10*mm,
+            rightMargin=10*mm
         )
         
         story = []
@@ -144,7 +144,7 @@ class DailyReportGenerator:
                 story.append(PageBreak())
         
         doc.build(story)
-        print(f"✓ PDF生成完了: {output_path}")
+        print(f"[OK] PDF生成完了: {output_path}")
     
     def _create_venue_page(
         self, venue: str, matches: list,
@@ -164,47 +164,49 @@ class DailyReportGenerator:
             "試合結果報告書",
             self.styles['subtitle']
         ))
-        content.append(Spacer(1, 2*mm))
-        
+        content.append(Spacer(1, 1*mm))
+
         # 発信情報
         header_data = [
             ['送信先：', recipient, '', '発信元：', sender],
             ['', '', '', '連絡先：', contact],
             ['', '', '', '', f'{date_str}　第{day}日'],
         ]
-        header_table = Table(header_data, colWidths=[18*mm, 45*mm, 10*mm, 18*mm, 60*mm])
+        header_table = Table(header_data, colWidths=[18*mm, 50*mm, 10*mm, 18*mm, 90*mm])
         header_table.setStyle(TableStyle([
             ('FONT', (0, 0), (-1, -1), FONT, 9),
             ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
             ('ALIGN', (3, 0), (3, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
         content.append(header_table)
-        content.append(Spacer(1, 3*mm))
-        
+        content.append(Spacer(1, 2*mm))
+
         # 会場名 + 区切り線
         content.append(Paragraph(f"大会会場：　{venue}", self.styles['venue']))
-        line = Table([['']], colWidths=[175*mm])
+        line = Table([['']], colWidths=[190*mm])
         line.setStyle(TableStyle([
             ('LINEBELOW', (0, 0), (-1, -1), 1, colors.black)
         ]))
         content.append(line)
-        content.append(Spacer(1, 5*mm))
+        content.append(Spacer(1, 3*mm))
         
         # 各試合
         for idx, match in enumerate(matches):
             match_content = self._create_match_row(match, idx + 1)
-            content.append(KeepTogether(match_content))
-            content.append(Spacer(1, 3*mm))
-            
+            content.append(match_content)
+            content.append(Spacer(1, 1*mm))
+
             # 試合間の仕切り線
             if idx < len(matches) - 1:
-                divider = Table([['']], colWidths=[175*mm])
+                divider = Table([['']], colWidths=[190*mm])
                 divider.setStyle(TableStyle([
                     ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.Color(0.7, 0.7, 0.7))
                 ]))
                 content.append(divider)
-                content.append(Spacer(1, 3*mm))
+                content.append(Spacer(1, 1*mm))
         
         # Shrink the entire venue section to fit a single page if needed.
         return [KeepInFrame(max_width, max_height, content, mode='shrink')]
@@ -268,47 +270,71 @@ class DailyReportGenerator:
             ('BOX', (4, 3), (4, 4), 1, colors.black),
         ]))
         
-        # 右側：得点経過
+        # 右側：得点経過（2列表示で全員表示）
         if scorers:
-            goal_data = [['時間', 'チーム', '得点者名']]
-            for s in scorers[:8]:  # 最大8人まで表示
-                goal_data.append([
-                    f"{s.get('time', '')}'",
-                    s.get('team', ''),
-                    s.get('name', '')
-                ])
-            if len(scorers) > 8:
-                goal_data.append(['', f'他{len(scorers)-8}名', ''])
-            
-            goal_table = Table(goal_data, colWidths=[12*mm, 28*mm, 38*mm])
+            # 左列と右列に分割
+            mid = (len(scorers) + 1) // 2
+            left_scorers = scorers[:mid]
+            right_scorers = scorers[mid:]
+
+            # 2列テーブル用データ作成
+            goal_data = [["時'", 'チーム', '得点者', "時'", 'チーム', '得点者']]
+            for i in range(max(len(left_scorers), len(right_scorers))):
+                row = []
+                # 左列
+                if i < len(left_scorers):
+                    s = left_scorers[i]
+                    row.extend([
+                        f"{s.get('time', '')}'",
+                        s.get('team', ''),
+                        s.get('name', '')
+                    ])
+                else:
+                    row.extend(['', '', ''])
+                # 右列
+                if i < len(right_scorers):
+                    s = right_scorers[i]
+                    row.extend([
+                        f"{s.get('time', '')}'",
+                        s.get('team', ''),
+                        s.get('name', '')
+                    ])
+                else:
+                    row.extend(['', '', ''])
+                goal_data.append(row)
+
+            goal_table = Table(goal_data, colWidths=[8*mm, 20*mm, 18*mm, 8*mm, 20*mm, 18*mm])
             goal_table.setStyle(TableStyle([
-                ('FONT', (0, 0), (-1, -1), FONT, 8),
+                ('FONT', (0, 0), (-1, -1), FONT, 7),
                 ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-                ('ALIGN', (2, 0), (2, -1), 'LEFT'),
+                ('ALIGN', (3, 0), (3, -1), 'CENTER'),
                 ('BACKGROUND', (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
-                ('TOPPADDING', (0, 0), (-1, -1), 2),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ('TOPPADDING', (0, 0), (-1, -1), 1),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+                ('LEFTPADDING', (0, 0), (-1, -1), 1),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 1),
+                # 左右列の区切り
+                ('LINEAFTER', (2, 0), (2, -1), 1, colors.Color(0.5, 0.5, 0.5)),
             ]))
         else:
             # 得点なし
             goal_data = [['得点経過'], ['（得点なし）']]
-            goal_table = Table(goal_data, colWidths=[78*mm])
+            goal_table = Table(goal_data, colWidths=[92*mm])
             goal_table.setStyle(TableStyle([
                 ('FONT', (0, 0), (-1, -1), FONT, 9),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('TEXTCOLOR', (0, 1), (-1, -1), colors.Color(0.5, 0.5, 0.5)),
             ]))
-        
+
         # 左右を結合
         combined = Table(
             [[result_table, goal_table]],
-            colWidths=[95*mm, 80*mm]
+            colWidths=[95*mm, 95*mm]
         )
         combined.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING', (1, 0), (1, 0), 8),
+            ('LEFTPADDING', (1, 0), (1, 0), 4),
         ]))
         
         return combined
