@@ -364,6 +364,16 @@ export default function DraggableMatchList({
   const errorCount = violations.filter(v => v.level === 'error').length
   const warningCount = violations.filter(v => v.level === 'warning').length
 
+  // 警告の内訳をタイプ別にカウント
+  const warningsByType = useMemo(() => {
+    const warnings = violations.filter(v => v.level === 'warning')
+    const counts: Record<string, number> = {}
+    warnings.forEach(w => {
+      counts[w.type] = (counts[w.type] || 0) + 1
+    })
+    return counts
+  }, [violations])
+
   return (
     <div className="space-y-4">
       {title && (
@@ -404,6 +414,52 @@ export default function DraggableMatchList({
             <div className="flex items-center gap-1 text-yellow-700">
               <AlertTriangle className="w-4 h-4" />
               <span className="text-sm font-medium">警告: {warningCount}件</span>
+            </div>
+          )}
+          {/* 警告の内訳 */}
+          {warningCount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500">内訳:</span>
+              {warningsByType.notEnoughGames && (
+                <span className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-full">
+                  試合数不足 {warningsByType.notEnoughGames}
+                </span>
+              )}
+              {warningsByType.consecutive && (
+                <span className="text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">
+                  連戦 {warningsByType.consecutive}
+                </span>
+              )}
+              {warningsByType.dailyGameLimit && (
+                <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                  1日3試合以上 {warningsByType.dailyGameLimit}
+                </span>
+              )}
+              {warningsByType.localVsLocal && (
+                <span className="text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full">
+                  地元同士 {warningsByType.localVsLocal}
+                </span>
+              )}
+              {warningsByType.sameRegion && (
+                <span className="text-xs px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-full">
+                  同地域 {warningsByType.sameRegion}
+                </span>
+              )}
+              {warningsByType.sameLeague && (
+                <span className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                  同リーグ {warningsByType.sameLeague}
+                </span>
+              )}
+              {warningsByType.tooManyGamesTotal && (
+                <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full">
+                  2日間5試合以上 {warningsByType.tooManyGamesTotal}
+                </span>
+              )}
+              {warningsByType.refereeConflict && (
+                <span className="text-xs px-1.5 py-0.5 bg-pink-100 text-pink-700 rounded-full">
+                  審判中試合 {warningsByType.refereeConflict}
+                </span>
+              )}
             </div>
           )}
           <span className="text-xs text-gray-500">各試合カードにバッジ表示</span>
