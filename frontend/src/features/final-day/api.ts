@@ -9,9 +9,72 @@ import {
   getFinalsMatchCount,
   type MixedVenueConfig,
 } from '@/lib/mixedVenueScheduler';
+import { standingApi } from '@/features/standings/api';
 
 // バックエンドAPI URL
 const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
+
+// 決勝進出チーム選出用のヘルパー関数
+interface QualifyingTeam {
+  teamId: number;
+  teamName: string;
+  groupId: string;
+  rank: number;      // グループ内順位
+  overallRank?: number; // 総合順位
+}
+
+/**
+ * グループ順位ルール: 各グループ1位を取得
+ */
+async function getGroupWinners(tournamentId: number): Promise<QualifyingTeam[]> {
+  const { data: standings, error } = await supabase
+    .from('standings')
+    .select(`
+      *,
+      team:teams(id, name, short_name)
+    `)
+    .eq('tournament_id', tournamentId)
+    .eq('rank', 1)
+    .order('group_id');
+
+  if (error) throw error;
+
+  return (standings || []).map(s => ({
+    teamId: s.team?.id || s.team_id,
+    teamName: s.team?.short_name || s.team?.name || '',
+    groupId: s.group_id,
+    rank: s.rank,
+  }));
+}
+
+/**
+ * 総合順位ルール: 上位4チームを取得
+ */
+async function getOverallTopTeams(tournamentId: number, count: number = 4): Promise<QualifyingTeam[]> {
+  const overallStandings = await standingApi.getOverallStandings(tournamentId);
+
+  return overallStandings.entries.slice(0, count).map(entry => ({
+    teamId: entry.teamId,
+    teamName: entry.shortName || entry.teamName,
+    groupId: entry.groupId,
+    rank: entry.groupRank,
+    overallRank: entry.overallRank,
+  }));
+}
+
+/**
+ * 決勝進出チームを取得（ルールに応じて）
+ */
+async function getQualifyingTeams(
+  tournamentId: number,
+  qualificationRule: 'group_based' | 'overall_ranking'
+): Promise<QualifyingTeam[]> {
+  if (qualificationRule === 'overall_ranking') {
+    return getOverallTopTeams(tournamentId, 4);
+  } else {
+    return getGroupWinners(tournamentId);
+  }
+}
 
 interface MatchListResponse {
   matches: MatchWithDetails[];
@@ -85,15 +148,184 @@ export const finalDayApi = {
   },
 
   /**
-   * 最終日スケジュールを自動生成（Supabase Edge Functionが必要）
+   * 最終日スケジュールを自動生成
+   * - 決勝トーナメント（準決勝、3位決定戦、決勝）
+   * - 研修試合（決勝進出チーム以外）
    */
   generateFinalDaySchedule: async (tournamentId: number): Promise<MatchWithDetails[]> => {
-    console.warn('generateFinalDaySchedule: Supabase Edge Function not implemented yet');
-    return [];
+    // 1. 大会設定を取得
+    const { data: tournament, error: tournamentError } = await supabase
+      .from('tournaments')
+      .select('*')
+      .eq('id', tournamentId)
+      .single();
+
+    if (tournamentError || !tournament) {
+      throw new Error('大会設定が見つかりません');
+    }
+
+    const qualificationRule = tournament.qualification_rule || 'group_based';
+    const finalDate = tournament.end_date;
+    const finalsStartTime = tournament.finals_start_time || '09:00';
+    const finalsMatchDuration = tournament.finals_match_duration || 60;
+    const finalsIntervalMinutes = tournament.finals_interval_minutes || 20;
+
+    // 2. 決勝進出チームを取得
+    const qualifyingTeams = await getQualifyingTeams(tournamentId, qualificationRule);
+
+    if (qualifyingTeams.length < 4) {
+      throw new Error(`決勝進出チームが不足しています（${qualifyingTeams.length}/4チーム）`);
+    }
+
+    // 3. 決勝会場を取得
+    const { data: finalsVenue, error: venueError } = await supabase
+      .from('venues')
+      .select('*')
+      .eq('tournament_id', tournamentId)
+      .eq('is_finals_venue', true)
+      .single();
+
+    if (venueError || !finalsVenue) {
+      throw new Error('決勝会場が設定されていません');
+    }
+
+    // 4. 既存の最終日試合を削除
+    await supabase
+      .from('matches')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('match_date', finalDate);
+
+    // 5. 準決勝の組み合わせを決定
+    // グループ順位ルール: A1 vs C1, B1 vs D1
+    // 総合順位ルール: 1位 vs 4位, 2位 vs 3位
+    let semifinalPairs: [QualifyingTeam, QualifyingTeam][];
+
+    if (qualificationRule === 'overall_ranking') {
+      // 総合順位: 1位vs4位, 2位vs3位
+      semifinalPairs = [
+        [qualifyingTeams[0], qualifyingTeams[3]], // 1位 vs 4位
+        [qualifyingTeams[1], qualifyingTeams[2]], // 2位 vs 3位
+      ];
+    } else {
+      // グループ順位: A1 vs C1, B1 vs D1
+      const sorted = [...qualifyingTeams].sort((a, b) => a.groupId.localeCompare(b.groupId));
+      semifinalPairs = [
+        [sorted[0], sorted[2]], // A1 vs C1
+        [sorted[1], sorted[3]], // B1 vs D1
+      ];
+    }
+
+    // 6. 時間計算用ヘルパー
+    const addMinutes = (time: string, minutes: number): string => {
+      const [h, m] = time.split(':').map(Number);
+      const totalMinutes = h * 60 + m + minutes;
+      const newH = Math.floor(totalMinutes / 60);
+      const newM = totalMinutes % 60;
+      return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    };
+
+    // 7. 試合レコードを作成
+    const matchesToInsert = [];
+    let currentTime = finalsStartTime;
+    let matchOrder = 1;
+
+    // 準決勝1
+    matchesToInsert.push({
+      tournament_id: tournamentId,
+      venue_id: finalsVenue.id,
+      home_team_id: semifinalPairs[0][0].teamId,
+      away_team_id: semifinalPairs[0][1].teamId,
+      match_date: finalDate,
+      match_time: currentTime,
+      match_order: matchOrder++,
+      stage: 'semifinal',
+      status: 'scheduled',
+      notes: qualificationRule === 'overall_ranking'
+        ? `準決勝1（総合1位 vs 総合4位）`
+        : `準決勝1（${semifinalPairs[0][0].groupId}1位 vs ${semifinalPairs[0][1].groupId}1位）`,
+    });
+    currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
+
+    // 準決勝2
+    matchesToInsert.push({
+      tournament_id: tournamentId,
+      venue_id: finalsVenue.id,
+      home_team_id: semifinalPairs[1][0].teamId,
+      away_team_id: semifinalPairs[1][1].teamId,
+      match_date: finalDate,
+      match_time: currentTime,
+      match_order: matchOrder++,
+      stage: 'semifinal',
+      status: 'scheduled',
+      notes: qualificationRule === 'overall_ranking'
+        ? `準決勝2（総合2位 vs 総合3位）`
+        : `準決勝2（${semifinalPairs[1][0].groupId}1位 vs ${semifinalPairs[1][1].groupId}1位）`,
+    });
+    currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
+
+    // 3位決定戦（チームはTBD - 準決勝後に決定）
+    matchesToInsert.push({
+      tournament_id: tournamentId,
+      venue_id: finalsVenue.id,
+      home_team_id: null,
+      away_team_id: null,
+      match_date: finalDate,
+      match_time: currentTime,
+      match_order: matchOrder++,
+      stage: 'third_place',
+      status: 'scheduled',
+      notes: '3位決定戦（準決勝敗者同士）',
+      home_seed: 'SF1敗者',
+      away_seed: 'SF2敗者',
+    });
+    currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
+
+    // 決勝（チームはTBD - 準決勝後に決定）
+    matchesToInsert.push({
+      tournament_id: tournamentId,
+      venue_id: finalsVenue.id,
+      home_team_id: null,
+      away_team_id: null,
+      match_date: finalDate,
+      match_time: currentTime,
+      match_order: matchOrder++,
+      stage: 'final',
+      status: 'scheduled',
+      notes: '決勝（準決勝勝者同士）',
+      home_seed: 'SF1勝者',
+      away_seed: 'SF2勝者',
+    });
+
+    // 8. 試合をDBに挿入
+    const { error: insertError } = await supabase
+      .from('matches')
+      .insert(matchesToInsert);
+
+    if (insertError) {
+      console.error('Failed to insert matches:', insertError);
+      throw new Error('試合の作成に失敗しました');
+    }
+
+    // 9. 作成した試合を取得して返す
+    const { data: createdMatches, error: fetchError } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        home_team:teams!matches_home_team_id_fkey(*),
+        away_team:teams!matches_away_team_id_fkey(*),
+        venue:venues(*)
+      `)
+      .eq('tournament_id', tournamentId)
+      .eq('match_date', finalDate)
+      .order('match_time');
+
+    if (fetchError) throw fetchError;
+    return (createdMatches || []) as MatchWithDetails[];
   },
 
   /**
-   * 決勝トーナメントを自動生成（Supabase Edge Functionが必要）
+   * 決勝トーナメントを自動生成（互換性のため残す）
    */
   generateFinals: async (
     tournamentId: number,
@@ -101,8 +333,8 @@ export const finalDayApi = {
     startTime: string = '09:00',
     venueId?: number
   ): Promise<MatchWithDetails[]> => {
-    console.warn('generateFinals: Supabase Edge Function not implemented yet');
-    return [];
+    // generateFinalDayScheduleを呼び出す
+    return finalDayApi.generateFinalDaySchedule(tournamentId);
   },
 
   /**
