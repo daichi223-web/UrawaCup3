@@ -194,7 +194,16 @@ export default function DraggableMatchList({
 
   // 制約チェック（即時実行）
   const violations = useMemo(() => {
-    if (!enableConstraintCheck || teams.length === 0) return []
+    console.log('[DraggableMatchList] Constraint check:', {
+      enableConstraintCheck,
+      teamsCount: teams.length,
+      matchesCount: matches.length,
+    })
+
+    if (!enableConstraintCheck || teams.length === 0) {
+      console.log('[DraggableMatchList] Skipping constraint check (disabled or no teams)')
+      return []
+    }
 
     const matchesForValidation: MatchForValidation[] = matches.map(m => ({
       id: m.id,
@@ -207,7 +216,9 @@ export default function DraggableMatchList({
       groupId: m.groupId || m.group_id || undefined,
     }))
 
-    return validateMatches(matchesForValidation, teams)
+    const result = validateMatches(matchesForValidation, teams)
+    console.log('[DraggableMatchList] Violations found:', result.length, result)
+    return result
   }, [matches, teams, enableConstraintCheck])
 
   // 試合ごとの違反を取得
