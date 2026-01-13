@@ -4,6 +4,7 @@
  * Supabase版
  */
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Edit3, Eye } from 'lucide-react'
@@ -852,6 +853,16 @@ function MatchSchedule() {
           >
             研修試合削除
           </button>
+        )
+        // 研修試合編集リンク
+        buttons.push(
+          <Link
+            key="training-editor"
+            to="/training-editor"
+            className="btn-secondary bg-purple-600 text-white hover:bg-purple-700"
+          >
+            研修試合編集
+          </Link>
         )
       }
     }

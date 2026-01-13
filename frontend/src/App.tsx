@@ -38,6 +38,7 @@ const ExclusionSettings = lazy(() => import('./pages/ExclusionSettings'))
 const ScorerRanking = lazy(() => import('./pages/ScorerRanking'))
 const PlayerManagement = lazy(() => import('./pages/PlayerManagement'))
 const FinalDaySchedule = lazy(() => import('./pages/FinalDaySchedule'))
+const TrainingMatchEditor = lazy(() => import('./pages/TrainingMatchEditor'))
 
 /**
  * 設定エラー表示コンポーネント
@@ -160,6 +161,16 @@ function App() {
               element={
                 <RequireAdmin>
                   <MatchSchedule />
+                </RequireAdmin>
+              }
+            />
+
+            {/* 研修試合編集（管理者専用） */}
+            <Route
+              path="/training-editor"
+              element={
+                <RequireAdmin>
+                  <TrainingMatchEditor />
                 </RequireAdmin>
               }
             />
