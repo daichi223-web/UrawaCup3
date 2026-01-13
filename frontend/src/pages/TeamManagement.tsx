@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/stores/appStore';
+import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore';
 
 // Team type for this component
 interface Team {
@@ -19,6 +20,9 @@ interface Team {
   isVenueHost?: boolean;
   tournament_id: number;
   group_order?: number;
+  region?: string;       // 地域
+  league_id?: string;    // リーグID
+  leagueId?: string;     // リーグID (camelCase)
 }
 
 // タブの定義
@@ -42,8 +46,8 @@ function TeamManagement() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', groupId: '', teamType: 'invited', isVenueHost: false });
-  const [addForm, setAddForm] = useState({ name: '', groupId: '', teamType: 'invited', isVenueHost: false });
+  const [editForm, setEditForm] = useState({ name: '', groupId: '', teamType: 'invited', isVenueHost: false, region: '', leagueId: '' });
+  const [addForm, setAddForm] = useState({ name: '', groupId: '', teamType: 'invited', isVenueHost: false, region: '', leagueId: '' });
   const [bulkText, setBulkText] = useState('');
   const [bulkTeamType, setBulkTeamType] = useState<'invited' | 'local'>('invited');
   const [saving, setSaving] = useState(false);
@@ -52,6 +56,9 @@ function TeamManagement() {
   // appStoreから現在のトーナメントIDを取得
   const { currentTournament } = useAppStore();
   const tournamentId = currentTournament?.id;
+
+  // 制約設定を取得
+  const { settings: constraintSettings } = useConstraintSettingsStore();
 
   useEffect(() => {
     // tournamentIdが確定するまで待機
@@ -116,6 +123,8 @@ function TeamManagement() {
       groupId: team.groupId || team.group_id || '',
       teamType: team.teamType || team.team_type || 'invited',
       isVenueHost: team.isVenueHost ?? team.is_venue_host ?? false,
+      region: team.region || '',
+      leagueId: team.leagueId || team.league_id || '',
     });
     setShowEditModal(true);
   };
@@ -130,6 +139,8 @@ function TeamManagement() {
         group_id: editForm.groupId || null,
         team_type: editForm.teamType,
         is_venue_host: editForm.isVenueHost,
+        region: editForm.region || null,
+        league_id: editForm.leagueId || null,
       });
       setTeams(prev => prev.map(t => t.id === selectedTeam.id ? data as Team : t));
       setShowEditModal(false);
@@ -156,10 +167,12 @@ function TeamManagement() {
         group_id: addForm.groupId || null,
         team_type: addForm.teamType,
         is_venue_host: addForm.isVenueHost,
+        region: addForm.region || null,
+        league_id: addForm.leagueId || null,
       });
       setTeams(prev => [...prev, data as Team]);
       setShowAddModal(false);
-      setAddForm({ name: '', groupId: '', teamType: 'invited', isVenueHost: false });
+      setAddForm({ name: '', groupId: '', teamType: 'invited', isVenueHost: false, region: '', leagueId: '' });
       toast.success('チームを追加しました');
     } catch (error) {
       const message = error instanceof Error ? error.message : '追加に失敗しました';
@@ -450,6 +463,35 @@ function TeamManagement() {
               会場担当チーム
             </label>
           </div>
+
+          {/* 制約チェック用フィールド（設定で有効な場合のみ表示） */}
+          {(constraintSettings.avoidSameRegion || constraintSettings.avoidLocalVsLocal) && (
+            <div>
+              <label className="form-label">地域</label>
+              <input
+                type="text"
+                className="form-input"
+                value={editForm.region}
+                onChange={(e) => setEditForm(prev => ({ ...prev, region: e.target.value }))}
+                placeholder="例: 埼玉、東京"
+              />
+              <p className="text-xs text-gray-500 mt-1">同地域チームの対戦回避に使用</p>
+            </div>
+          )}
+          {constraintSettings.avoidSameLeague && (
+            <div>
+              <label className="form-label">所属リーグID</label>
+              <input
+                type="text"
+                className="form-input"
+                value={editForm.leagueId}
+                onChange={(e) => setEditForm(prev => ({ ...prev, leagueId: e.target.value }))}
+                placeholder="例: U18リーグA、S1リーグ"
+              />
+              <p className="text-xs text-gray-500 mt-1">同リーグチームの対戦回避に使用</p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4">
             <button
               className="btn-secondary"
@@ -522,6 +564,35 @@ function TeamManagement() {
               会場担当チーム
             </label>
           </div>
+
+          {/* 制約チェック用フィールド（設定で有効な場合のみ表示） */}
+          {(constraintSettings.avoidSameRegion || constraintSettings.avoidLocalVsLocal) && (
+            <div>
+              <label className="form-label">地域</label>
+              <input
+                type="text"
+                className="form-input"
+                value={addForm.region}
+                onChange={(e) => setAddForm(prev => ({ ...prev, region: e.target.value }))}
+                placeholder="例: 埼玉、東京"
+              />
+              <p className="text-xs text-gray-500 mt-1">同地域チームの対戦回避に使用</p>
+            </div>
+          )}
+          {constraintSettings.avoidSameLeague && (
+            <div>
+              <label className="form-label">所属リーグID</label>
+              <input
+                type="text"
+                className="form-input"
+                value={addForm.leagueId}
+                onChange={(e) => setAddForm(prev => ({ ...prev, leagueId: e.target.value }))}
+                placeholder="例: U18リーグA、S1リーグ"
+              />
+              <p className="text-xs text-gray-500 mt-1">同リーグチームの対戦回避に使用</p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4">
             <button
               className="btn-secondary"

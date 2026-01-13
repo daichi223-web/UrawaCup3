@@ -5,7 +5,8 @@
 import { useState, useMemo } from 'react'
 import { ArrowLeftRight, Check, AlertCircle, AlertTriangle } from 'lucide-react'
 import type { MatchWithDetails } from '@/types'
-import { validateMatches, getViolationsForMatch, type ConstraintViolation, type MatchForValidation } from '@/lib/matchConstraints'
+import { validateMatches, getViolationsForMatch, type ConstraintViolation, type MatchForValidation, type ConstraintCheckSettings } from '@/lib/matchConstraints'
+import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 
 // 選択状態の型
 interface SelectedTeam {
@@ -168,7 +169,14 @@ interface ClickableMatchListProps {
   emptyMessage?: string
   consecutiveMatchTeams?: Set<number>
   /** 制約チェック用のチーム情報（指定すると即時チェック有効） */
-  teams?: { id: number; name: string; groupId: string }[]
+  teams?: {
+    id: number
+    name: string
+    groupId: string
+    teamType?: 'local' | 'invited'  // 地元校 or 招待校
+    region?: string                  // 地域
+    leagueId?: string | number       // 所属リーグID
+  }[]
   /** 制約チェックを有効にする（デフォルト: true） */
   enableConstraintCheck?: boolean
 }
@@ -192,12 +200,16 @@ export default function DraggableMatchList({
 }: ClickableMatchListProps) {
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
 
+  // 制約設定を取得
+  const { settings: constraintSettings } = useConstraintSettingsStore()
+
   // 制約チェック（即時実行）
   const violations = useMemo(() => {
     console.log('[DraggableMatchList] Constraint check:', {
       enableConstraintCheck,
       teamsCount: teams.length,
       matchesCount: matches.length,
+      constraintSettings,
     })
 
     if (!enableConstraintCheck || teams.length === 0) {
@@ -216,10 +228,20 @@ export default function DraggableMatchList({
       groupId: m.groupId || m.group_id || undefined,
     }))
 
-    const result = validateMatches(matchesForValidation, teams)
+    // 設定を ConstraintCheckSettings 形式に変換
+    const checkSettings: ConstraintCheckSettings = {
+      avoidLocalVsLocal: constraintSettings.avoidLocalVsLocal,
+      avoidSameRegion: constraintSettings.avoidSameRegion,
+      avoidSameLeague: constraintSettings.avoidSameLeague,
+      avoidConsecutive: constraintSettings.avoidConsecutive,
+      warnDailyGameLimit: constraintSettings.warnDailyGameLimit,
+      warnTotalGameLimit: constraintSettings.warnTotalGameLimit,
+    }
+
+    const result = validateMatches(matchesForValidation, teams, undefined, checkSettings)
     console.log('[DraggableMatchList] Violations found:', result.length, result)
     return result
-  }, [matches, teams, enableConstraintCheck])
+  }, [matches, teams, enableConstraintCheck, constraintSettings])
 
   // 試合ごとの違反を取得
   const getMatchViolations = (matchId: number): ConstraintViolation[] => {

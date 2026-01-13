@@ -28,7 +28,9 @@ import {
   type ConstraintViolation,
   type MatchForValidation,
   type TeamInfo,
+  type ConstraintCheckSettings,
 } from '@/lib/matchConstraints'
+import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 
 // チーム情報
 interface Team {
@@ -348,6 +350,9 @@ export default function MatchScheduleEditor({
   onSave,
   disabled = false,
 }: MatchScheduleEditorProps) {
+  // 制約設定を取得
+  const { settings: constraintSettings } = useConstraintSettingsStore()
+
   // グループのチーム
   const groupTeams = useMemo(
     () => teams.filter(t => t.groupId === groupId),
@@ -434,12 +439,25 @@ export default function MatchScheduleEditor({
       id: t.id,
       name: t.name,
       groupId: t.groupId || groupId,
+      teamType: (t as any).teamType,
+      region: (t as any).region,
+      leagueId: (t as any).leagueId,
     }))
 
     console.log('[Validation] Matches:', allMatchesForValidation.length, 'Teams:', teamInfos.length)
 
-    return validateMatches(allMatchesForValidation, teamInfos)
-  }, [editableMatches, allGroupMatches, groupTeams, groupId])
+    // 設定を ConstraintCheckSettings 形式に変換
+    const checkSettings: ConstraintCheckSettings = {
+      avoidLocalVsLocal: constraintSettings.avoidLocalVsLocal,
+      avoidSameRegion: constraintSettings.avoidSameRegion,
+      avoidSameLeague: constraintSettings.avoidSameLeague,
+      avoidConsecutive: constraintSettings.avoidConsecutive,
+      warnDailyGameLimit: constraintSettings.warnDailyGameLimit,
+      warnTotalGameLimit: constraintSettings.warnTotalGameLimit,
+    }
+
+    return validateMatches(allMatchesForValidation, teamInfos, undefined, checkSettings)
+  }, [editableMatches, allGroupMatches, groupTeams, groupId, constraintSettings])
 
   const summary = getViolationSummary(violations)
 

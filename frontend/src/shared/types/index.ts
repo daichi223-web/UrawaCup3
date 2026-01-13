@@ -145,6 +145,10 @@ export interface Team {
   groupOrder?: number;
   /** 都道府県 */
   prefecture?: string;
+  /** 地域（同地域対戦回避用、例: '埼玉', '東京'） */
+  region?: string;
+  /** 所属リーグID（同リーグ対戦回避用、別途DBカラム追加が必要） */
+  leagueId?: string | number;
   /** 備考 */
   notes?: string;
   /** 作成日時 */
@@ -158,6 +162,8 @@ export interface Team {
   is_venue_host?: boolean;
   group_id?: string;
   group_order?: number;
+  region_snake?: string;      // region (snake_case alias)
+  league_id?: string | number; // leagueId (snake_case)
   created_at?: string;
   updated_at?: string;
 }
@@ -172,6 +178,8 @@ export interface TeamCreate {
   groupId?: string;
   groupOrder?: number;
   prefecture?: string;
+  region?: string;       // 地域
+  leagueId?: string | number; // 所属リーグID
   notes?: string;
 }
 
@@ -184,6 +192,8 @@ export interface TeamUpdate {
   groupId?: string;
   groupOrder?: number;
   prefecture?: string;
+  region?: string;            // 地域
+  leagueId?: string | number; // 所属リーグID
   notes?: string;
 }
 

@@ -37,6 +37,21 @@ export interface TeamInfo {
   id: number
   name: string
   groupId: string
+  teamType?: 'local' | 'invited'  // 地元校 or 招待校
+  region?: string                  // 地域（例: '埼玉', '東京'）
+  leagueId?: string | number       // 所属リーグID（別リーグ戦）
+}
+
+/**
+ * 制約チェック設定
+ */
+export interface ConstraintCheckSettings {
+  avoidLocalVsLocal?: boolean
+  avoidSameRegion?: boolean
+  avoidSameLeague?: boolean
+  avoidConsecutive?: boolean
+  warnDailyGameLimit?: boolean
+  warnTotalGameLimit?: boolean
 }
 
 /**
@@ -81,6 +96,18 @@ const WARNING_CONSTRAINTS = {
     label: '2日間で5試合以上',
     description: '1チームが2日間合計で5試合以上',
   },
+  localVsLocal: {
+    label: '地元同士',
+    description: '地元チーム同士の対戦（避けるべき）',
+  },
+  sameRegion: {
+    label: '同地域',
+    description: '同じ地域のチーム同士の対戦（避けるべき）',
+  },
+  sameLeague: {
+    label: '同リーグ',
+    description: '同じリーグに所属するチーム同士の対戦（普段から対戦している）',
+  },
 }
 
 /**
@@ -119,9 +146,21 @@ function getSlotFromTime(matchTime: string, startTime: string = '09:00', matchDu
 export function validateMatches(
   matches: MatchForValidation[],
   teams: TeamInfo[],
-  originalByePairs?: [number, number][]  // 元々の不戦ペア
+  originalByePairs?: [number, number][],  // 元々の不戦ペア
+  settings?: ConstraintCheckSettings      // 制約チェック設定
 ): ConstraintViolation[] {
   const violations: ConstraintViolation[] = []
+
+  // デフォルト設定（すべて有効）
+  const cfg: ConstraintCheckSettings = {
+    avoidLocalVsLocal: true,
+    avoidSameRegion: true,
+    avoidSameLeague: true,
+    avoidConsecutive: true,
+    warnDailyGameLimit: true,
+    warnTotalGameLimit: true,
+    ...settings,
+  }
 
   // 試合にスロット番号を付与
   const matchesWithSlots = matches.map(m => ({
@@ -129,17 +168,32 @@ export function validateMatches(
     slot: m.slot || getSlotFromTime(m.matchTime),
   }))
 
-  // エラーチェック
+  // エラーチェック（常に実行）
   violations.push(...checkSameTimeConflict(matchesWithSlots))
   violations.push(...checkDuplicateMatch(matchesWithSlots))
   violations.push(...checkSelfMatch(matchesWithSlots))
 
-  // 警告チェック
-  violations.push(...checkDailyGameLimit(matchesWithSlots))
-  violations.push(...checkConsecutiveMatches(matchesWithSlots))
-  violations.push(...checkRefereeConflict(matchesWithSlots))
-  violations.push(...checkNotEnoughGames(matchesWithSlots, teams))
-  violations.push(...checkTooManyGamesTotal(matchesWithSlots))
+  // 警告チェック（設定に基づいて実行）
+  if (cfg.warnDailyGameLimit) {
+    violations.push(...checkDailyGameLimit(matchesWithSlots))
+  }
+  if (cfg.avoidConsecutive) {
+    violations.push(...checkConsecutiveMatches(matchesWithSlots))
+  }
+  violations.push(...checkRefereeConflict(matchesWithSlots))  // 常に実行
+  violations.push(...checkNotEnoughGames(matchesWithSlots, teams))  // 常に実行
+  if (cfg.warnTotalGameLimit) {
+    violations.push(...checkTooManyGamesTotal(matchesWithSlots))
+  }
+  if (cfg.avoidLocalVsLocal) {
+    violations.push(...checkLocalVsLocal(matchesWithSlots, teams))
+  }
+  if (cfg.avoidSameRegion) {
+    violations.push(...checkSameRegion(matchesWithSlots, teams))
+  }
+  if (cfg.avoidSameLeague) {
+    violations.push(...checkSameLeague(matchesWithSlots, teams))
+  }
 
   // 情報チェック
   if (originalByePairs) {
@@ -451,6 +505,109 @@ function checkTooManyGamesTotal(matches: MatchForValidation[]): ConstraintViolat
         description: `合計${matchIds.length}試合`,
         matchIds,
         teamIds: [Number(teamId)],
+      })
+    }
+  }
+
+  return violations
+}
+
+/**
+ * 警告: 地元チーム同士の対戦チェック
+ */
+function checkLocalVsLocal(
+  matches: MatchForValidation[],
+  teams: TeamInfo[]
+): ConstraintViolation[] {
+  const violations: ConstraintViolation[] = []
+
+  // チームIDからTeamInfoを引くためのMap
+  const teamMap = new Map(teams.map(t => [t.id, t]))
+
+  for (const m of matches) {
+    const homeTeam = teamMap.get(m.homeTeamId)
+    const awayTeam = teamMap.get(m.awayTeamId)
+
+    if (homeTeam?.teamType === 'local' && awayTeam?.teamType === 'local') {
+      violations.push({
+        level: 'warning',
+        type: 'localVsLocal',
+        label: WARNING_CONSTRAINTS.localVsLocal.label,
+        description: `${homeTeam.name} vs ${awayTeam.name}`,
+        matchIds: [m.id],
+        teamIds: [m.homeTeamId, m.awayTeamId],
+      })
+    }
+  }
+
+  return violations
+}
+
+/**
+ * 警告: 同一地域チーム同士の対戦チェック
+ */
+function checkSameRegion(
+  matches: MatchForValidation[],
+  teams: TeamInfo[]
+): ConstraintViolation[] {
+  const violations: ConstraintViolation[] = []
+
+  // チームIDからTeamInfoを引くためのMap
+  const teamMap = new Map(teams.map(t => [t.id, t]))
+
+  for (const m of matches) {
+    const homeTeam = teamMap.get(m.homeTeamId)
+    const awayTeam = teamMap.get(m.awayTeamId)
+
+    // 両チームに地域が設定されていて、かつ同じ地域の場合
+    if (
+      homeTeam?.region &&
+      awayTeam?.region &&
+      homeTeam.region === awayTeam.region
+    ) {
+      violations.push({
+        level: 'warning',
+        type: 'sameRegion',
+        label: WARNING_CONSTRAINTS.sameRegion.label,
+        description: `${homeTeam.name} vs ${awayTeam.name}（${homeTeam.region}）`,
+        matchIds: [m.id],
+        teamIds: [m.homeTeamId, m.awayTeamId],
+      })
+    }
+  }
+
+  return violations
+}
+
+/**
+ * 警告: 同一リーグ所属チーム同士の対戦チェック
+ */
+function checkSameLeague(
+  matches: MatchForValidation[],
+  teams: TeamInfo[]
+): ConstraintViolation[] {
+  const violations: ConstraintViolation[] = []
+
+  // チームIDからTeamInfoを引くためのMap
+  const teamMap = new Map(teams.map(t => [t.id, t]))
+
+  for (const m of matches) {
+    const homeTeam = teamMap.get(m.homeTeamId)
+    const awayTeam = teamMap.get(m.awayTeamId)
+
+    // 両チームにリーグIDが設定されていて、かつ同じリーグの場合
+    if (
+      homeTeam?.leagueId &&
+      awayTeam?.leagueId &&
+      homeTeam.leagueId === awayTeam.leagueId
+    ) {
+      violations.push({
+        level: 'warning',
+        type: 'sameLeague',
+        label: WARNING_CONSTRAINTS.sameLeague.label,
+        description: `${homeTeam.name} vs ${awayTeam.name}`,
+        matchIds: [m.id],
+        teamIds: [m.homeTeamId, m.awayTeamId],
       })
     }
   }

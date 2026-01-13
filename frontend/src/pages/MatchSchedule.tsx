@@ -174,6 +174,10 @@ function MatchSchedule() {
       name: t.name,
       shortName: t.short_name,
       groupId: t.group_id,
+      // 制約チェック用の追加プロパティ
+      teamType: t.team_type as 'local' | 'invited' | undefined,  // 地元校 or 招待校
+      region: t.region as string | undefined,                     // 地域
+      leagueId: t.league_id as string | number | undefined,       // 所属リーグID
     }))
     console.log('[MatchSchedule] allTeams:', result.length)
     return result

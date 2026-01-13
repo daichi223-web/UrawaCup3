@@ -13,6 +13,7 @@ import type { Venue, Tournament } from '@/types'
 import { useCreateVenue } from '@/features/venues/hooks'
 import { useCreateTournament } from '@/features/tournaments/hooks'
 import { useAppStore } from '@/stores/appStore'
+import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 
 // グループの色設定
 const GROUP_COLORS: Record<string, string> = {
@@ -25,6 +26,7 @@ const GROUP_COLORS: Record<string, string> = {
 function Settings() {
   const queryClient = useQueryClient()
   const { currentTournament, setCurrentTournament } = useAppStore()
+  const { settings: constraintSettings, setSettings: setConstraintSettings } = useConstraintSettingsStore()
   // appStoreから現在のトーナメントIDを取得
   const tournamentId = currentTournament?.id || 1
 
@@ -759,6 +761,111 @@ function Settings() {
           </div>
           <p className="text-xs text-gray-500 mt-3">
             ※ 選手管理ページでチームを選択し、「Excelインポート」ボタンからインポートできます
+          </p>
+        </div>
+      </div>
+
+      {/* 制約チェック設定 */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="text-lg font-semibold">対戦回避設定</h3>
+        </div>
+        <div className="card-body">
+          <p className="text-gray-600 mb-4">
+            日程編集時の対戦チェック（警告表示）の設定を行います。
+            有効にした項目は、チーム登録画面で入力欄が表示されます。
+          </p>
+
+          <div className="space-y-4">
+            {/* チーム属性による回避 */}
+            <div className="border rounded-lg p-4">
+              <h4 className="font-medium mb-3 text-gray-700">チーム属性による回避</h4>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-primary-600 rounded"
+                    checked={constraintSettings.avoidLocalVsLocal}
+                    onChange={(e) => setConstraintSettings({ avoidLocalVsLocal: e.target.checked })}
+                  />
+                  <div>
+                    <span className="text-sm font-medium">地元チーム同士の対戦を避ける</span>
+                    <p className="text-xs text-gray-500">地元校（local）同士の対戦を警告</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-primary-600 rounded"
+                    checked={constraintSettings.avoidSameRegion}
+                    onChange={(e) => setConstraintSettings({ avoidSameRegion: e.target.checked })}
+                  />
+                  <div>
+                    <span className="text-sm font-medium">同一地域チームの対戦を避ける</span>
+                    <p className="text-xs text-gray-500">同じ地域（例: 埼玉、東京）のチーム同士の対戦を警告</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-primary-600 rounded"
+                    checked={constraintSettings.avoidSameLeague}
+                    onChange={(e) => setConstraintSettings({ avoidSameLeague: e.target.checked })}
+                  />
+                  <div>
+                    <span className="text-sm font-medium">同一リーグチームの対戦を避ける</span>
+                    <p className="text-xs text-gray-500">同じリーグ（別大会）に所属するチーム同士の対戦を警告</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* 日程による回避 */}
+            <div className="border rounded-lg p-4">
+              <h4 className="font-medium mb-3 text-gray-700">日程による制約</h4>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-primary-600 rounded"
+                    checked={constraintSettings.avoidConsecutive}
+                    onChange={(e) => setConstraintSettings({ avoidConsecutive: e.target.checked })}
+                  />
+                  <div>
+                    <span className="text-sm font-medium">連戦を警告</span>
+                    <p className="text-xs text-gray-500">同じチームが連続で試合する場合を警告</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-primary-600 rounded"
+                    checked={constraintSettings.warnDailyGameLimit}
+                    onChange={(e) => setConstraintSettings({ warnDailyGameLimit: e.target.checked })}
+                  />
+                  <div>
+                    <span className="text-sm font-medium">1日3試合以上を警告</span>
+                    <p className="text-xs text-gray-500">同じ日に3試合以上ある場合を警告</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 text-primary-600 rounded"
+                    checked={constraintSettings.warnTotalGameLimit}
+                    onChange={(e) => setConstraintSettings({ warnTotalGameLimit: e.target.checked })}
+                  />
+                  <div>
+                    <span className="text-sm font-medium">2日間で5試合以上を警告</span>
+                    <p className="text-xs text-gray-500">予選リーグ2日間で合計5試合以上ある場合を警告</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-4">
+            ※ 設定は自動保存されます（ブラウザに保存）
           </p>
         </div>
       </div>
