@@ -354,21 +354,10 @@ export default function DraggableMatchList({
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {/* 試合を左右2列に分割: 左列に前半分、右列に後半分 */}
-        {(() => {
-          const sortedMatches = [...matches].sort((a, b) => (a.matchOrder || 0) - (b.matchOrder || 0))
-          const mid = Math.ceil(sortedMatches.length / 2)
-          const leftMatches = sortedMatches.slice(0, mid)
-          const rightMatches = sortedMatches.slice(mid)
-
-          // 左右のカラムを交互に並べてgridで表示
-          const interleavedMatches: MatchWithDetails[] = []
-          for (let i = 0; i < Math.max(leftMatches.length, rightMatches.length); i++) {
-            if (leftMatches[i]) interleavedMatches.push(leftMatches[i])
-            if (rightMatches[i]) interleavedMatches.push(rightMatches[i])
-          }
-          return interleavedMatches
-        })().map((match) => {
+        {/* 試合順でソートして表示（モバイルでも正しい順序で表示） */}
+        {[...matches]
+          .sort((a, b) => (a.matchOrder || a.match_order || 0) - (b.matchOrder || b.match_order || 0))
+          .map((match) => {
           const isHomeSelected = selectedTeam?.matchId === match.id && selectedTeam.position === 'home'
           const isAwaySelected = selectedTeam?.matchId === match.id && selectedTeam.position === 'away'
           const isDisabled = match.status === 'completed'
@@ -396,8 +385,8 @@ export default function DraggableMatchList({
             }`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-gray-500 flex items-center gap-2">
-                  <span className="w-6 text-right font-mono">#{match.matchOrder}</span>
-                  <span className="font-mono">{match.matchTime?.substring(0, 5)}</span>
+                  <span className="w-6 text-right font-mono">#{match.matchOrder || match.match_order}</span>
+                  <span className="font-mono">{(match.matchTime || match.match_time)?.substring(0, 5)}</span>
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
                   {/* 制約違反バッジ */}
