@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { matchesApi } from '@/lib/api';
+import { matchesApi, tournamentsApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
-import { MapPin, Clock, List, LayoutGrid } from 'lucide-react';
+import { MapPin, Clock, List, LayoutGrid, AlertCircle, Calendar } from 'lucide-react';
 
 // ビューモード
 type ViewMode = 'timeline' | 'group';
@@ -45,23 +45,36 @@ export default function PublicMatchList() {
     const [selectedGroup, setSelectedGroup] = useState<string>('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
-    const tournamentId = 1;
+    const [tournamentName, setTournamentName] = useState<string>('');
 
     useEffect(() => {
         let mounted = true;
         let retryCount = 0;
         const maxRetries = 2;
 
-        const fetchMatches = async (): Promise<void> => {
+        const fetchData = async (): Promise<void> => {
             try {
                 setLoading(true);
                 setError(null);
 
-                // タイムアウト付きでフェッチ
+                // まず最新の大会を取得
+                const tournaments = await tournamentsApi.getAll();
+                if (!mounted) return;
+
+                if (!tournaments || tournaments.length === 0) {
+                    setError('NO_TOURNAMENT');
+                    setLoading(false);
+                    return;
+                }
+
+                const latestTournament = tournaments[0];
+                const tournamentId = latestTournament.id;
+                setTournamentName(latestTournament.name || latestTournament.short_name || '');
+
+                // タイムアウト付きで試合データをフェッチ
                 const fetchPromise = matchesApi.getAll(tournamentId);
                 const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('データの取得がタイムアウトしました')), 8000)
+                    setTimeout(() => reject(new Error('TIMEOUT')), 8000)
                 );
 
                 const data: any = await Promise.race([fetchPromise, timeoutPromise]);
@@ -69,7 +82,8 @@ export default function PublicMatchList() {
                 if (!mounted) return;
 
                 // Sort by date and time
-                const sorted = (data.matches as MatchData[]).sort((a, b) => {
+                const matchList = data.matches || [];
+                const sorted = (matchList as MatchData[]).sort((a, b) => {
                     const aTime = `${a.match_date} ${a.match_time}`;
                     const bTime = `${b.match_date} ${b.match_time}`;
                     return new Date(aTime).getTime() - new Date(bTime).getTime();
@@ -84,29 +98,35 @@ export default function PublicMatchList() {
                 if (retryCount < maxRetries) {
                     retryCount++;
                     console.log(`[PublicMatchList] Retrying... (${retryCount}/${maxRetries})`);
-                    // 少し待ってからリトライ
                     setTimeout(() => {
-                        if (mounted) fetchMatches();
+                        if (mounted) fetchData();
                     }, 1000 * retryCount);
                     return;
                 }
 
-                const errorMessage = err.message || "試合データの読み込みに失敗しました";
-                setError(errorMessage);
+                // エラータイプを判定
+                const errorMessage = err.message || '';
+                if (errorMessage === 'TIMEOUT') {
+                    setError('TIMEOUT');
+                } else if (errorMessage.includes('permission') || errorMessage.includes('RLS')) {
+                    setError('PERMISSION');
+                } else {
+                    setError('UNKNOWN');
+                }
                 setLoading(false);
             }
         };
 
         // 少し遅延してからフェッチ開始（認証状態の安定化を待つ）
         const startTimeout = setTimeout(() => {
-            if (mounted) fetchMatches();
+            if (mounted) fetchData();
         }, 100);
 
         return () => {
             mounted = false;
             clearTimeout(startTimeout);
         };
-    }, [tournamentId]);
+    }, []);
 
     if (loading) return (
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -116,21 +136,54 @@ export default function PublicMatchList() {
     );
 
     if (error) {
+        const errorContent = {
+            NO_TOURNAMENT: {
+                icon: <Calendar className="w-12 h-12 text-gray-400 mb-4" />,
+                title: '大会が登録されていません',
+                description: '公開用の大会データが準備されていないようです。管理者にお問い合わせください。',
+                bgColor: 'bg-gray-50',
+                textColor: 'text-gray-600',
+            },
+            TIMEOUT: {
+                icon: <AlertCircle className="w-12 h-12 text-yellow-500 mb-4" />,
+                title: '接続がタイムアウトしました',
+                description: '通信状況を確認の上、再読み込みしてください。',
+                bgColor: 'bg-yellow-50',
+                textColor: 'text-yellow-700',
+            },
+            PERMISSION: {
+                icon: <AlertCircle className="w-12 h-12 text-red-500 mb-4" />,
+                title: 'アクセス権限がありません',
+                description: '公開ページのデータ取得が許可されていない可能性があります。管理者にお問い合わせください。',
+                bgColor: 'bg-red-50',
+                textColor: 'text-red-600',
+            },
+            UNKNOWN: {
+                icon: <AlertCircle className="w-12 h-12 text-red-500 mb-4" />,
+                title: 'データの読み込みに失敗しました',
+                description: '通信状況を確認の上、再読み込みしてください。',
+                bgColor: 'bg-red-50',
+                textColor: 'text-red-600',
+            },
+        };
+        const content = errorContent[error as keyof typeof errorContent] || errorContent.UNKNOWN;
+
         return (
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-                <div className="bg-red-50 text-red-600 p-4 rounded-lg max-w-sm w-full">
-                    <p className="font-bold mb-2">データの読み込みに失敗しました</p>
+                <div className={`${content.bgColor} ${content.textColor} p-6 rounded-lg max-w-sm w-full`}>
+                    {content.icon}
+                    <p className="font-bold mb-2">{content.title}</p>
                     <p className="text-sm mb-4 text-gray-600">
-                        通信状況を確認の上、再読み込みしてください。
+                        {content.description}
                     </p>
                     <button
                         onClick={() => window.location.reload()}
-                        className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 transition-colors"
+                        className="bg-gray-700 text-white px-4 py-2 rounded text-sm hover:bg-gray-800 transition-colors"
                     >
                         再読み込み
                     </button>
                     {import.meta.env.DEV && (
-                        <div className="mt-4 pt-4 border-t border-red-200 text-left text-xs font-mono bg-white p-2 rounded">
+                        <div className="mt-4 pt-4 border-t border-gray-200 text-left text-xs font-mono bg-white p-2 rounded text-gray-700">
                             <p>Debug: {error}</p>
                         </div>
                     )}
@@ -141,8 +194,15 @@ export default function PublicMatchList() {
 
     if (matches.length === 0) {
         return (
-            <div className="text-center py-10 text-gray-500">
-                試合データがありません
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+                <Calendar className="w-12 h-12 text-gray-400 mb-4" />
+                <h3 className="font-bold text-gray-700 mb-2">
+                    {tournamentName ? `${tournamentName}` : '試合日程'}
+                </h3>
+                <p className="text-gray-500 text-sm">
+                    試合日程がまだ登録されていません。<br />
+                    大会開始前にご確認ください。
+                </p>
             </div>
         );
     }
