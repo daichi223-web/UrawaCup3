@@ -508,9 +508,25 @@ function MatchSchedule() {
       // 試合日（大会最終日）
       const matchDate = tournament?.endDate || new Date().toISOString().split('T')[0]
 
-      // 決勝トーナメント会場（isFinalsVenueがtrueの会場、なければ最初の会場）
-      const finalsVenue = venues.find(v => v.isFinalsVenue || v.is_finals_venue) || venues[0]
-      const finalsVenueId = finalsVenue?.id || 1
+      // 決勝トーナメント会場の設定
+      // 1. 主会場（isFinalsVenue = true）：決勝、3位決定戦、準決勝1
+      // 2. 混合会場（isMixedUse = true）：準決勝2を分散可能
+      const mainFinalsVenue = venues.find(v => v.isFinalsVenue || v.is_finals_venue) || venues[0]
+      const mainFinalsVenueId = mainFinalsVenue?.id || 1
+
+      // 混合会場を取得（決勝試合を受け入れ可能な会場）
+      const mixedVenues = venues.filter(v => {
+        const isMixed = (v as any).isMixedUse ?? (v as any).is_mixed_use ?? false
+        const finalsCount = (v as any).finalsMatchCount ?? (v as any).finals_match_count ?? 0
+        return isMixed && finalsCount > 0 && v.id !== mainFinalsVenueId
+      })
+
+      // 準決勝2用の会場（混合会場があればそちら、なければ主会場）
+      const semifinal2VenueId = mixedVenues.length > 0 ? mixedVenues[0].id : mainFinalsVenueId
+
+      console.log('[Finals] Main venue:', mainFinalsVenue?.name, 'ID:', mainFinalsVenueId)
+      console.log('[Finals] Mixed venues:', mixedVenues.map(v => v.name))
+      console.log('[Finals] Semifinal2 venue ID:', semifinal2VenueId)
 
       // 既存の決勝トーナメント試合を削除
       await supabase
@@ -519,22 +535,31 @@ function MatchSchedule() {
         .eq('tournament_id', tournamentId)
         .in('stage', ['finals', 'semifinal', 'third_place', 'final'])
 
-      // 決勝トーナメントの試合を保存
+      // 決勝トーナメントの試合を保存（会場分散対応）
       let created = 0
       if (result.tournament && result.tournament.length > 0) {
-        const tournamentMatches = result.tournament.map((m, idx) => ({
-          tournament_id: tournamentId,
-          home_team_id: m.home_team_id,
-          away_team_id: m.away_team_id,
-          venue_id: finalsVenueId,
-          match_date: matchDate,
-          match_time: m.kickoff,
-          match_order: 100 + idx + 1,
-          stage: m.match_type === 'semifinal1' || m.match_type === 'semifinal2' ? 'semifinal' :
-                 m.match_type === 'third_place' ? 'third_place' :
-                 m.match_type === 'final' ? 'final' : 'finals',
-          status: 'scheduled',
-        }))
+        const tournamentMatches = result.tournament.map((m, idx) => {
+          // 試合タイプに応じて会場を決定
+          let venueId = mainFinalsVenueId
+          if (m.match_type === 'semifinal2') {
+            venueId = semifinal2VenueId  // 準決勝2は混合会場へ分散
+          }
+          // semifinal1, third_place, final は主会場
+
+          return {
+            tournament_id: tournamentId,
+            home_team_id: m.home_team_id,
+            away_team_id: m.away_team_id,
+            venue_id: venueId,
+            match_date: matchDate,
+            match_time: m.kickoff,
+            match_order: 100 + idx + 1,
+            stage: m.match_type === 'semifinal1' || m.match_type === 'semifinal2' ? 'semifinal' :
+                   m.match_type === 'third_place' ? 'third_place' :
+                   m.match_type === 'final' ? 'final' : 'finals',
+            status: 'scheduled',
+          }
+        })
 
         const { error: tournamentError } = await supabase.from('matches').insert(tournamentMatches)
         if (tournamentError) console.error('Tournament insert error:', tournamentError)
