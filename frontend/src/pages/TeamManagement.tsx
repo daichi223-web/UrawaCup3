@@ -140,7 +140,7 @@ function TeamManagement() {
         team_type: editForm.teamType,
         is_venue_host: editForm.isVenueHost,
         region: editForm.region || null,
-        league_id: editForm.leagueId || null,
+        league_id: editForm.leagueId ? parseInt(editForm.leagueId) : null,
       });
       setTeams(prev => prev.map(t => t.id === selectedTeam.id ? data as Team : t));
       setShowEditModal(false);
@@ -168,7 +168,7 @@ function TeamManagement() {
         team_type: addForm.teamType,
         is_venue_host: addForm.isVenueHost,
         region: addForm.region || null,
-        league_id: addForm.leagueId || null,
+        league_id: addForm.leagueId ? parseInt(addForm.leagueId) : null,
       });
       setTeams(prev => [...prev, data as Team]);
       setShowAddModal(false);
