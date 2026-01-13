@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { teamsApi } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
@@ -21,8 +22,14 @@ interface Team {
   tournament_id: number;
   group_order?: number;
   region?: string;       // 地域
-  league_id?: string;    // リーグID
-  leagueId?: string;     // リーグID (camelCase)
+  league_id?: number;    // リーグID
+  leagueId?: number;     // リーグID (camelCase)
+}
+
+// リーグ型
+interface League {
+  id: number;
+  name: string;
 }
 
 // タブの定義
@@ -38,6 +45,7 @@ const GROUP_MAP: Record<GroupTab, string | null> = {
 
 function TeamManagement() {
   const [teams, setTeams] = useState<Team[]>([]);
+  const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<GroupTab>('全チーム');
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -65,19 +73,24 @@ function TeamManagement() {
     if (!tournamentId) {
       return;
     }
-    const fetchTeams = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await teamsApi.getAll(tournamentId);
-        setTeams(response.teams as Team[]);
+        // チームとリーグを並行取得
+        const [teamsResponse, leaguesResponse] = await Promise.all([
+          teamsApi.getAll(tournamentId),
+          supabase.from('leagues').select('id, name').eq('tournament_id', tournamentId).order('name')
+        ]);
+        setTeams(teamsResponse.teams as Team[]);
+        setLeagues(leaguesResponse.data || []);
       } catch (e) {
-        console.error('チーム取得エラー:', e);
-        toast.error('チームデータの取得に失敗しました');
+        console.error('データ取得エラー:', e);
+        toast.error('データの取得に失敗しました');
       } finally {
         setLoading(false);
       }
     };
-    fetchTeams();
+    fetchData();
   }, [tournamentId]);
 
   // tournamentIdが確定するまでローディング表示
@@ -356,7 +369,22 @@ function TeamManagement() {
                       </select>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{team.id}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-lg font-bold text-gray-900">{team.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg font-bold text-gray-900">{team.name}</div>
+                      <div className="flex gap-1 mt-1">
+                        {team.region && (
+                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">
+                            {team.region}
+                          </span>
+                        )}
+                        {(team.league_id || team.leagueId) && (
+                          <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">
+                            {leagues.find(l => l.id === (team.league_id || team.leagueId))?.name ||
+                             `リーグID:${team.league_id || team.leagueId}`}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <select
                         className={`px-2.5 py-0.5 rounded-full text-xs font-medium border-0 cursor-pointer
@@ -490,8 +518,8 @@ function TeamManagement() {
                 onChange={(e) => setEditForm(prev => ({ ...prev, leagueId: e.target.value }))}
               >
                 <option value="">未設定</option>
-                {masterData.leagues.map((l) => (
-                  <option key={l} value={l}>{l}</option>
+                {leagues.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1">同リーグチームの対戦回避に使用</p>
@@ -597,8 +625,8 @@ function TeamManagement() {
                 onChange={(e) => setAddForm(prev => ({ ...prev, leagueId: e.target.value }))}
               >
                 <option value="">未設定</option>
-                {masterData.leagues.map((l) => (
-                  <option key={l} value={l}>{l}</option>
+                {leagues.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1">同リーグチームの対戦回避に使用</p>
