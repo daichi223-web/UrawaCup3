@@ -64,13 +64,10 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
       {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
       {hasConsecutiveError && !isSelected && <span className="text-red-500 text-xs">⚠</span>}
       <span
-        className={`font-medium flex-1 ${hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
+        className={`font-medium flex-1 min-w-0 truncate ${hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
         style={{
           fontSize: (team?.shortName || team?.name || '')?.length > 8 ? '0.75rem' : '0.875rem',
           lineHeight: '1.25',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
         }}
       >
         {team?.shortName || team?.name || `チームID: ${teamId}`}
