@@ -532,6 +532,9 @@ function MatchSchedule() {
         data.warnings.forEach((w: string) => toast(w, { icon: '⚠️' }))
       }
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
+      // standings も再生成後にクリアされるので無効化
+      queryClient.invalidateQueries({ queryKey: ['standings'] })
+      queryClient.invalidateQueries({ queryKey: ['public-standings'] })
       setShowGenerateModal(false)
     },
     onError: (error: any) => {
@@ -623,6 +626,11 @@ function MatchSchedule() {
         data.stage === 'training' ? '研修試合' : '全試合'
       toast.success(`${stageLabel}の日程を削除しました`)
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
+      // 予選/全体削除時はstandingsも無効化
+      if (data.stage === 'preliminary' || data.stage === 'all') {
+        queryClient.invalidateQueries({ queryKey: ['standings'] })
+        queryClient.invalidateQueries({ queryKey: ['public-standings'] })
+      }
       setShowDeleteModal(false)
       setDeleteType(null)
     },

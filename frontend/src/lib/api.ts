@@ -461,17 +461,19 @@ export const standingsApi = {
   },
 
   async recalculate(tournamentId: number, groupId: string) {
-    // 該当グループの完了済み試合を取得（stageは問わない）
+    // 該当グループの完了済み＆承認済み試合を取得（stageは問わない）
+    // approval_status が null（承認フロー未使用）または 'approved'（承認済み）のみ対象
     const { data: matches, error: matchError } = await supabase
       .from('matches')
       .select('*')
       .eq('tournament_id', tournamentId)
       .eq('group_id', groupId)
       .eq('status', 'completed')
+      .or('approval_status.is.null,approval_status.eq.approved')
 
     if (matchError) throw matchError
 
-    console.log(`[Standings] Found ${matches?.length || 0} completed matches for group ${groupId}`)
+    console.log(`[Standings] Found ${matches?.length || 0} completed+approved matches for group ${groupId}`)
 
     // 該当グループのチームを取得
     const { data: teams, error: teamError } = await supabase

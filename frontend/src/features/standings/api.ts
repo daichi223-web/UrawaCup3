@@ -224,4 +224,34 @@ export const standingApi = {
       throw error;
     }
   },
+
+  /**
+   * 全グループの順位を一括再計算
+   * 不整合データの修復や、一括削除後の再計算に使用
+   */
+  recalculateAll: async (tournamentId: number): Promise<{ groups: number; success: boolean }> => {
+    try {
+      // 全グループを取得
+      const { data: groups, error: groupsError } = await supabase
+        .from('groups')
+        .select('id')
+        .eq('tournament_id', tournamentId);
+
+      if (groupsError) throw groupsError;
+
+      // 各グループの順位を再計算
+      let calculatedGroups = 0;
+      for (const group of groups || []) {
+        await standingsApi.recalculate(tournamentId, group.id);
+        calculatedGroups++;
+        console.log(`[Standings] Recalculated group ${group.id}`);
+      }
+
+      console.log(`[Standings] All ${calculatedGroups} groups recalculated for tournament ${tournamentId}`);
+      return { groups: calculatedGroups, success: true };
+    } catch (error) {
+      console.error('[Standings] Failed to recalculate all groups:', error);
+      return { groups: 0, success: false };
+    }
+  },
 };
