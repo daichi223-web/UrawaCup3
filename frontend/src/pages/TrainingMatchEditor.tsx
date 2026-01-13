@@ -56,26 +56,41 @@ export default function TrainingMatchEditor() {
   const { data: trainingMatches, isLoading } = useQuery({
     queryKey: ['training-matches', tournamentId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // まず試合データを取得
+      const { data: matches, error } = await supabase
         .from('matches')
-        .select(`
-          id,
-          home_team_id,
-          away_team_id,
-          venue_id,
-          stage,
-          match_date,
-          start_time,
-          home_team:teams!matches_home_team_id_fkey(id, name, short_name, group_id),
-          away_team:teams!matches_away_team_id_fkey(id, name, short_name, group_id),
-          venue:venues(id, name)
-        `)
+        .select('id, home_team_id, away_team_id, venue_id, stage, match_date, start_time')
         .eq('tournament_id', tournamentId)
         .eq('stage', 'training')
         .order('venue_id')
         .order('start_time')
       if (error) throw error
-      return data as Match[]
+      if (!matches || matches.length === 0) return []
+
+      // チームと会場を別途取得
+      const teamIds = new Set<number>()
+      const venueIds = new Set<number>()
+      matches.forEach(m => {
+        teamIds.add(m.home_team_id)
+        teamIds.add(m.away_team_id)
+        venueIds.add(m.venue_id)
+      })
+
+      const [teamsRes, venuesRes] = await Promise.all([
+        supabase.from('teams').select('id, name, short_name, group_id').in('id', Array.from(teamIds)),
+        supabase.from('venues').select('id, name').in('id', Array.from(venueIds))
+      ])
+
+      const teamsMap = new Map((teamsRes.data || []).map(t => [t.id, t]))
+      const venuesMap = new Map((venuesRes.data || []).map(v => [v.id, v]))
+
+      // データを結合
+      return matches.map(m => ({
+        ...m,
+        home_team: teamsMap.get(m.home_team_id),
+        away_team: teamsMap.get(m.away_team_id),
+        venue: venuesMap.get(m.venue_id),
+      })) as Match[]
     },
   })
 
