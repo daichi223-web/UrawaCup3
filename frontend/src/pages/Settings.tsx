@@ -403,16 +403,28 @@ function Settings() {
   // チームのleague_id更新
   const updateTeamLeagueMutation = useMutation({
     mutationFn: async ({ teamId, leagueId }: { teamId: number; leagueId: number | null }) => {
-      const { error } = await supabase
-        .from('teams')
-        .update({ league_id: leagueId })
-        .eq('id', teamId)
-      if (error) throw error
+      console.log('[updateTeamLeague] teamId:', teamId, 'leagueId:', leagueId, 'type:', typeof leagueId)
+      // 直接RPCで更新（スキーマキャッシュ問題を回避）
+      const { error } = await supabase.rpc('update_team_league', {
+        p_team_id: teamId,
+        p_league_id: leagueId
+      })
+      if (error) {
+        // RPCが存在しない場合は通常のupdateにフォールバック
+        console.log('[updateTeamLeague] RPC failed, trying direct update:', error)
+        const { error: updateError } = await supabase
+          .from('teams')
+          .update({ league_id: leagueId })
+          .eq('id', teamId)
+        if (updateError) throw updateError
+      }
     },
     onSuccess: () => {
       refetchTeams()
+      toast.success('リーグを更新しました')
     },
     onError: (error: Error) => {
+      console.error('[updateTeamLeague] error:', error)
       toast.error(`更新に失敗しました: ${error.message}`)
     },
   })
