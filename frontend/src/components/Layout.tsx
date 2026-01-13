@@ -95,13 +95,16 @@ function Layout({ children }: LayoutProps) {
   useRealtimeUpdates({ showNotifications: true })
 
 
-  const { setCurrentTournament } = useAppStore()
+  const { currentTournament, setCurrentTournament } = useAppStore()
+
+  // 現在の大会ID（ストアに保存されていればそれを使用、なければ1）
+  const currentTournamentId = currentTournament?.id ?? 1
 
   // 大会情報を取得してグローバルストアに保存
   // 他のコンポーネント（Dashboard, Sidebar, Settings等）と同期するため
   const { data: tournament } = useQuery({
-    queryKey: ['tournament', 1], // TODO: ID動的化
-    queryFn: () => tournamentsApi.getById(1),
+    queryKey: ['tournament', currentTournamentId],
+    queryFn: () => tournamentsApi.getById(currentTournamentId),
     staleTime: 1000 * 60 * 10, // 10分間キャッシュ
     retry: 1, // 1回だけリトライ
     retryDelay: 1000, // リトライは1秒後

@@ -125,15 +125,57 @@ class FinalDayGenerator:
     def _generate_tournament(self) -> List[Match]:
         """決勝トーナメント生成"""
         groups = self.config.group_names
-        
-        # 4グループの場合: A vs C, B vs D
-        # それ以外の場合: 1位同士でトーナメント
-        if self.config.num_groups == 4:
-            a1 = self.standings[groups[0]][0]  # A1
-            b1 = self.standings[groups[1]][0]  # B1
-            c1 = self.standings[groups[2]][0]  # C1
-            d1 = self.standings[groups[3]][0]  # D1
-            
+        num_groups = self.config.num_groups
+
+        matches = []
+
+        if num_groups == 2:
+            # 2グループ: 決勝のみ（A1 vs B1）
+            a1 = self.standings[groups[0]][0]
+            b1 = self.standings[groups[1]][0]
+
+            matches = [
+                Match(
+                    match_id="final-final",
+                    match_type=MatchType.FINAL,
+                    venue=self.config.tournament_venue,
+                    kickoff="11:00",
+                    home_team=a1,
+                    away_team=b1,
+                    referee="派遣",
+                ),
+            ]
+
+        elif num_groups == 3:
+            # 3グループ: 1位3チームでリーグ戦風または最上位2チームで決勝
+            # ここでは最上位2チームで決勝とする（勝点→得失点差で決定）
+            first_place_teams = [self.standings[g][0] for g in groups]
+            # 勝点→得失点差→得点でソート
+            sorted_teams = sorted(
+                first_place_teams,
+                key=lambda t: (-t.points, -t.goal_diff, -t.goals_for)
+            )
+
+            matches = [
+                Match(
+                    match_id="final-final",
+                    match_type=MatchType.FINAL,
+                    venue=self.config.tournament_venue,
+                    kickoff="11:00",
+                    home_team=sorted_teams[0],
+                    away_team=sorted_teams[1],
+                    referee="派遣",
+                ),
+            ]
+            self.warnings.append(f"ℹ️ 3グループのため、1位の上位2チームで決勝を実施")
+
+        elif num_groups == 4:
+            # 4グループ: A vs C, B vs D
+            a1 = self.standings[groups[0]][0]
+            b1 = self.standings[groups[1]][0]
+            c1 = self.standings[groups[2]][0]
+            d1 = self.standings[groups[3]][0]
+
             matches = [
                 Match(
                     match_id="final-sf1",
@@ -172,11 +214,59 @@ class FinalDayGenerator:
                     referee="派遣",
                 ),
             ]
+
+        elif num_groups in [5, 6]:
+            # 5-6グループ: 1位の上位4チームで準決勝→決勝
+            first_place_teams = [self.standings[g][0] for g in groups]
+            sorted_teams = sorted(
+                first_place_teams,
+                key=lambda t: (-t.points, -t.goal_diff, -t.goals_for)
+            )[:4]  # 上位4チーム
+
+            matches = [
+                Match(
+                    match_id="final-sf1",
+                    match_type=MatchType.SEMIFINAL1,
+                    venue=self.config.tournament_venue,
+                    kickoff="9:30",
+                    home_team=sorted_teams[0],
+                    away_team=sorted_teams[3],
+                    referee="派遣",
+                ),
+                Match(
+                    match_id="final-sf2",
+                    match_type=MatchType.SEMIFINAL2,
+                    venue=self.config.tournament_venue,
+                    kickoff="9:30",
+                    home_team=sorted_teams[1],
+                    away_team=sorted_teams[2],
+                    referee="派遣",
+                ),
+                Match(
+                    match_id="final-3rd",
+                    match_type=MatchType.THIRD_PLACE,
+                    venue=self.config.tournament_venue,
+                    kickoff="12:00",
+                    home_seed="SF1敗者",
+                    away_seed="SF2敗者",
+                    referee="派遣",
+                ),
+                Match(
+                    match_id="final-final",
+                    match_type=MatchType.FINAL,
+                    venue=self.config.tournament_venue,
+                    kickoff="13:30",
+                    home_seed="SF1勝者",
+                    away_seed="SF2勝者",
+                    referee="派遣",
+                ),
+            ]
+            self.warnings.append(f"ℹ️ {num_groups}グループのため、1位の上位4チームで決勝Tを実施")
+
         else:
-            # TODO: 他のグループ数に対応
-            matches = []
-            self.warnings.append(f"⚠️ {self.config.num_groups}グループの決勝T生成は未実装")
-        
+            # 7グループ以上は未対応
+            self.warnings.append(f"⚠️ {num_groups}グループの決勝T生成は未実装（2-6グループに対応）")
+
         return matches
     
     def _generate_training(self) -> List[Match]:
@@ -211,46 +301,98 @@ class FinalDayGenerator:
         return matches
     
     def _create_round1_pairs(
-        self, 
-        teams: List[Team], 
+        self,
+        teams: List[Team],
         match_count: Dict[int, int]
     ) -> List[Tuple[Team, Team]]:
-        """第1ラウンド: A vs C, B vs D"""
+        """第1ラウンド: 同順位で異グループのペア（クロス方式）"""
         pairs = []
         groups = self.config.group_names
-        
+        num_groups = self.config.num_groups
+
         for rank in range(2, self.config.teams_per_group + 1):
             rank_teams = [t for t in teams if t.rank == rank]
             teams_by_group = {t.group: t for t in rank_teams}
-            
-            if self.config.num_groups == 4:
-                # A vs C, B vs D
+
+            if num_groups == 2:
+                # 2グループ: A vs B
+                pair = self._try_pair(teams_by_group.get("A"), teams_by_group.get("B"), match_count)
+                if pair: pairs.append(pair)
+            elif num_groups == 3:
+                # 3グループ: A vs B, B vs C (ラウンドロビン前半)
+                pair1 = self._try_pair(teams_by_group.get("A"), teams_by_group.get("B"), match_count)
+                pair2 = self._try_pair(teams_by_group.get("B"), teams_by_group.get("C"), match_count)
+                if pair1: pairs.append(pair1)
+                if pair2: pairs.append(pair2)
+            elif num_groups == 4:
+                # 4グループ: A vs C, B vs D
                 pair1 = self._try_pair(teams_by_group.get("A"), teams_by_group.get("C"), match_count)
                 pair2 = self._try_pair(teams_by_group.get("B"), teams_by_group.get("D"), match_count)
                 if pair1: pairs.append(pair1)
                 if pair2: pairs.append(pair2)
-        
+            elif num_groups == 5:
+                # 5グループ: A vs C, B vs D, E vs A（循環）
+                pair1 = self._try_pair(teams_by_group.get("A"), teams_by_group.get("C"), match_count)
+                pair2 = self._try_pair(teams_by_group.get("B"), teams_by_group.get("D"), match_count)
+                pair3 = self._try_pair(teams_by_group.get("E"), teams_by_group.get("A"), match_count)
+                if pair1: pairs.append(pair1)
+                if pair2: pairs.append(pair2)
+                if pair3: pairs.append(pair3)
+            elif num_groups == 6:
+                # 6グループ: A vs D, B vs E, C vs F
+                pair1 = self._try_pair(teams_by_group.get("A"), teams_by_group.get("D"), match_count)
+                pair2 = self._try_pair(teams_by_group.get("B"), teams_by_group.get("E"), match_count)
+                pair3 = self._try_pair(teams_by_group.get("C"), teams_by_group.get("F"), match_count)
+                if pair1: pairs.append(pair1)
+                if pair2: pairs.append(pair2)
+                if pair3: pairs.append(pair3)
+
         return pairs
-    
+
     def _create_round2_pairs(
-        self, 
-        teams: List[Team], 
+        self,
+        teams: List[Team],
         match_count: Dict[int, int]
     ) -> List[Tuple[Team, Team]]:
-        """第2ラウンド: A vs D, B vs C（クロス）"""
+        """第2ラウンド: 同順位で異グループのペア（第1ラウンドとクロス）"""
         pairs = []
-        
+        groups = self.config.group_names
+        num_groups = self.config.num_groups
+
         for rank in range(2, self.config.teams_per_group + 1):
             rank_teams = [t for t in teams if t.rank == rank]
             teams_by_group = {t.group: t for t in rank_teams}
-            
-            if self.config.num_groups == 4:
-                # A vs D, B vs C（第1ラウンドとクロス）
+
+            if num_groups == 2:
+                # 2グループ: 第2ラウンドなし（1試合のみ）
+                pass
+            elif num_groups == 3:
+                # 3グループ: A vs C (ラウンドロビン後半)
+                pair = self._try_pair(teams_by_group.get("A"), teams_by_group.get("C"), match_count)
+                if pair: pairs.append(pair)
+            elif num_groups == 4:
+                # 4グループ: A vs D, B vs C（第1ラウンドとクロス）
                 pair1 = self._try_pair(teams_by_group.get("A"), teams_by_group.get("D"), match_count)
                 pair2 = self._try_pair(teams_by_group.get("B"), teams_by_group.get("C"), match_count)
                 if pair1: pairs.append(pair1)
                 if pair2: pairs.append(pair2)
-        
+            elif num_groups == 5:
+                # 5グループ: B vs E, C vs A, D vs E（クロス）
+                pair1 = self._try_pair(teams_by_group.get("B"), teams_by_group.get("E"), match_count)
+                pair2 = self._try_pair(teams_by_group.get("C"), teams_by_group.get("E"), match_count)
+                pair3 = self._try_pair(teams_by_group.get("D"), teams_by_group.get("A"), match_count)
+                if pair1: pairs.append(pair1)
+                if pair2: pairs.append(pair2)
+                if pair3: pairs.append(pair3)
+            elif num_groups == 6:
+                # 6グループ: A vs E, B vs F, C vs D（クロス）
+                pair1 = self._try_pair(teams_by_group.get("A"), teams_by_group.get("E"), match_count)
+                pair2 = self._try_pair(teams_by_group.get("B"), teams_by_group.get("F"), match_count)
+                pair3 = self._try_pair(teams_by_group.get("C"), teams_by_group.get("D"), match_count)
+                if pair1: pairs.append(pair1)
+                if pair2: pairs.append(pair2)
+                if pair3: pairs.append(pair3)
+
         return pairs
     
     def _try_pair(

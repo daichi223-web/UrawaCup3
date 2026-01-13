@@ -130,11 +130,52 @@ function MatchApproval() {
                                     </div>
                                 </div>
 
-                                {/* 得点者・警告（簡易表示 - 詳細が必要ならここに追加） */}
-                                {/* 
-                  TODO: View Goal Scorers here if needed. 
-                  Currently focusing on high-level score verification. 
-                */}
+                                {/* 得点者一覧 */}
+                                {match.goals && match.goals.length > 0 && (
+                                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                        <h4 className="text-sm font-medium text-gray-700 mb-2">得点者</h4>
+                                        <div className="grid grid-cols-2 gap-2 text-sm">
+                                            {/* ホームチーム得点 */}
+                                            <div className="space-y-1">
+                                                {match.goals
+                                                    .filter(g => g.teamId === match.homeTeamId || g.team_id === match.home_team_id)
+                                                    .sort((a, b) => (a.half - b.half) || (a.minute - b.minute))
+                                                    .map((goal, idx) => (
+                                                        <div key={idx} className="text-gray-600">
+                                                            <span className="text-gray-400">{goal.half === 1 ? '前' : '後'}{goal.minute}'</span>
+                                                            {' '}
+                                                            <span>{goal.playerName || goal.player_name}</span>
+                                                            {(goal.isOwnGoal || goal.is_own_goal) && <span className="text-red-500 ml-1">(OG)</span>}
+                                                            {(goal.isPenalty || goal.is_penalty) && <span className="text-blue-500 ml-1">(PK)</span>}
+                                                        </div>
+                                                    ))
+                                                }
+                                                {match.goals.filter(g => g.teamId === match.homeTeamId || g.team_id === match.home_team_id).length === 0 && (
+                                                    <div className="text-gray-400">-</div>
+                                                )}
+                                            </div>
+                                            {/* アウェイチーム得点 */}
+                                            <div className="space-y-1">
+                                                {match.goals
+                                                    .filter(g => g.teamId === match.awayTeamId || g.team_id === match.away_team_id)
+                                                    .sort((a, b) => (a.half - b.half) || (a.minute - b.minute))
+                                                    .map((goal, idx) => (
+                                                        <div key={idx} className="text-gray-600">
+                                                            <span className="text-gray-400">{goal.half === 1 ? '前' : '後'}{goal.minute}'</span>
+                                                            {' '}
+                                                            <span>{goal.playerName || goal.player_name}</span>
+                                                            {(goal.isOwnGoal || goal.is_own_goal) && <span className="text-red-500 ml-1">(OG)</span>}
+                                                            {(goal.isPenalty || goal.is_penalty) && <span className="text-blue-500 ml-1">(PK)</span>}
+                                                        </div>
+                                                    ))
+                                                }
+                                                {match.goals.filter(g => g.teamId === match.awayTeamId || g.team_id === match.away_team_id).length === 0 && (
+                                                    <div className="text-gray-400">-</div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* アクションボタン */}
                                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

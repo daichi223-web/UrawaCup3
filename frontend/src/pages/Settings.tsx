@@ -372,7 +372,8 @@ function Settings() {
             intervalMinutes: 15,
           })
           toast.success(`大会「${newTournament.name}」を作成しました`)
-          // TODO: 作成した大会に切り替える
+          // 作成した大会に切り替える
+          setCurrentTournament(newTournament)
         },
         onError: (error: Error) => {
           toast.error(`作成に失敗しました: ${error.message}`)
