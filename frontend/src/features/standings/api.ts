@@ -151,15 +151,13 @@ export const standingApi = {
       lost: s.lost,
     }));
 
-    // 総合順位でソート: グループ内順位 → 勝点 → 得失点差 → 総得点
+    // 総合順位でソート: 勝点 → 得失点差 → 総得点（グループ関係なく純粋に成績順）
     entries.sort((a, b) => {
-      // 1. グループ内順位
-      if (a.groupRank !== b.groupRank) return a.groupRank - b.groupRank;
-      // 2. 勝点
+      // 1. 勝点
       if (a.points !== b.points) return b.points - a.points;
-      // 3. 得失点差
+      // 2. 得失点差
       if (a.goalDifference !== b.goalDifference) return b.goalDifference - a.goalDifference;
-      // 4. 総得点
+      // 3. 総得点
       if (a.goalsFor !== b.goalsFor) return b.goalsFor - a.goalsFor;
       // 同点の場合はグループID順（安定ソート）
       return a.groupId.localeCompare(b.groupId);
