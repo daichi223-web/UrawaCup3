@@ -59,12 +59,14 @@ export default function TrainingMatchEditor() {
       // まず試合データを取得
       const { data: matches, error } = await supabase
         .from('matches')
-        .select('id, home_team_id, away_team_id, venue_id, stage, match_date, start_time')
+        .select('*')
         .eq('tournament_id', tournamentId)
         .eq('stage', 'training')
         .order('venue_id')
-        .order('start_time')
-      if (error) throw error
+      if (error) {
+        console.error('[TrainingMatchEditor] Query error:', error)
+        throw error
+      }
       if (!matches || matches.length === 0) return []
 
       // チームと会場を別途取得
