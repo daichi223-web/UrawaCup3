@@ -782,22 +782,42 @@ export const finalDayApi = {
     const matchesPerVenue = Math.floor(teamsPerVenue / 2);
     console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${venues.length}, 会場あたり: ${teamsPerVenue}チーム, ${matchesPerVenue}試合`);
 
-    // 10. 全チームを順位順にソートして会場に振り分け
-    const allTrainingTeams: TeamInfo[] = [];
-    for (let rank = 2; rank <= 10; rank++) {
-      const teams = teamsByRank[rank] || [];
-      allTrainingTeams.push(...teams);
-    }
-
-    // 会場ごとにチームを割り当て（順位順で均等に）
+    // 10. チームを会場に振り分け（異なるグループのチームが同じ会場に集まるように）
     const venueAssignments: Map<number, TeamInfo[]> = new Map();
     venues.forEach(v => venueAssignments.set(v.id, []));
 
-    allTrainingTeams.forEach((team, index) => {
-      const venueIndex = index % venues.length;
-      const venue = venues[venueIndex];
-      venueAssignments.get(venue.id)!.push(team);
-    });
+    // グループごとにチームを分類
+    const teamsByGroup: Record<string, TeamInfo[]> = {};
+    for (const teams of Object.values(teamsByRank)) {
+      for (const team of teams) {
+        const groupKey = team.groupId || 'unknown';
+        if (!teamsByGroup[groupKey]) teamsByGroup[groupKey] = [];
+        teamsByGroup[groupKey].push(team);
+      }
+    }
+
+    // 各グループのチームを順位順にソート
+    for (const groupTeams of Object.values(teamsByGroup)) {
+      groupTeams.sort((a, b) => a.rank - b.rank);
+    }
+
+    // グループごとに、チームを各会場に1つずつ配置
+    // 例: グループAの2位→会場1、3位→会場2、4位→会場3...
+    const groupIds = Object.keys(teamsByGroup).sort();
+    for (const groupId of groupIds) {
+      const groupTeams = teamsByGroup[groupId];
+      groupTeams.forEach((team, index) => {
+        const venueIndex = index % venues.length;
+        const venue = venues[venueIndex];
+        venueAssignments.get(venue.id)!.push(team);
+      });
+    }
+
+    console.log('[Training] 会場割り当て完了:',
+      Array.from(venueAssignments.entries()).map(([vid, teams]) =>
+        `会場${vid}: ${teams.length}チーム (${[...new Set(teams.map(t => t.groupId))].join(',')})`
+      ).join(' | ')
+    );
 
     // 11. 各会場でリーグ戦（総当たり）を生成
     const matchesToInsert: any[] = [];
@@ -806,6 +826,9 @@ export const finalDayApi = {
     for (const venue of venues) {
       const teamsInVenue = venueAssignments.get(venue.id) || [];
       if (teamsInVenue.length < 2) continue;
+
+      // デバッグ: チーム情報を出力
+      console.log(`[Training] 会場${venue.id}のチーム:`, teamsInVenue.map(t => ({ id: t.teamId, name: t.teamName, group: t.groupId })));
 
       // 会場内の平均順位（リーグ名用）
       const avgRank = Math.round(teamsInVenue.reduce((sum, t) => sum + t.rank, 0) / teamsInVenue.length);
@@ -818,6 +841,8 @@ export const finalDayApi = {
           // 同グループ以外は全て対戦（リーグ戦）
           if (score < Infinity) {
             pairs.push({ teamA: teamsInVenue[i], teamB: teamsInVenue[j], score });
+          } else {
+            console.log(`[Training] スキップ: ${teamsInVenue[i].teamName} vs ${teamsInVenue[j].teamName} (同グループ: ${teamsInVenue[i].groupId})`);
           }
         }
       }
@@ -833,7 +858,7 @@ export const finalDayApi = {
           home_team_id: pair.teamA.teamId,
           away_team_id: pair.teamB.teamId,
           match_date: finalDate,
-          start_time: startTime,
+          match_time: startTime,
           match_order: matchOrder++,
           stage: 'training',
           status: 'scheduled',
@@ -867,7 +892,7 @@ export const finalDayApi = {
       `)
       .eq('tournament_id', tournamentId)
       .eq('stage', 'training')
-      .order('start_time');
+      .order('match_time');
 
     if (fetchError) throw fetchError;
     return (createdMatches || []) as MatchWithDetails[];
