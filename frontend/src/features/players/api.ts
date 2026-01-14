@@ -90,13 +90,13 @@ export const playerApi = {
     let error;
 
     if (isNumberQuery) {
-      // 背番号検索（完全一致または前方一致）
+      // 背番号検索（入力値以上の番号を表示）
       const numberValue = parseInt(normalizedQuery, 10);
       const result = await supabase
         .from('players')
         .select('id, number, name')
         .eq('team_id', teamId)
-        .or(`number.eq.${numberValue},number.like.${normalizedQuery}%`)
+        .gte('number', numberValue)
         .order('number')
         .limit(10);
       data = result.data;
