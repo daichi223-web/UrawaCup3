@@ -111,7 +111,20 @@ export const matchApi = {
       homePK: m.home_pk,
       awayPK: m.away_pk,
       hasPenaltyShootout: m.has_penalty_shootout,
-      goals: m.goals || [],
+      // goals も snake_case → camelCase 変換
+      goals: (m.goals || []).map((g: any) => ({
+        id: g.id,
+        matchId: g.match_id,
+        teamId: g.team_id,
+        playerId: g.player_id,
+        playerName: g.player_name,
+        minute: g.minute,
+        half: g.half,
+        isOwnGoal: g.is_own_goal || false,
+        isPenalty: g.is_penalty || false,
+        createdAt: g.created_at,
+        updatedAt: g.updated_at,
+      })),
     }));
 
     return { matches, total: matches.length };
@@ -199,9 +212,11 @@ export const matchApi = {
 
         if (goalsError) {
           console.error('[Goals] Failed to save goals:', goalsError);
+          throw new Error(`得点者の保存に失敗しました: ${goalsError.message}`);
         }
       } catch (err) {
         console.error('[Goals] Error saving goals:', err);
+        throw err;
       }
     } else {
       // 得点者が空の場合は既存の得点を削除
