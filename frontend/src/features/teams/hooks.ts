@@ -48,6 +48,7 @@ export function useUpdateTeam() {
       teamApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }
@@ -59,6 +60,7 @@ export function useDeleteTeam() {
     mutationFn: (id: number) => teamApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }

@@ -13,6 +13,8 @@ export interface Team {
   groupId: string;
   groupOrder: number;
   prefecture: string;
+  region?: string | null;
+  league_id?: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -27,6 +29,8 @@ export interface CreateTeamInput {
   groupId?: string;
   groupOrder?: number;
   prefecture?: string;
+  region?: string;
+  league_id?: number;
 }
 
 export interface UpdateTeamInput {
@@ -37,6 +41,8 @@ export interface UpdateTeamInput {
   groupId?: string;
   groupOrder?: number;
   prefecture?: string;
+  region?: string;
+  league_id?: number;
 }
 
 export interface TeamWithPlayers extends Team {

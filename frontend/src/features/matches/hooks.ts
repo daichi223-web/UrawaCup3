@@ -63,6 +63,7 @@ export function useDeleteMatch() {
     mutationFn: (id: number) => matchApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }
@@ -74,6 +75,7 @@ export function useGenerateMatchSchedule() {
     mutationFn: (data: MatchGenerateScheduleInput) => matchApi.generateSchedule(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }
@@ -85,6 +87,7 @@ export function useGenerateTrainingMatches() {
     mutationFn: (tournamentId: number) => matchApi.generateTrainingMatches(tournamentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }
@@ -96,6 +99,7 @@ export function useGenerateFinals() {
     mutationFn: (tournamentId: number) => matchApi.generateFinals(tournamentId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }
@@ -120,6 +124,7 @@ export function useRejectMatch() {
       matchApi.reject(id, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }

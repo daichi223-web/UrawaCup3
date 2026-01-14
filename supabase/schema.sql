@@ -291,6 +291,78 @@ CREATE TABLE IF NOT EXISTS team_uniforms (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 大会設定テーブル
+CREATE TABLE IF NOT EXISTS tournament_settings (
+    id SERIAL PRIMARY KEY,
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    match_duration INTEGER NOT NULL DEFAULT 20,
+    break_duration INTEGER NOT NULL DEFAULT 5,
+    points_for_win INTEGER NOT NULL DEFAULT 3,
+    points_for_draw INTEGER NOT NULL DEFAULT 1,
+    points_for_loss INTEGER NOT NULL DEFAULT 0,
+    interval_minutes INTEGER DEFAULT 15,
+    half_time_minutes INTEGER DEFAULT 5,
+    preliminary_rounds INTEGER DEFAULT 5,
+    tiebreaker_rules JSONB DEFAULT '["points", "goal_difference", "goals_scored", "head_to_head", "lottery"]',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(tournament_id)
+);
+
+-- 会場スタッフテーブル
+CREATE TABLE IF NOT EXISTS venue_staff (
+    id SERIAL PRIMARY KEY,
+    venue_id INTEGER NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL DEFAULT 'staff',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(venue_id, user_id)
+);
+
+-- 報告書発信元設定テーブル
+CREATE TABLE IF NOT EXISTS sender_settings (
+    id SERIAL PRIMARY KEY,
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    sender_name VARCHAR(100),
+    sender_title VARCHAR(100),
+    sender_organization VARCHAR(100),
+    recipient VARCHAR(200),
+    contact VARCHAR(200),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(tournament_id)
+);
+
+-- 報告書受信者テーブル
+CREATE TABLE IF NOT EXISTS report_recipients (
+    id SERIAL PRIMARY KEY,
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255),
+    fax VARCHAR(50),
+    role VARCHAR(50),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    notes VARCHAR(500),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 優秀選手テーブル
+CREATE TABLE IF NOT EXISTS outstanding_players (
+    id SERIAL PRIMARY KEY,
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    team_id INTEGER REFERENCES teams(id) ON DELETE SET NULL,
+    player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+    team_name VARCHAR(100),
+    player_name VARCHAR(100) NOT NULL,
+    player_number INTEGER,
+    award_type VARCHAR(20) NOT NULL DEFAULT 'outstanding',
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =====================================================
 -- 3. Circular Dependencies (Idempotent ALTERs)
 -- =====================================================
@@ -422,6 +494,36 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_tournament_settings_updated_at ON tournament_settings;
+    CREATE TRIGGER update_tournament_settings_updated_at BEFORE UPDATE ON tournament_settings
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END $$;
+
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_venue_staff_updated_at ON venue_staff;
+    CREATE TRIGGER update_venue_staff_updated_at BEFORE UPDATE ON venue_staff
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END $$;
+
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_sender_settings_updated_at ON sender_settings;
+    CREATE TRIGGER update_sender_settings_updated_at BEFORE UPDATE ON sender_settings
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END $$;
+
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_report_recipients_updated_at ON report_recipients;
+    CREATE TRIGGER update_report_recipients_updated_at BEFORE UPDATE ON report_recipients
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END $$;
+
+DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_outstanding_players_updated_at ON outstanding_players;
+    CREATE TRIGGER update_outstanding_players_updated_at BEFORE UPDATE ON outstanding_players
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END $$;
+
+DO $$ BEGIN
     DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
     CREATE TRIGGER on_auth_user_created
         AFTER INSERT ON auth.users
@@ -445,6 +547,11 @@ ALTER TABLE standings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exclusion_pairs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_uniforms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tournament_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE venue_staff ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sender_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE report_recipients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE outstanding_players ENABLE ROW LEVEL SECURITY;
 
 -- Clean up existing policies to avoid duplicates/errors
 DO $$ BEGIN
@@ -459,11 +566,16 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Public read access" ON standings;
     DROP POLICY IF EXISTS "Public read access" ON staff;
     DROP POLICY IF EXISTS "Public read access" ON team_uniforms;
-    
+    DROP POLICY IF EXISTS "Public read access" ON tournament_settings;
+    DROP POLICY IF EXISTS "Public read access" ON venue_staff;
+    DROP POLICY IF EXISTS "Public read access" ON sender_settings;
+    DROP POLICY IF EXISTS "Public read access" ON report_recipients;
+    DROP POLICY IF EXISTS "Public read access" ON outstanding_players;
+
     -- Profiles
     DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON profiles;
     DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
-    
+
     -- Admin
     DROP POLICY IF EXISTS "Admin full access" ON tournaments;
     DROP POLICY IF EXISTS "Admin full access" ON groups;
@@ -475,7 +587,12 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Admin full access" ON exclusion_pairs;
     DROP POLICY IF EXISTS "Admin full access" ON staff;
     DROP POLICY IF EXISTS "Admin full access" ON team_uniforms;
-    
+    DROP POLICY IF EXISTS "Admin full access" ON tournament_settings;
+    DROP POLICY IF EXISTS "Admin full access" ON venue_staff;
+    DROP POLICY IF EXISTS "Admin full access" ON sender_settings;
+    DROP POLICY IF EXISTS "Admin full access" ON report_recipients;
+    DROP POLICY IF EXISTS "Admin full access" ON outstanding_players;
+
     -- Venue Staff
     DROP POLICY IF EXISTS "Venue staff can update matches" ON matches;
     DROP POLICY IF EXISTS "Venue staff can insert goals" ON goals;
@@ -494,6 +611,11 @@ CREATE POLICY "Public read access" ON goals FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON standings FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON staff FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON team_uniforms FOR SELECT USING (true);
+CREATE POLICY "Public read access" ON tournament_settings FOR SELECT USING (true);
+CREATE POLICY "Public read access" ON venue_staff FOR SELECT USING (true);
+CREATE POLICY "Public read access" ON sender_settings FOR SELECT USING (true);
+CREATE POLICY "Public read access" ON report_recipients FOR SELECT USING (true);
+CREATE POLICY "Public read access" ON outstanding_players FOR SELECT USING (true);
 
 CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
@@ -508,6 +630,11 @@ CREATE POLICY "Admin full access" ON standings FOR ALL USING (is_admin());
 CREATE POLICY "Admin full access" ON exclusion_pairs FOR ALL USING (is_admin());
 CREATE POLICY "Admin full access" ON staff FOR ALL USING (is_admin());
 CREATE POLICY "Admin full access" ON team_uniforms FOR ALL USING (is_admin());
+CREATE POLICY "Admin full access" ON tournament_settings FOR ALL USING (is_admin());
+CREATE POLICY "Admin full access" ON venue_staff FOR ALL USING (is_admin());
+CREATE POLICY "Admin full access" ON sender_settings FOR ALL USING (is_admin());
+CREATE POLICY "Admin full access" ON report_recipients FOR ALL USING (is_admin());
+CREATE POLICY "Admin full access" ON outstanding_players FOR ALL USING (is_admin());
 
 CREATE POLICY "Venue staff can update matches" ON matches
     FOR UPDATE USING (can_edit_match(venue_id));
@@ -566,3 +693,28 @@ DO $$ BEGIN
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
+
+-- =====================================================
+-- 8. Indexes for New Tables
+-- =====================================================
+
+-- tournament_settings indexes
+CREATE INDEX IF NOT EXISTS idx_tournament_settings_tournament_id ON tournament_settings(tournament_id);
+
+-- venue_staff indexes
+CREATE INDEX IF NOT EXISTS idx_venue_staff_venue_id ON venue_staff(venue_id);
+CREATE INDEX IF NOT EXISTS idx_venue_staff_user_id ON venue_staff(user_id);
+
+-- sender_settings indexes
+CREATE INDEX IF NOT EXISTS idx_sender_settings_tournament_id ON sender_settings(tournament_id);
+
+-- report_recipients indexes
+CREATE INDEX IF NOT EXISTS idx_report_recipients_tournament_id ON report_recipients(tournament_id);
+CREATE INDEX IF NOT EXISTS idx_report_recipients_is_active ON report_recipients(is_active);
+
+-- outstanding_players indexes
+CREATE INDEX IF NOT EXISTS idx_outstanding_players_tournament_id ON outstanding_players(tournament_id);
+CREATE INDEX IF NOT EXISTS idx_outstanding_players_team_id ON outstanding_players(team_id);
+CREATE INDEX IF NOT EXISTS idx_outstanding_players_player_id ON outstanding_players(player_id);
+CREATE INDEX IF NOT EXISTS idx_outstanding_players_award_type ON outstanding_players(award_type);
+CREATE INDEX IF NOT EXISTS idx_outstanding_players_display_order ON outstanding_players(display_order);

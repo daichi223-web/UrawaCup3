@@ -25,23 +25,43 @@ export async function withTimeout<T>(
   return Promise.race([promise, timeoutPromise])
 }
 
-// Vercel環境変数が設定されていない場合のフォールバック値
+// 開発環境用フォールバック値
 // Note: anon key は公開しても安全です（Row Level Security で保護されています）
-const FALLBACK_SUPABASE_URL = 'https://ulpdvtxqtwtmpzcnkelz.supabase.co'
-const FALLBACK_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVscGR2dHhxdHd0bXB6Y25rZWx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3MDI3NjQsImV4cCI6MjA4MzI3ODc2NH0.9LoNuSbJVHWOn5D6mDNEkWTGVIgLEKL7pd5kUZ879Ek'
+const DEV_FALLBACK_SUPABASE_URL = 'https://ulpdvtxqtwtmpzcnkelz.supabase.co'
+const DEV_FALLBACK_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVscGR2dHhxdHd0bXB6Y25rZWx6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3MDI3NjQsImV4cCI6MjA4MzI3ODc2NH0.9LoNuSbJVHWOn5D6mDNEkWTGVIgLEKL7pd5kUZ879Ek'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || FALLBACK_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || FALLBACK_SUPABASE_ANON_KEY
+// 環境変数から取得
+const envSupabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const envSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// 本番環境では環境変数必須、開発環境ではフォールバック使用
+if (!envSupabaseUrl || !envSupabaseAnonKey) {
+  if (import.meta.env.PROD) {
+    throw new Error(
+      'Supabase environment variables are required in production. ' +
+      'Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.'
+    )
+  }
+  console.warn(
+    '%c[Supabase] WARNING: Using development fallback values. ' +
+    'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY for production.',
+    'background: #ff9800; color: #000; padding: 4px; border-radius: 4px;'
+  )
+}
+
+// 最終的な値（開発環境ではフォールバック使用可）
+const supabaseUrl = envSupabaseUrl || DEV_FALLBACK_SUPABASE_URL
+const supabaseAnonKey = envSupabaseAnonKey || DEV_FALLBACK_SUPABASE_ANON_KEY
 
 // Debugging: Expose URL and log configuration source
 if (typeof window !== 'undefined') {
   // @ts-ignore
   window.__SUPABASE_URL__ = supabaseUrl
 
-  const isFallback = supabaseUrl === FALLBACK_SUPABASE_URL
+  const isUsingEnvVars = !!envSupabaseUrl && !!envSupabaseAnonKey
   console.log(
-    `%c[Supabase] Initializing... Using ${isFallback ? 'FALLBACK' : 'VITE ENV VARS'}`,
-    'background: #333; color: #00d1b2; padding: 4px; border-radius: 4px;'
+    `%c[Supabase] Initialized with ${isUsingEnvVars ? 'environment variables' : 'development fallback'}`,
+    `background: #333; color: ${isUsingEnvVars ? '#00d1b2' : '#ff9800'}; padding: 4px; border-radius: 4px;`
   )
 }
 

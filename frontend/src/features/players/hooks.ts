@@ -77,6 +77,7 @@ export function useImportPlayersCsv() {
     }) => playerApi.importCsv(teamId, file, replaceExisting),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [...QUERY_KEY, { teamId: variables.teamId }] });
+      queryClient.invalidateQueries({ queryKey: ['standings'] });
     },
   });
 }
