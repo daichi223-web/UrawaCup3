@@ -196,13 +196,13 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
     const match = name.match(/^(.+?)(U\d+)$/)
     if (match) {
       return (
-        <span className="flex flex-col items-center leading-tight">
-          <span>{match[1]}</span>
-          <span className="text-xs">{match[2]}</span>
+        <span className="flex flex-col items-center leading-none">
+          <span className="text-xs">{match[1]}</span>
+          <span style={{ fontSize: '0.6rem' }}>{match[2]}</span>
         </span>
       )
     }
-    return name
+    return <span className="text-xs">{name}</span>
   }
 
   // 結果記号を取得
@@ -222,7 +222,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full text-sm border-collapse">
+      <table className="text-sm border-collapse table-fixed">
         <thead>
           <tr className="bg-gray-100">
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-green-100 w-8">順</th>
@@ -230,7 +230,8 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
             {teamStats.map(stats => (
               <th
                 key={`header-${stats.teamId}`}
-                className="border border-gray-300 px-1 py-1 text-center font-medium w-12"
+                className="border border-gray-300 px-0.5 py-1 text-center font-medium"
+                style={{ width: '2.5rem', minWidth: '2.5rem', maxWidth: '2.5rem' }}
                 title={stats.team.name}
               >
                 {formatTeamNameForHeader(stats.team)}
@@ -272,12 +273,16 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
 
               {/* 対戦結果マトリックス */}
               {teamStats.map(colStats => {
+                // セルの共通スタイル
+                const cellStyle = { width: '2.5rem', minWidth: '2.5rem', maxWidth: '2.5rem' }
+
                 // 自分自身のセル
                 if (rowStats.teamId === colStats.teamId) {
                   return (
                     <td
                       key={`cell-${rowStats.teamId}-${colStats.teamId}`}
-                      className="border border-gray-300 px-1 py-1 text-center bg-gray-200"
+                      className="border border-gray-300 px-0.5 py-1 text-center bg-gray-200"
+                      style={cellStyle}
                     >
                       -
                     </td>
@@ -289,7 +294,8 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                   return (
                     <td
                       key={`cell-${rowStats.teamId}-${colStats.teamId}`}
-                      className="border border-gray-300 px-1 py-1 text-center bg-gray-100"
+                      className="border border-gray-300 px-0.5 py-1 text-center bg-gray-100"
+                      style={cellStyle}
                       title="対戦なし"
                     >
                       <span className="text-gray-400">-</span>
@@ -304,7 +310,8 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                 return (
                   <td
                     key={`cell-${rowStats.teamId}-${colStats.teamId}`}
-                    className="border border-gray-300 px-1 py-1 text-center"
+                    className="border border-gray-300 px-0.5 py-1 text-center"
+                    style={cellStyle}
                     title={h2h ? `${h2h.score}-${h2h.opponentScore}` : '未対戦'}
                   >
                     {h2h ? (
