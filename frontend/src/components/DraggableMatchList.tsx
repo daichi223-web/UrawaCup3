@@ -25,6 +25,7 @@ interface TeamSlotProps {
   disabled: boolean
   hasConsecutiveError?: boolean
   compact?: boolean
+  isChanged?: boolean  // 未確定の変更があるか
 }
 
 // グループごとの色設定
@@ -38,11 +39,14 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 /**
  * クリック可能なチームスロット
  */
-function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError, compact }: TeamSlotProps) {
+function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError, compact, isChanged }: TeamSlotProps) {
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
   const groupId = team?.groupId || team?.group_id || null
   const groupColors = groupId ? GROUP_COLORS[groupId] : null
+
+  // 変更されたチームは目立つシアン色で表示
+  const changedStyle = isChanged ? 'border-cyan-500 bg-cyan-100 ring-2 ring-cyan-300' : ''
 
   return (
     <button
@@ -50,23 +54,26 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
       disabled={disabled}
       className={`
         flex items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'p-2'} rounded border ${compact ? 'border' : 'border-2'} w-full text-left transition-all overflow-hidden
-        ${hasConsecutiveError
-          ? 'border-red-400 bg-red-50'
-          : isSelected
-            ? 'border-primary-500 bg-primary-100 ring-2 ring-primary-300'
-            : isSwapTarget
-              ? 'border-green-400 bg-green-50 hover:bg-green-100'
-              : groupColors
-                ? `${groupColors.border} ${groupColors.bg} hover:opacity-80`
-                : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-gray-50'
+        ${isChanged
+          ? changedStyle
+          : hasConsecutiveError
+            ? 'border-red-400 bg-red-50'
+            : isSelected
+              ? 'border-primary-500 bg-primary-100 ring-2 ring-primary-300'
+              : isSwapTarget
+                ? 'border-green-400 bg-green-50 hover:bg-green-100'
+                : groupColors
+                  ? `${groupColors.border} ${groupColors.bg} hover:opacity-80`
+                  : 'border-gray-200 bg-white hover:border-primary-300 hover:bg-gray-50'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
     >
       {isSelected && <Check className={`${compact ? 'w-3 h-3' : 'w-4 h-4'} text-primary-600 flex-shrink-0`} />}
-      {hasConsecutiveError && !isSelected && <span className="text-red-500 text-xs">⚠</span>}
+      {isChanged && !isSelected && <span className="text-cyan-600 text-xs font-bold">★</span>}
+      {hasConsecutiveError && !isSelected && !isChanged && <span className="text-red-500 text-xs">⚠</span>}
       <span
-        className={`font-medium flex-1 min-w-0 truncate ${hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
+        className={`font-medium flex-1 min-w-0 truncate ${isChanged ? 'text-cyan-800' : hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
         style={{
           fontSize: compact ? '0.65rem' : (team?.shortName || team?.name || '')?.length > 8 ? '0.75rem' : '0.875rem',
           lineHeight: '1.1',
@@ -188,6 +195,8 @@ interface ClickableMatchListProps {
   onExternalSelect?: (selected: SelectedTeam | null) => void
   /** 全試合リスト（会場を超えた交換時に相手の試合を検索するため） */
   allMatches?: MatchWithDetails[]
+  /** 変更されたチームID（未確定の変更をハイライト） */
+  changedTeamIds?: Set<number>
 }
 
 /**
@@ -210,6 +219,7 @@ export default function DraggableMatchList({
   externalSelectedTeam,
   onExternalSelect,
   allMatches,
+  changedTeamIds,
 }: ClickableMatchListProps) {
   // 内部状態（外部状態が提供されない場合に使用）
   const [internalSelectedTeam, setInternalSelectedTeam] = useState<SelectedTeam | null>(null)
@@ -567,6 +577,9 @@ export default function DraggableMatchList({
           const awayTeamId = match.awayTeamId || (match as any).away_team_id
           const homeHasConsecutiveError = consecutiveMatchTeams?.has(homeTeamId) ?? false
           const awayHasConsecutiveError = consecutiveMatchTeams?.has(awayTeamId) ?? false
+          // 変更チェック
+          const homeIsChanged = changedTeamIds?.has(homeTeamId) ?? false
+          const awayIsChanged = changedTeamIds?.has(awayTeamId) ?? false
 
           // 制約違反をチェック
           const matchViolations = getMatchViolations(match.id)
@@ -601,6 +614,7 @@ export default function DraggableMatchList({
                   disabled={isDisabled}
                   hasConsecutiveError={homeHasConsecutiveError}
                   compact
+                  isChanged={homeIsChanged}
                 />
                 <span className="text-gray-400 text-xs flex-shrink-0">vs</span>
                 <ClickableTeamSlot
@@ -612,6 +626,7 @@ export default function DraggableMatchList({
                   disabled={isDisabled}
                   hasConsecutiveError={awayHasConsecutiveError}
                   compact
+                  isChanged={awayIsChanged}
                 />
               </div>
 
@@ -673,6 +688,7 @@ export default function DraggableMatchList({
                     onClick={() => handleTeamClick(match, 'home')}
                     disabled={isDisabled}
                     hasConsecutiveError={homeHasConsecutiveError}
+                    isChanged={homeIsChanged}
                   />
                 </div>
 
@@ -688,6 +704,7 @@ export default function DraggableMatchList({
                     onClick={() => handleTeamClick(match, 'away')}
                     disabled={isDisabled}
                     hasConsecutiveError={awayHasConsecutiveError}
+                    isChanged={awayIsChanged}
                   />
                 </div>
               </div>

@@ -98,6 +98,8 @@ function MatchSchedule() {
   } | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)  // 組み合わせ編集モード
   const [crossVenueSelectedTeam, setCrossVenueSelectedTeam] = useState<SelectedTeam | null>(null)  // 会場を超えた選択状態（1リーグ制用）
+  const [originalTeamPositions, setOriginalTeamPositions] = useState<Map<number, { matchId: number; position: 'home' | 'away'; venueId: number }>>(new Map())  // 元のチーム配置
+  const [isChangeConfirmed, setIsChangeConfirmed] = useState(true)  // 変更が確定済みか
 
   // 大会情報を取得
   const { data: tournament, isLoading: isLoadingTournament } = useQuery({
@@ -754,6 +756,9 @@ function MatchSchedule() {
     }
     swappingRef.current.add(matchId)
 
+    // 変更が行われたら未確定状態に
+    setIsChangeConfirmed(false)
+
     try {
       await swapTeamsMutation.mutateAsync({ matchId, homeTeamId, awayTeamId })
       // 成功したら即座にデータを再取得
@@ -767,6 +772,58 @@ function MatchSchedule() {
         swappingRef.current.delete(matchId)
       }, 500)
     }
+  }
+
+  // 元のチーム配置を保存（編集開始時）
+  const captureOriginalPositions = (matchList: MatchWithDetails[]) => {
+    const positions = new Map<number, { matchId: number; position: 'home' | 'away'; venueId: number }>()
+    matchList.forEach(match => {
+      const venueId = match.venueId || match.venue_id || 0
+      const homeId = match.homeTeamId || match.home_team_id
+      const awayId = match.awayTeamId || match.away_team_id
+      if (homeId) {
+        positions.set(homeId, { matchId: match.id, position: 'home', venueId })
+      }
+      if (awayId) {
+        positions.set(awayId, { matchId: match.id, position: 'away', venueId })
+      }
+    })
+    setOriginalTeamPositions(positions)
+    setIsChangeConfirmed(true)
+  }
+
+  // 変更されたチームを検出
+  const getChangedTeamIds = (currentMatches: MatchWithDetails[]): Set<number> => {
+    if (isChangeConfirmed || originalTeamPositions.size === 0) {
+      return new Set()
+    }
+    const changedTeams = new Set<number>()
+    currentMatches.forEach(match => {
+      const venueId = match.venueId || match.venue_id || 0
+      const homeId = match.homeTeamId || match.home_team_id
+      const awayId = match.awayTeamId || match.away_team_id
+
+      if (homeId) {
+        const original = originalTeamPositions.get(homeId)
+        if (original && (original.matchId !== match.id || original.position !== 'home')) {
+          changedTeams.add(homeId)
+        }
+      }
+      if (awayId) {
+        const original = originalTeamPositions.get(awayId)
+        if (original && (original.matchId !== match.id || original.position !== 'away')) {
+          changedTeams.add(awayId)
+        }
+      }
+    })
+    return changedTeams
+  }
+
+  // 変更を確定
+  const confirmChanges = () => {
+    const allMatches = [...day1Matches, ...day2Matches]
+    captureOriginalPositions(allMatches)
+    toast.success('変更を確定しました')
   }
 
   // 日程生成モーダルを開く
@@ -1305,20 +1362,46 @@ function MatchSchedule() {
               ) : (
                 /* 1リーグ制：会場ごとにコンパクト表示（会場を超えたチーム変更対応） */
                 <>
-                  {/* 選択中のチーム表示 */}
-                  {crossVenueSelectedTeam && (
-                    <div className="mb-2 p-2 bg-primary-50 border border-primary-200 rounded flex items-center justify-between">
-                      <span className="text-sm text-primary-700">
-                        「{crossVenueSelectedTeam.teamName}」を選択中 - 入れ替えたいチームをクリック
-                      </span>
+                  {/* ツールバー: 選択状態・変更状態・確定ボタン */}
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    {/* 選択中のチーム表示 */}
+                    {crossVenueSelectedTeam && (
+                      <div className="flex-1 p-2 bg-primary-50 border border-primary-200 rounded flex items-center justify-between">
+                        <span className="text-sm text-primary-700">
+                          「{crossVenueSelectedTeam.teamName}」を選択中
+                        </span>
+                        <button
+                          onClick={() => setCrossVenueSelectedTeam(null)}
+                          className="text-xs text-gray-500 hover:text-gray-700 underline"
+                        >
+                          解除
+                        </button>
+                      </div>
+                    )}
+                    {/* 変更状態表示・確定ボタン */}
+                    {!isChangeConfirmed && (
+                      <div className="flex items-center gap-2 p-2 bg-cyan-50 border border-cyan-300 rounded">
+                        <span className="text-sm text-cyan-700">
+                          <span className="font-bold">★</span> 未確定の変更があります
+                        </span>
+                        <button
+                          onClick={confirmChanges}
+                          className="px-3 py-1 bg-cyan-600 text-white text-sm rounded hover:bg-cyan-700"
+                        >
+                          確定
+                        </button>
+                      </div>
+                    )}
+                    {/* 編集開始ボタン（初回のみ） */}
+                    {isChangeConfirmed && originalTeamPositions.size === 0 && day1Matches.length > 0 && (
                       <button
-                        onClick={() => setCrossVenueSelectedTeam(null)}
-                        className="text-xs text-gray-500 hover:text-gray-700 underline"
+                        onClick={() => captureOriginalPositions([...day1Matches, ...day2Matches])}
+                        className="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
                       >
-                        解除
+                        編集開始
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                     {venues.filter(v => v.forPreliminary || v.for_preliminary).map((venue, idx) => {
                       const day1VenueMatches = day1Matches.filter(m => (m.venueId || m.venue_id) === venue.id)
@@ -1356,6 +1439,7 @@ function MatchSchedule() {
                               externalSelectedTeam={crossVenueSelectedTeam}
                               onExternalSelect={setCrossVenueSelectedTeam}
                               allMatches={[...day1Matches, ...day2Matches]}
+                              changedTeamIds={getChangedTeamIds([...day1Matches, ...day2Matches])}
                             />
                           </div>
                           {/* Day2 */}
@@ -1373,6 +1457,7 @@ function MatchSchedule() {
                               externalSelectedTeam={crossVenueSelectedTeam}
                               onExternalSelect={setCrossVenueSelectedTeam}
                               allMatches={[...day1Matches, ...day2Matches]}
+                              changedTeamIds={getChangedTeamIds([...day1Matches, ...day2Matches])}
                             />
                           </div>
                         </div>
