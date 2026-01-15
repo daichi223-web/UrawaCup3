@@ -31,11 +31,12 @@ interface TeamStats {
 
 export default function StarTable({ teams, matches, groupId, byePairs = [], overallRankings, showOverallRank = false }: StarTableProps) {
   // 完了した予選試合のみをフィルタ
+  // groupId が 'all' の場合はグループフィルタをスキップ（1リーグ制用）
   const completedMatches = useMemo(() => {
     return matches.filter(m =>
       m.status === 'completed' &&
       m.stage === 'preliminary' &&
-      (m.groupId === groupId || m.group_id === groupId)
+      (groupId === 'all' || m.groupId === groupId || m.group_id === groupId)
     )
   }, [matches, groupId])
 

@@ -16,7 +16,7 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import StarTable from '../components/StarTable';
 import { useAppStore } from '@/stores/appStore';
-import { matchesApi, teamsApi } from '@/lib/api';
+import { matchesApi, teamsApi, venuesApi } from '@/lib/api';
 
 // 印刷用スタイル（2x2レイアウトで1ページに収める）
 const printStyles = `
@@ -134,8 +134,19 @@ function Standings() {
     enabled: !!tournamentId,
   });
 
+  // 大会形式を取得（グループ制か1リーグ制か）
+  const useGroupSystem = (currentTournament as any)?.use_group_system ?? (currentTournament as any)?.useGroupSystem ?? true;
+
+  // 会場一覧を取得（1リーグ制用）
+  const { data: venuesData } = useQuery({
+    queryKey: ['venues', tournamentId],
+    queryFn: () => venuesApi.getAll(tournamentId!),
+    staleTime: 30000,
+    enabled: !!tournamentId && !useGroupSystem,
+  });
+
   // 総合順位を取得（常に取得）
-  const isOverallRanking = currentTournament?.qualification_rule === 'overall_ranking';
+  const isOverallRanking = currentTournament?.qualification_rule === 'overall_ranking' || !useGroupSystem;
   const { data: overallStandings, isLoading: isLoadingOverall, refetch: refetchOverall } = useQuery<OverallStandings>({
     queryKey: ['overall-standings', tournamentId],
     queryFn: () => standingApi.getOverallStandings(tournamentId!),
@@ -208,8 +219,8 @@ function Standings() {
             </h1>
             <p className="text-gray-600 mt-1">
               {viewMode === 'star'
-                ? '各グループの対戦結果を確認できます'
-                : '全グループを通じた総合順位を確認できます'}
+                ? (useGroupSystem ? '各グループの対戦結果を確認できます' : '全チームの対戦結果を確認できます')
+                : (useGroupSystem ? '全グループを通じた総合順位を確認できます' : '全チームの総合順位を確認できます')}
             </p>
           </div>
           {/* LIVE インジケーター */}
@@ -308,45 +319,72 @@ function Standings() {
       {viewMode === 'star' ? (
         // 星取表表示
         <>
-          {/* グループ別星取表 */}
-          <div className={`standings-grid grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
-            recentlyUpdated ? 'opacity-80' : 'opacity-100'
-          }`}>
-            {groupStandings.map((groupData) => {
-              // グループのチームと試合を抽出
-              const groupTeams = (teamsData?.teams || []).filter(
-                t => (t.group_id || t.groupId) === groupData.groupId
-              )
-              const groupMatches = (matchesData?.matches || []).filter(
-                m => (m.group_id || m.groupId) === groupData.groupId
-              )
+          {useGroupSystem ? (
+            /* グループ制：グループ別星取表 */
+            <div className={`standings-grid grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
+              recentlyUpdated ? 'opacity-80' : 'opacity-100'
+            }`}>
+              {groupStandings.map((groupData) => {
+                // グループのチームと試合を抽出
+                const groupTeams = (teamsData?.teams || []).filter(
+                  t => (t.group_id || t.groupId) === groupData.groupId
+                )
+                const groupMatches = (matchesData?.matches || []).filter(
+                  m => (m.group_id || m.groupId) === groupData.groupId
+                )
 
-              return (
-                <div key={groupData.groupId} className={`card transition-shadow ${
-                  recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
-                }`}>
-                  <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
-                    <h3 className="text-lg font-semibold">{groupData.groupId}グループ 星取表</h3>
+                return (
+                  <div key={groupData.groupId} className={`card transition-shadow ${
+                    recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
+                  }`}>
+                    <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
+                      <h3 className="text-lg font-semibold">{groupData.groupId}グループ 星取表</h3>
+                    </div>
+                    <div className="card-body p-4">
+                      {groupTeams.length > 0 ? (
+                        <StarTable
+                          teams={groupTeams}
+                          matches={groupMatches}
+                          groupId={groupData.groupId}
+                          overallRankings={overallRankingsMap}
+                          showOverallRank={isOverallRanking}
+                        />
+                      ) : (
+                        <div className="text-center py-8 text-gray-400">
+                          チームデータを読み込み中...
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="card-body p-4">
-                    {groupTeams.length > 0 ? (
-                      <StarTable
-                        teams={groupTeams}
-                        matches={groupMatches}
-                        groupId={groupData.groupId}
-                        overallRankings={overallRankingsMap}
-                        showOverallRank={isOverallRanking}
-                      />
-                    ) : (
-                      <div className="text-center py-8 text-gray-400">
-                        チームデータを読み込み中...
-                      </div>
-                    )}
+                )
+              })}
+            </div>
+          ) : (
+            /* 1リーグ制：全チーム統合星取表 */
+            <div className={`card transition-shadow ${
+              recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
+            }`}>
+              <div className="card-header bg-primary-600 text-white flex justify-between items-center">
+                <h3 className="text-lg font-semibold">全チーム 星取表</h3>
+                <span className="text-sm opacity-80">{teamsData?.teams?.length || 0}チーム</span>
+              </div>
+              <div className="card-body p-4 overflow-x-auto">
+                {(teamsData?.teams?.length || 0) > 0 ? (
+                  <StarTable
+                    teams={teamsData?.teams || []}
+                    matches={matchesData?.matches?.filter(m => m.stage === 'preliminary') || []}
+                    groupId="all"
+                    overallRankings={overallRankingsMap}
+                    showOverallRank={true}
+                  />
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    チームデータを読み込み中...
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 順位決定ルール説明 */}
           <div className="card no-print">
@@ -362,9 +400,11 @@ function Standings() {
                 <li>抽選</li>
               </ol>
               <p className="mt-3 text-xs text-gray-500">
-                {isOverallRanking
-                  ? '※ 総合順位で上位4チームが決勝トーナメントに進出します'
-                  : '※ 各グループ上位2チームが決勝トーナメントに進出します'}
+                {useGroupSystem
+                  ? (isOverallRanking
+                      ? '※ 総合順位で上位4チームが決勝トーナメントに進出します'
+                      : '※ 各グループ上位2チームが決勝トーナメントに進出します')
+                  : '※ 総合順位で上位4チームが決勝トーナメントに進出します'}
               </p>
             </div>
           </div>
@@ -386,7 +426,7 @@ function Standings() {
                     <tr className="bg-gray-50 border-b">
                       <th className="px-3 py-3 text-center w-14">順位</th>
                       <th className="px-3 py-3 text-left">チーム</th>
-                      <th className="px-3 py-3 text-center w-14">G</th>
+                      {useGroupSystem && <th className="px-3 py-3 text-center w-14">G</th>}
                       <th className="px-3 py-3 text-center w-12">試</th>
                       <th className="px-3 py-3 text-center w-12">勝</th>
                       <th className="px-3 py-3 text-center w-12">分</th>
@@ -423,11 +463,13 @@ function Standings() {
                           <td className="px-3 py-3 font-medium">
                             {entry.shortName || entry.teamName}
                           </td>
-                          <td className="px-3 py-3 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${groupColors[entry.groupId] || 'bg-gray-100'}`}>
-                              {entry.groupId}
-                            </span>
-                          </td>
+                          {useGroupSystem && (
+                            <td className="px-3 py-3 text-center">
+                              <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${groupColors[entry.groupId] || 'bg-gray-100'}`}>
+                                {entry.groupId}
+                              </span>
+                            </td>
+                          )}
                           <td className="px-3 py-3 text-center">{entry.played}</td>
                           <td className="px-3 py-3 text-center text-green-600 font-medium">{entry.won}</td>
                           <td className="px-3 py-3 text-center text-gray-500">{entry.drawn}</td>
