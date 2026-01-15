@@ -45,9 +45,6 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
   const groupId = team?.groupId || team?.group_id || null
   const groupColors = groupId ? GROUP_COLORS[groupId] : null
 
-  // 変更されたチームは目立つシアン色で表示
-  const changedStyle = isChanged ? 'border-cyan-500 bg-cyan-100 ring-2 ring-cyan-300' : ''
-
   return (
     <button
       onClick={onClick}
@@ -55,7 +52,7 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
       className={`
         flex items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'p-2'} rounded border ${compact ? 'border' : 'border-2'} w-full text-left transition-all overflow-hidden
         ${isChanged
-          ? changedStyle
+          ? 'border-teal-400 bg-teal-50'
           : hasConsecutiveError
             ? 'border-red-400 bg-red-50'
             : isSelected
@@ -70,10 +67,9 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
       `}
     >
       {isSelected && <Check className={`${compact ? 'w-3 h-3' : 'w-4 h-4'} text-primary-600 flex-shrink-0`} />}
-      {isChanged && !isSelected && <span className="text-cyan-600 text-xs font-bold">★</span>}
       {hasConsecutiveError && !isSelected && !isChanged && <span className="text-red-500 text-xs">⚠</span>}
       <span
-        className={`font-medium flex-1 min-w-0 truncate ${isChanged ? 'text-cyan-800' : hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
+        className={`font-medium flex-1 min-w-0 truncate ${isChanged ? 'text-teal-700' : hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
         style={{
           fontSize: compact ? '0.65rem' : (team?.shortName || team?.name || '')?.length > 8 ? '0.75rem' : '0.875rem',
           lineHeight: '1.1',

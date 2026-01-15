@@ -774,45 +774,44 @@ function MatchSchedule() {
     }
   }
 
-  // 元のチーム配置を保存（編集開始時）
+  // 元の試合構成を保存（編集開始時）- 試合単位で記録
+  const [originalMatchComposition, setOriginalMatchComposition] = useState<Map<number, { homeTeamId: number; awayTeamId: number }>>(new Map())
+
   const captureOriginalPositions = (matchList: MatchWithDetails[]) => {
-    const positions = new Map<number, { matchId: number; position: 'home' | 'away'; venueId: number }>()
+    const composition = new Map<number, { homeTeamId: number; awayTeamId: number }>()
     matchList.forEach(match => {
-      const venueId = match.venueId || match.venue_id || 0
       const homeId = match.homeTeamId || match.home_team_id
       const awayId = match.awayTeamId || match.away_team_id
-      if (homeId) {
-        positions.set(homeId, { matchId: match.id, position: 'home', venueId })
-      }
-      if (awayId) {
-        positions.set(awayId, { matchId: match.id, position: 'away', venueId })
+      if (homeId && awayId) {
+        composition.set(match.id, { homeTeamId: homeId, awayTeamId: awayId })
       }
     })
-    setOriginalTeamPositions(positions)
+    setOriginalMatchComposition(composition)
+    setOriginalTeamPositions(new Map()) // 旧形式はクリア
     setIsChangeConfirmed(true)
   }
 
-  // 変更されたチームを検出
+  // 変更されたチームを検出（試合単位で比較）
   const getChangedTeamIds = (currentMatches: MatchWithDetails[]): Set<number> => {
-    if (isChangeConfirmed || originalTeamPositions.size === 0) {
+    if (isChangeConfirmed || originalMatchComposition.size === 0) {
       return new Set()
     }
     const changedTeams = new Set<number>()
     currentMatches.forEach(match => {
-      const venueId = match.venueId || match.venue_id || 0
       const homeId = match.homeTeamId || match.home_team_id
       const awayId = match.awayTeamId || match.away_team_id
+      const original = originalMatchComposition.get(match.id)
 
-      if (homeId) {
-        const original = originalTeamPositions.get(homeId)
-        if (original && (original.matchId !== match.id || original.position !== 'home')) {
-          changedTeams.add(homeId)
+      if (original) {
+        // この試合のホームチームが変わっていたら、現在と元のホームチームを変更扱い
+        if (original.homeTeamId !== homeId) {
+          if (homeId) changedTeams.add(homeId)
+          changedTeams.add(original.homeTeamId)
         }
-      }
-      if (awayId) {
-        const original = originalTeamPositions.get(awayId)
-        if (original && (original.matchId !== match.id || original.position !== 'away')) {
-          changedTeams.add(awayId)
+        // この試合のアウェイチームが変わっていたら、現在と元のアウェイチームを変更扱い
+        if (original.awayTeamId !== awayId) {
+          if (awayId) changedTeams.add(awayId)
+          changedTeams.add(original.awayTeamId)
         }
       }
     })
@@ -1380,13 +1379,13 @@ function MatchSchedule() {
                     )}
                     {/* 変更状態表示・確定ボタン */}
                     {!isChangeConfirmed && (
-                      <div className="flex items-center gap-2 p-2 bg-cyan-50 border border-cyan-300 rounded">
-                        <span className="text-sm text-cyan-700">
-                          <span className="font-bold">★</span> 未確定の変更があります
+                      <div className="flex items-center gap-2 p-2 bg-teal-50 border border-teal-300 rounded">
+                        <span className="text-sm text-teal-700">
+                          未確定の変更があります
                         </span>
                         <button
                           onClick={confirmChanges}
-                          className="px-3 py-1 bg-cyan-600 text-white text-sm rounded hover:bg-cyan-700"
+                          className="px-3 py-1 bg-teal-600 text-white text-sm rounded hover:bg-teal-700"
                         >
                           確定
                         </button>
