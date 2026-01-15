@@ -1,12 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { teamsApi } from '@/lib/api';
+import { teamsApi, venuesApi } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/stores/appStore';
 import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore';
+
+// 会場型
+interface Venue {
+  id: number;
+  name: string;
+  short_name?: string;
+  shortName?: string;
+}
 
 // Team type for this component
 interface Team {
@@ -46,6 +54,7 @@ const GROUP_MAP: Record<GroupTab, string | null> = {
 function TeamManagement() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [leagues, setLeagues] = useState<League[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<GroupTab>('全チーム');
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -65,6 +74,9 @@ function TeamManagement() {
   const { currentTournament } = useAppStore();
   const tournamentId = currentTournament?.id;
 
+  // 大会形式（グループ制か1リーグ制か）
+  const useGroupSystem = (currentTournament as any)?.use_group_system ?? true;
+
   // 制約設定とマスタデータを取得
   const { settings: constraintSettings, masterData } = useConstraintSettingsStore();
 
@@ -76,13 +88,19 @@ function TeamManagement() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // チームとリーグを並行取得
-        const [teamsResponse, leaguesResponse] = await Promise.all([
+        // チーム、リーグ、会場を並行取得
+        const [teamsResponse, leaguesResponse, venuesResponse] = await Promise.all([
           teamsApi.getAll(tournamentId),
-          supabase.from('leagues').select('id, name').eq('tournament_id', tournamentId).order('name')
+          supabase.from('leagues').select('id, name').eq('tournament_id', tournamentId).order('name'),
+          venuesApi.getAll(tournamentId),
         ]);
         setTeams(teamsResponse.teams as Team[]);
         setLeagues(leaguesResponse.data || []);
+        setVenues((venuesResponse || []).map((v: any) => ({
+          id: v.id,
+          name: v.name,
+          shortName: v.short_name || v.name.charAt(0),
+        })));
       } catch (e) {
         console.error('データ取得エラー:', e);
         toast.error('データの取得に失敗しました');
@@ -282,7 +300,9 @@ function TeamManagement() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">チーム管理</h1>
           <p className="text-gray-600 mt-1">
-            参加チームの登録・編集・グループ分けを行います
+            {useGroupSystem
+              ? '参加チームの登録・編集・グループ分けを行います'
+              : '参加チームの登録・編集を行います'}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -299,37 +319,39 @@ function TeamManagement() {
         </div>
       </div>
 
-      {/* グループタブ */}
+      {/* グループタブ（グループ制の場合のみ表示） */}
       <div className="card">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
-            {GROUP_TABS.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab
-                    ? 'border-primary-500 text-primary-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab}
-                {activeTab === tab && filteredTeams.length > 0 && (
-                  <span className="ml-2 bg-primary-100 text-primary-700 text-xs px-2 py-0.5 rounded-full">
-                    {filteredTeams.length}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
+        {useGroupSystem && (
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              {GROUP_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === tab
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {tab}
+                  {activeTab === tab && filteredTeams.length > 0 && (
+                    <span className="ml-2 bg-primary-100 text-primary-700 text-xs px-2 py-0.5 rounded-full">
+                      {filteredTeams.length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+        )}
 
         {/* チーム一覧テーブル */}
         <div className="table-container">
           <table className="table">
             <thead>
               <tr>
-                <th>グループ</th>
+                {useGroupSystem && <th>グループ</th>}
                 <th>番号</th>
                 <th>チーム名</th>
                 <th>区分</th>
@@ -339,35 +361,37 @@ function TeamManagement() {
             </thead>
             <tbody>
 
-              {filteredTeams.length === 0 ? (
+              {(useGroupSystem ? filteredTeams : teams).length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-8 text-gray-500">
+                  <td colSpan={useGroupSystem ? 6 : 5} className="text-center py-8 text-gray-500">
                     チームが登録されていません
                   </td>
                 </tr>
               ) : (
-                filteredTeams.map((team) => (
+                (useGroupSystem ? filteredTeams : teams).map((team) => (
                   <tr key={team.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      <select
-                        className={`w-16 h-8 rounded-full font-bold text-center border-0 cursor-pointer
-                          ${(team.groupId || team.group_id) === 'A' ? 'bg-red-100 text-red-800' :
-                            (team.groupId || team.group_id) === 'B' ? 'bg-blue-100 text-blue-800' :
-                              (team.groupId || team.group_id) === 'C' ? 'bg-green-100 text-green-800' :
-                                (team.groupId || team.group_id) === 'D' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
-                          }`}
-                        value={team.groupId || team.group_id || ''}
-                        onChange={(e) => handleInlineUpdate(team.id, 'groupId', e.target.value || null)}
-                        disabled={updatingTeamId === team.id}
-                        style={{ opacity: updatingTeamId === team.id ? 0.5 : 1 }}
-                      >
-                        <option value="">-</option>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                        <option value="D">D</option>
-                      </select>
-                    </td>
+                    {useGroupSystem && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <select
+                          className={`w-16 h-8 rounded-full font-bold text-center border-0 cursor-pointer
+                            ${(team.groupId || team.group_id) === 'A' ? 'bg-red-100 text-red-800' :
+                              (team.groupId || team.group_id) === 'B' ? 'bg-blue-100 text-blue-800' :
+                                (team.groupId || team.group_id) === 'C' ? 'bg-green-100 text-green-800' :
+                                  (team.groupId || team.group_id) === 'D' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'
+                            }`}
+                          value={team.groupId || team.group_id || ''}
+                          onChange={(e) => handleInlineUpdate(team.id, 'groupId', e.target.value || null)}
+                          disabled={updatingTeamId === team.id}
+                          style={{ opacity: updatingTeamId === team.id ? 0.5 : 1 }}
+                        >
+                          <option value="">-</option>
+                          <option value="A">A</option>
+                          <option value="B">B</option>
+                          <option value="C">C</option>
+                          <option value="D">D</option>
+                        </select>
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{team.id}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-lg font-bold text-gray-900">{team.name}</div>
@@ -454,20 +478,22 @@ function TeamManagement() {
               onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
             />
           </div>
-          <div>
-            <label className="form-label">グループ</label>
-            <select
-              className="form-input"
-              value={editForm.groupId}
-              onChange={(e) => setEditForm(prev => ({ ...prev, groupId: e.target.value }))}
-            >
-              <option value="">未設定</option>
-              <option value="A">Aグループ</option>
-              <option value="B">Bグループ</option>
-              <option value="C">Cグループ</option>
-              <option value="D">Dグループ</option>
-            </select>
-          </div>
+          {useGroupSystem && (
+            <div>
+              <label className="form-label">グループ</label>
+              <select
+                className="form-input"
+                value={editForm.groupId}
+                onChange={(e) => setEditForm(prev => ({ ...prev, groupId: e.target.value }))}
+              >
+                <option value="">未設定</option>
+                <option value="A">Aグループ</option>
+                <option value="B">Bグループ</option>
+                <option value="C">Cグループ</option>
+                <option value="D">Dグループ</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="form-label">チーム区分</label>
             <select
@@ -561,20 +587,22 @@ function TeamManagement() {
               placeholder="チーム名を入力"
             />
           </div>
-          <div>
-            <label className="form-label">グループ</label>
-            <select
-              className="form-input"
-              value={addForm.groupId}
-              onChange={(e) => setAddForm(prev => ({ ...prev, groupId: e.target.value }))}
-            >
-              <option value="">未設定</option>
-              <option value="A">Aグループ</option>
-              <option value="B">Bグループ</option>
-              <option value="C">Cグループ</option>
-              <option value="D">Dグループ</option>
-            </select>
-          </div>
+          {useGroupSystem && (
+            <div>
+              <label className="form-label">グループ</label>
+              <select
+                className="form-input"
+                value={addForm.groupId}
+                onChange={(e) => setAddForm(prev => ({ ...prev, groupId: e.target.value }))}
+              >
+                <option value="">未設定</option>
+                <option value="A">Aグループ</option>
+                <option value="B">Bグループ</option>
+                <option value="C">Cグループ</option>
+                <option value="D">Dグループ</option>
+              </select>
+            </div>
+          )}
           <div>
             <label className="form-label">チーム区分</label>
             <select
@@ -660,7 +688,11 @@ function TeamManagement() {
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
             <p className="font-medium mb-1">入力形式（1行1チーム）:</p>
-            <p className="text-xs">略称（スペースまたはタブ）グループ</p>
+            <p className="text-xs">
+              {useGroupSystem
+                ? '略称（スペースまたはタブ）グループ'
+                : '略称のみ'}
+            </p>
           </div>
           <div>
             <label className="form-label">チーム区分</label>
@@ -679,12 +711,19 @@ function TeamManagement() {
               className="form-input min-h-[200px] font-mono text-sm"
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
-              placeholder={`浦和南  A
+              placeholder={useGroupSystem
+                ? `浦和南  A
 市浦和  B
 前橋育  A
 青森山田  B
 流経柏  C
-静岡学園  D`}
+静岡学園  D`
+                : `浦和南
+市浦和
+前橋育
+青森山田
+流経柏
+静岡学園`}
             />
             <p className="text-xs text-gray-500 mt-1">
               {bulkText.split('\n').filter(l => l.trim()).length}チーム検出

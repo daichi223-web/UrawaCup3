@@ -24,6 +24,7 @@ interface TeamSlotProps {
   onClick: () => void
   disabled: boolean
   hasConsecutiveError?: boolean
+  compact?: boolean
 }
 
 // グループごとの色設定
@@ -37,7 +38,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 /**
  * クリック可能なチームスロット
  */
-function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError }: TeamSlotProps) {
+function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError, compact }: TeamSlotProps) {
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
   const groupId = team?.groupId || team?.group_id || null
@@ -48,7 +49,7 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
       onClick={onClick}
       disabled={disabled}
       className={`
-        flex items-center gap-2 p-2 rounded border-2 w-full text-left transition-all overflow-hidden
+        flex items-center gap-1 ${compact ? 'px-1.5 py-0.5' : 'p-2'} rounded border ${compact ? 'border' : 'border-2'} w-full text-left transition-all overflow-hidden
         ${hasConsecutiveError
           ? 'border-red-400 bg-red-50'
           : isSelected
@@ -62,13 +63,13 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       `}
     >
-      {isSelected && <Check className="w-4 h-4 text-primary-600 flex-shrink-0" />}
+      {isSelected && <Check className={`${compact ? 'w-3 h-3' : 'w-4 h-4'} text-primary-600 flex-shrink-0`} />}
       {hasConsecutiveError && !isSelected && <span className="text-red-500 text-xs">⚠</span>}
       <span
         className={`font-medium flex-1 min-w-0 truncate ${hasConsecutiveError ? 'text-red-700' : groupColors ? groupColors.text : ''}`}
         style={{
-          fontSize: (team?.shortName || team?.name || '')?.length > 8 ? '0.75rem' : '0.875rem',
-          lineHeight: '1.25',
+          fontSize: compact ? '0.65rem' : (team?.shortName || team?.name || '')?.length > 8 ? '0.75rem' : '0.875rem',
+          lineHeight: '1.1',
         }}
       >
         {team?.shortName || team?.name || `チームID: ${teamId}`}
@@ -179,6 +180,8 @@ interface ClickableMatchListProps {
   }[]
   /** 制約チェックを有効にする（デフォルト: true） */
   enableConstraintCheck?: boolean
+  /** コンパクト表示モード */
+  compact?: boolean
 }
 
 /**
@@ -197,6 +200,7 @@ export default function DraggableMatchList({
   consecutiveMatchTeams,
   teams = [],
   enableConstraintCheck = true,
+  compact = false,
 }: ClickableMatchListProps) {
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
 
@@ -375,8 +379,8 @@ export default function DraggableMatchList({
   }, [violations])
 
   return (
-    <div className="space-y-4">
-      {title && (
+    <div className={compact ? 'space-y-1' : 'space-y-4'}>
+      {title && !compact && (
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-gray-900">{title}</h3>
           {selectedTeam ? (
@@ -399,8 +403,8 @@ export default function DraggableMatchList({
         </div>
       )}
 
-      {/* 制約違反サマリー */}
-      {enableConstraintCheck && violations.length > 0 && (
+      {/* 制約違反サマリー（コンパクトモードでは非表示） */}
+      {!compact && enableConstraintCheck && violations.length > 0 && (
         <div className={`p-3 rounded-lg flex items-center gap-4 ${
           errorCount > 0 ? 'bg-red-50 border border-red-200' : 'bg-yellow-50 border border-yellow-200'
         }`}>
@@ -471,16 +475,20 @@ export default function DraggableMatchList({
         スマホでは1列表示で順番通り（1,2,3,4,5,6）
         md:grid-flow-col で縦方向に流れるようにし、
         md:grid-rows-N で行数を指定
+        compact モードでは1列でスペースを節約
       */}
       <div
-        className={`grid gap-4 md:grid-cols-2 md:grid-flow-col ${
-          matches.length <= 2 ? '' :
-          matches.length <= 4 ? 'md:grid-rows-2' :
-          matches.length <= 6 ? 'md:grid-rows-3' :
-          matches.length <= 8 ? 'md:grid-rows-4' :
-          matches.length <= 10 ? 'md:grid-rows-5' :
-          'md:grid-rows-6'
-        }`}
+        className={compact
+          ? 'space-y-1'
+          : `grid gap-4 md:grid-cols-2 md:grid-flow-col ${
+              matches.length <= 2 ? '' :
+              matches.length <= 4 ? 'md:grid-rows-2' :
+              matches.length <= 6 ? 'md:grid-rows-3' :
+              matches.length <= 8 ? 'md:grid-rows-4' :
+              matches.length <= 10 ? 'md:grid-rows-5' :
+              'md:grid-rows-6'
+            }`
+        }
       >
         {/* 試合順でソートして表示 */}
         {[...matches]
@@ -503,7 +511,60 @@ export default function DraggableMatchList({
           const hasError = matchViolations.some(v => v.level === 'error')
           const hasWarning = matchViolations.some(v => v.level === 'warning')
 
-          return (
+          return compact ? (
+            /* コンパクトモード: 1行表示 */
+            <div key={match.id} className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs ${
+              hasError
+                ? 'border-red-400 bg-red-50'
+                : hasWarning || homeHasConsecutiveError || awayHasConsecutiveError
+                  ? 'border-yellow-300 bg-yellow-50'
+                  : 'border-gray-200 bg-white'
+            }`}>
+              {/* 試合番号・時間 */}
+              <span className="text-gray-400 font-mono w-8 flex-shrink-0">
+                #{groupMatchNumbers.get(match.id) || 1}
+              </span>
+              <span className="text-gray-500 font-mono w-10 flex-shrink-0">
+                {(match.matchTime || match.match_time)?.substring(0, 5)}
+              </span>
+
+              {/* チーム名 */}
+              <div className="flex-1 min-w-0 flex items-center gap-1">
+                <ClickableTeamSlot
+                  match={match}
+                  position="home"
+                  isSelected={isHomeSelected}
+                  isSwapTarget={isHomeSwapTarget}
+                  onClick={() => handleTeamClick(match, 'home')}
+                  disabled={isDisabled}
+                  hasConsecutiveError={homeHasConsecutiveError}
+                  compact
+                />
+                <span className="text-gray-400 text-xs flex-shrink-0">vs</span>
+                <ClickableTeamSlot
+                  match={match}
+                  position="away"
+                  isSelected={isAwaySelected}
+                  isSwapTarget={isAwaySwapTarget}
+                  onClick={() => handleTeamClick(match, 'away')}
+                  disabled={isDisabled}
+                  hasConsecutiveError={awayHasConsecutiveError}
+                  compact
+                />
+              </div>
+
+              {/* スコア（完了時のみ） */}
+              {match.status === 'completed' && (
+                <span className="font-bold text-gray-700 w-10 text-center flex-shrink-0">
+                  {match.homeScoreTotal ?? 0}-{match.awayScoreTotal ?? 0}
+                </span>
+              )}
+              {/* 警告アイコン */}
+              {(hasError || hasWarning) && (
+                <span className="text-xs">⚠</span>
+              )}
+            </div>
+          ) : (
             <div key={match.id} className={`bg-white rounded-lg border-2 p-4 ${
               hasError
                 ? 'border-red-400 bg-red-50'
@@ -628,9 +689,11 @@ export default function DraggableMatchList({
         })}
       </div>
 
-      <div className="text-xs text-gray-400 text-center mt-4">
-        ※ チームをクリックして選択後、入れ替えたいチームをクリックしてください
-      </div>
+      {!compact && (
+        <div className="text-xs text-gray-400 text-center mt-4">
+          ※ チームをクリックして選択後、入れ替えたいチームをクリックしてください
+        </div>
+      )}
     </div>
   )
 }
