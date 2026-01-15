@@ -214,8 +214,8 @@ function MatchResult() {
       teamType: g.teamId === match.homeTeamId ? 'home' : 'away',
       minute: g.minute,
       half: g.half,
-      scorerNumber: (g as any).playerNumber ? String((g as any).playerNumber) : '',
-      scorerName: (g as any).scorerName || g.playerName || "",
+      scorerNumber: (g as any).jerseyNumber ? String((g as any).jerseyNumber) : '',
+      scorerName: (g as any).scorerName || (g as any).playerName || "",
       playerId: g.playerId ?? null,
       isOwnGoal: g.isOwnGoal ?? false,
     }));
@@ -303,6 +303,7 @@ function MatchResult() {
           teamId: g.teamId,
           playerId: g.playerId,
           scorerName: (g as any).scorerName || (g as any).playerName || "",
+          jerseyNumber: g.scorerNumber ? parseInt(g.scorerNumber) : null,
           minute: g.minute,
           half: g.half,
           isOwnGoal: g.isOwnGoal,

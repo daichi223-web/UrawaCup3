@@ -30,17 +30,35 @@ interface TeamStats {
 }
 
 export default function StarTable({ teams, matches, groupId, byePairs = [], overallRankings, showOverallRank = false }: StarTableProps) {
-  // 完了した予選試合のみをフィルタ
+  // 予選試合をフィルタ（完了・予定含む）
   // groupId が 'all' の場合はグループフィルタをスキップ（1リーグ制用）
-  const completedMatches = useMemo(() => {
+  const allPreliminaryMatches = useMemo(() => {
     return matches.filter(m =>
-      m.status === 'completed' &&
       m.stage === 'preliminary' &&
       (groupId === 'all' || m.groupId === groupId || m.group_id === groupId)
     )
   }, [matches, groupId])
 
-  // 対戦しないペアのセット (両方向をチェックするため)
+  // 完了した試合のみ
+  const completedMatches = useMemo(() => {
+    return allPreliminaryMatches.filter(m => m.status === 'completed')
+  }, [allPreliminaryMatches])
+
+  // 対戦予定があるペアのセット
+  const scheduledPairSet = useMemo(() => {
+    const set = new Set<string>()
+    allPreliminaryMatches.forEach(m => {
+      const homeId = m.homeTeamId ?? m.home_team_id
+      const awayId = m.awayTeamId ?? m.away_team_id
+      if (homeId && awayId) {
+        set.add(`${homeId}-${awayId}`)
+        set.add(`${awayId}-${homeId}`)
+      }
+    })
+    return set
+  }, [allPreliminaryMatches])
+
+  // 対戦しないペアのセット (明示的に指定されたもの + 対戦予定がないもの)
   const byePairSet = useMemo(() => {
     const set = new Set<string>()
     byePairs.forEach(([a, b]) => {
@@ -49,6 +67,14 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
     })
     return set
   }, [byePairs])
+
+  // 対戦しないかどうかを判定（明示的byePairs または 対戦予定なし）
+  const hasNoScheduledMatch = (team1Id: number, team2Id: number) => {
+    if (byePairSet.has(`${team1Id}-${team2Id}`)) return true
+    // 1リーグ制で対戦予定がない場合
+    if (groupId === 'all' && !scheduledPairSet.has(`${team1Id}-${team2Id}`)) return true
+    return false
+  }
 
   // 各チームの成績を計算
   const teamStats = useMemo(() => {
@@ -173,10 +199,6 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
     }
   }
 
-  // 対戦しないペアかどうか
-  const isByePair = (team1Id: number, team2Id: number) => {
-    return byePairSet.has(`${team1Id}-${team2Id}`)
-  }
 
   if (teams.length === 0) {
     return <div className="text-center py-4 text-gray-500">チームデータがありません</div>
@@ -187,6 +209,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
       <table className="min-w-full text-sm border-collapse">
         <thead>
           <tr className="bg-gray-100">
+            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-green-100 w-8">順</th>
             <th className="border border-gray-300 px-2 py-1 text-left font-medium w-24">チーム</th>
             {teamStats.map(stats => (
               <th
@@ -204,7 +227,6 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">得点</th>
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">失点</th>
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">差</th>
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-green-100 w-8">順</th>
             {showOverallRank && (
               <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-amber-100 w-8" title="総合順位">総合</th>
             )}
@@ -216,6 +238,14 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
               key={`row-${rowStats.teamId}`}
               className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
             >
+              {/* 順位（左端） */}
+              <td className={`border border-gray-300 px-1 py-1 text-center font-bold ${
+                rowStats.rank === 1 ? 'text-yellow-600 bg-yellow-50' :
+                rowStats.rank === 2 ? 'text-gray-500 bg-green-50' :
+                'bg-green-50'
+              }`}>
+                {rowStats.rank}
+              </td>
               {/* チーム名 */}
               <td
                 className="border border-gray-300 px-2 py-1 font-medium whitespace-nowrap"
@@ -238,8 +268,8 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                   )
                 }
 
-                // 対戦しないペア
-                if (isByePair(rowStats.teamId, colStats.teamId)) {
+                // 対戦しないペア（明示的byePairs または 対戦予定なし）
+                if (hasNoScheduledMatch(rowStats.teamId, colStats.teamId)) {
                   return (
                     <td
                       key={`cell-${rowStats.teamId}-${colStats.teamId}`}
@@ -282,13 +312,6 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
               <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.goalsAgainst}</td>
               <td className="border border-gray-300 px-1 py-1 text-center">
                 {rowStats.goalDiff > 0 ? `+${rowStats.goalDiff}` : rowStats.goalDiff}
-              </td>
-              <td className={`border border-gray-300 px-1 py-1 text-center font-bold ${
-                rowStats.rank === 1 ? 'text-yellow-600 bg-yellow-50' :
-                rowStats.rank === 2 ? 'text-gray-500 bg-green-50' :
-                'bg-green-50'
-              }`}>
-                {rowStats.rank}
               </td>
               {showOverallRank && (
                 <td className={`border border-gray-300 px-1 py-1 text-center font-bold ${

@@ -64,6 +64,7 @@ export interface Goal {
   teamId: number;
   playerId: number | null;
   scorerName: string;
+  jerseyNumber?: number | null;
   minute: number;
   half: 1 | 2;
   isOwnGoal: boolean;
