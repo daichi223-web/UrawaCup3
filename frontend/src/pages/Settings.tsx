@@ -45,6 +45,8 @@ function Settings() {
     edition: 0,
     startDate: '',
     endDate: '',
+    // 大会形式
+    useGroupSystem: true, // true=グループ制（旧方式）, false=1リーグ制（新方式）
     // 予選リーグ設定
     matchDuration: 50,
     intervalMinutes: 15,
@@ -53,11 +55,16 @@ function Settings() {
     finalsMatchDuration: 60,
     finalsIntervalMinutes: 20,
     finalsStartTime: '09:00',
-    // チーム構成
+    // チーム構成（グループ制用）
     groupCount: 4,
     teamsPerGroup: 4,
     advancingTeams: 1,
     qualificationRule: 'group_based' as 'group_based' | 'overall_ranking',
+    // 新方式用設定
+    venueCount: 6,
+    teamsPerVenue: 4,
+    matchesPerTeamPerDay: 2,
+    preliminaryDays: 2,
   })
 
   // 会場編集モーダル
@@ -186,6 +193,8 @@ function Settings() {
         edition: tournament.edition || 0,
         startDate: tournament.startDate || '',
         endDate: tournament.endDate || '',
+        // 大会形式
+        useGroupSystem: (tournament as any).useGroupSystem ?? (tournament as any).use_group_system ?? true,
         // 予選リーグ設定
         matchDuration: tournament.matchDuration || 50,
         intervalMinutes: tournament.intervalMinutes || 15,
@@ -194,11 +203,16 @@ function Settings() {
         finalsMatchDuration: (tournament as any).finalsMatchDuration || (tournament as any).finals_match_duration || 60,
         finalsIntervalMinutes: (tournament as any).finalsIntervalMinutes || (tournament as any).finals_interval_minutes || 20,
         finalsStartTime: (tournament as any).finalsStartTime || (tournament as any).finals_start_time || '09:00',
-        // チーム構成
+        // チーム構成（グループ制用）
         groupCount: tournament.groupCount || 4,
         teamsPerGroup: tournament.teamsPerGroup || 4,
         advancingTeams: tournament.advancingTeams || 1,
         qualificationRule: (tournament as any).qualificationRule || (tournament as any).qualification_rule || 'group_based',
+        // 新方式用設定
+        venueCount: (tournament as any).venueCount ?? (tournament as any).venue_count ?? 6,
+        teamsPerVenue: (tournament as any).teamsPerVenue ?? (tournament as any).teams_per_venue ?? 4,
+        matchesPerTeamPerDay: (tournament as any).matchesPerTeamPerDay ?? (tournament as any).matches_per_team_per_day ?? 2,
+        preliminaryDays: (tournament as any).preliminaryDays ?? (tournament as any).preliminary_days ?? 2,
       })
     }
   }, [tournament])
@@ -211,6 +225,7 @@ function Settings() {
       edition: number;
       startDate: string;
       endDate: string;
+      useGroupSystem: boolean;
       matchDuration: number;
       intervalMinutes: number;
       preliminaryStartTime: string;
@@ -221,6 +236,10 @@ function Settings() {
       teamsPerGroup: number;
       advancingTeams: number;
       qualificationRule: 'group_based' | 'overall_ranking';
+      venueCount: number;
+      teamsPerVenue: number;
+      matchesPerTeamPerDay: number;
+      preliminaryDays: number;
     }) => {
       const { data: updated, error } = await supabase
         .from('tournaments')
@@ -229,6 +248,7 @@ function Settings() {
           short_name: data.shortName,
           start_date: data.startDate,
           end_date: data.endDate,
+          use_group_system: data.useGroupSystem,
           match_duration: data.matchDuration,
           interval_minutes: data.intervalMinutes,
           preliminary_start_time: data.preliminaryStartTime,
@@ -239,6 +259,10 @@ function Settings() {
           teams_per_group: data.teamsPerGroup,
           advancing_teams: data.advancingTeams,
           qualification_rule: data.qualificationRule,
+          venue_count: data.venueCount,
+          teams_per_venue: data.teamsPerVenue,
+          matches_per_team_per_day: data.matchesPerTeamPerDay,
+          preliminary_days: data.preliminaryDays,
         })
         .eq('id', tournamentId)
         .select()
@@ -250,6 +274,7 @@ function Settings() {
         shortName: updated.short_name,
         startDate: updated.start_date,
         endDate: updated.end_date,
+        useGroupSystem: updated.use_group_system,
       } as Tournament
     },
     onSuccess: (updatedTournament) => {
@@ -803,75 +828,201 @@ function Settings() {
             </div>
           </div>
 
-          {/* チーム構成設定 */}
+          {/* 大会形式設定 */}
           <div className="border-t pt-4 mt-4">
-            <h4 className="font-medium mb-3 text-gray-700">チーム構成設定</h4>
-            <p className="text-xs text-gray-500 mb-3">
-              ※ グループやチームが既に登録されている場合、変更すると整合性が崩れる可能性があります
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="form-label">グループ数</label>
-                <select
-                  className="form-input"
-                  value={tournamentForm.groupCount}
-                  onChange={(e) => setTournamentForm(prev => ({ ...prev, groupCount: parseInt(e.target.value) || 4 }))}
-                >
-                  <option value={2}>2グループ</option>
-                  <option value={4}>4グループ</option>
-                  <option value={8}>8グループ</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label">グループ内チーム数</label>
-                <select
-                  className="form-input"
-                  value={tournamentForm.teamsPerGroup}
-                  onChange={(e) => setTournamentForm(prev => ({ ...prev, teamsPerGroup: parseInt(e.target.value) || 4 }))}
-                >
-                  <option value={3}>3チーム</option>
-                  <option value={4}>4チーム</option>
-                  <option value={5}>5チーム</option>
-                  <option value={6}>6チーム</option>
-                </select>
-              </div>
-              <div>
-                <label className="form-label">決勝進出ルール</label>
-                <select
-                  className="form-input"
-                  value={tournamentForm.qualificationRule}
-                  onChange={(e) => setTournamentForm(prev => ({
-                    ...prev,
-                    qualificationRule: e.target.value as 'group_based' | 'overall_ranking',
-                    // 総合順位ルールの場合は進出数を4に固定
-                    advancingTeams: e.target.value === 'overall_ranking' ? 1 : prev.advancingTeams
-                  }))}
-                >
-                  <option value="group_based">グループ順位（各グループ上位）</option>
-                  <option value="overall_ranking">総合順位（上位4チーム）</option>
-                </select>
-              </div>
-              {tournamentForm.qualificationRule === 'group_based' && (
+            <h4 className="font-medium mb-3 text-gray-700">大会形式</h4>
+            <div className="flex gap-4">
+              <label className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                tournamentForm.useGroupSystem
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="tournamentFormat"
+                  className="sr-only"
+                  checked={tournamentForm.useGroupSystem}
+                  onChange={() => setTournamentForm(prev => ({ ...prev, useGroupSystem: true }))}
+                />
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    tournamentForm.useGroupSystem ? 'border-primary-500' : 'border-gray-300'
+                  }`}>
+                    {tournamentForm.useGroupSystem && (
+                      <div className="w-2 h-2 rounded-full bg-primary-500" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">グループリーグ制（旧方式）</div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      A〜Dグループに分かれて総当たり → 決勝トーナメント
+                    </p>
+                  </div>
+                </div>
+              </label>
+              <label className={`flex-1 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                !tournamentForm.useGroupSystem
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="tournamentFormat"
+                  className="sr-only"
+                  checked={!tournamentForm.useGroupSystem}
+                  onChange={() => setTournamentForm(prev => ({ ...prev, useGroupSystem: false }))}
+                />
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    !tournamentForm.useGroupSystem ? 'border-primary-500' : 'border-gray-300'
+                  }`}>
+                    {!tournamentForm.useGroupSystem && (
+                      <div className="w-2 h-2 rounded-full bg-primary-500" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-gray-900">1リーグ制（新方式）</div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      会場ごとにチーム配置 → 全チーム総合順位で決勝進出
+                    </p>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* グループ制用：チーム構成設定 */}
+          {tournamentForm.useGroupSystem && (
+            <div className="border-t pt-4 mt-4">
+              <h4 className="font-medium mb-3 text-gray-700">チーム構成設定（グループ制）</h4>
+              <p className="text-xs text-gray-500 mb-3">
+                ※ グループやチームが既に登録されている場合、変更すると整合性が崩れる可能性があります
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="form-label">決勝T進出チーム数</label>
+                  <label className="form-label">グループ数</label>
                   <select
                     className="form-input"
-                    value={tournamentForm.advancingTeams}
-                    onChange={(e) => setTournamentForm(prev => ({ ...prev, advancingTeams: parseInt(e.target.value) || 1 }))}
+                    value={tournamentForm.groupCount}
+                    onChange={(e) => setTournamentForm(prev => ({ ...prev, groupCount: parseInt(e.target.value) || 4 }))}
                   >
-                    <option value={1}>各グループ1位のみ</option>
-                    <option value={2}>各グループ1・2位</option>
+                    <option value={2}>2グループ</option>
+                    <option value={4}>4グループ</option>
+                    <option value={8}>8グループ</option>
                   </select>
                 </div>
-              )}
+                <div>
+                  <label className="form-label">グループ内チーム数</label>
+                  <select
+                    className="form-input"
+                    value={tournamentForm.teamsPerGroup}
+                    onChange={(e) => setTournamentForm(prev => ({ ...prev, teamsPerGroup: parseInt(e.target.value) || 4 }))}
+                  >
+                    <option value={3}>3チーム</option>
+                    <option value={4}>4チーム</option>
+                    <option value={5}>5チーム</option>
+                    <option value={6}>6チーム</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">決勝進出ルール</label>
+                  <select
+                    className="form-input"
+                    value={tournamentForm.qualificationRule}
+                    onChange={(e) => setTournamentForm(prev => ({
+                      ...prev,
+                      qualificationRule: e.target.value as 'group_based' | 'overall_ranking',
+                      // 総合順位ルールの場合は進出数を4に固定
+                      advancingTeams: e.target.value === 'overall_ranking' ? 1 : prev.advancingTeams
+                    }))}
+                  >
+                    <option value="group_based">グループ順位（各グループ上位）</option>
+                    <option value="overall_ranking">総合順位（上位4チーム）</option>
+                  </select>
+                </div>
+                {tournamentForm.qualificationRule === 'group_based' && (
+                  <div>
+                    <label className="form-label">決勝T進出チーム数</label>
+                    <select
+                      className="form-input"
+                      value={tournamentForm.advancingTeams}
+                      onChange={(e) => setTournamentForm(prev => ({ ...prev, advancingTeams: parseInt(e.target.value) || 1 }))}
+                    >
+                      <option value={1}>各グループ1位のみ</option>
+                      <option value={2}>各グループ1・2位</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                総チーム数: {tournamentForm.groupCount * tournamentForm.teamsPerGroup}チーム /
+                決勝T参加: {tournamentForm.qualificationRule === 'overall_ranking'
+                  ? '4チーム（総合1〜4位）'
+                  : `${tournamentForm.groupCount * tournamentForm.advancingTeams}チーム`}
+              </p>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              総チーム数: {tournamentForm.groupCount * tournamentForm.teamsPerGroup}チーム /
-              決勝T参加: {tournamentForm.qualificationRule === 'overall_ranking'
-                ? '4チーム（総合1〜4位）'
-                : `${tournamentForm.groupCount * tournamentForm.advancingTeams}チーム`}
-            </p>
-          </div>
+          )}
+
+          {/* 新方式用：会場・チーム構成設定 */}
+          {!tournamentForm.useGroupSystem && (
+            <div className="border-t pt-4 mt-4">
+              <h4 className="font-medium mb-3 text-gray-700">会場・チーム構成設定（1リーグ制）</h4>
+              <p className="text-xs text-gray-500 mb-3">
+                ※ 各会場にチームを配置し、会場内で対戦を行います。チーム配置は「チーム配置」画面で行います。
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="form-label">会場数</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={2}
+                    max={12}
+                    value={tournamentForm.venueCount}
+                    onChange={(e) => setTournamentForm(prev => ({ ...prev, venueCount: parseInt(e.target.value) || 6 }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">1会場のチーム数</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={3}
+                    max={8}
+                    value={tournamentForm.teamsPerVenue}
+                    onChange={(e) => setTournamentForm(prev => ({ ...prev, teamsPerVenue: parseInt(e.target.value) || 4 }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">1日の試合数/チーム</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={1}
+                    max={4}
+                    value={tournamentForm.matchesPerTeamPerDay}
+                    onChange={(e) => setTournamentForm(prev => ({ ...prev, matchesPerTeamPerDay: parseInt(e.target.value) || 2 }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">予選日数</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={1}
+                    max={3}
+                    value={tournamentForm.preliminaryDays}
+                    onChange={(e) => setTournamentForm(prev => ({ ...prev, preliminaryDays: parseInt(e.target.value) || 2 }))}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                総チーム数: {tournamentForm.venueCount * tournamentForm.teamsPerVenue}チーム /
+                予選試合数/チーム: {tournamentForm.matchesPerTeamPerDay * tournamentForm.preliminaryDays}試合 /
+                決勝T参加: 総合順位上位4チーム
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end">
             <button
