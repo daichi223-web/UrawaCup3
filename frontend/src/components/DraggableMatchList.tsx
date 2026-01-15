@@ -291,24 +291,69 @@ export default function DraggableMatchList({
     return getViolationsForMatch(matchId, violations)
   }
 
+  // 違反タイプごとのバッジ設定
+  const VIOLATION_BADGE_CONFIG: Record<string, { short: string; color: string; icon: string }> = {
+    // エラー（赤系）
+    sameTimeConflict: { short: '重複', color: 'bg-red-500 text-white', icon: '⊗' },
+    duplicateMatch: { short: '済', color: 'bg-red-400 text-white', icon: '✕' },
+    selfMatch: { short: '自', color: 'bg-red-600 text-white', icon: '!' },
+    // 警告（各色）
+    consecutive: { short: '連', color: 'bg-yellow-400 text-yellow-900', icon: '→' },
+    dailyGameLimit: { short: '3+', color: 'bg-orange-400 text-white', icon: '▲' },
+    tooManyGamesTotal: { short: '5+', color: 'bg-orange-500 text-white', icon: '▲' },
+    notEnoughGames: { short: '少', color: 'bg-purple-400 text-white', icon: '▽' },
+    localVsLocal: { short: '地', color: 'bg-pink-400 text-white', icon: '◆' },
+    sameRegion: { short: '域', color: 'bg-indigo-400 text-white', icon: '■' },
+    sameLeague: { short: 'L', color: 'bg-blue-400 text-white', icon: '●' },
+    refereeConflict: { short: '審', color: 'bg-pink-500 text-white', icon: '!' },
+  }
+
   // 違反タイプに応じたバッジ
   const ViolationBadge = ({ violation }: { violation: ConstraintViolation }) => {
+    const config = VIOLATION_BADGE_CONFIG[violation.type]
+    if (config) {
+      return (
+        <span
+          className={`px-1 py-0.5 text-xs rounded font-bold ${config.color}`}
+          title={`${violation.label}: ${violation.description}`}
+        >
+          {config.short}
+        </span>
+      )
+    }
+    // 未定義タイプのフォールバック
     const isError = violation.level === 'error'
-    const isWarning = violation.level === 'warning'
     return (
       <span
-        className={`px-1.5 py-0.5 text-xs rounded-full inline-flex items-center gap-1 ${
-          isError
-            ? 'bg-red-100 text-red-700'
-            : isWarning
-              ? 'bg-yellow-100 text-yellow-700'
-              : 'bg-blue-100 text-blue-700'
-        }`}
+        className={`px-1 py-0.5 text-xs rounded ${isError ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}
         title={violation.description}
       >
-        {isError ? <AlertCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-        {violation.label}
+        {violation.label.slice(0, 2)}
       </span>
+    )
+  }
+
+  // 凡例コンポーネント
+  const ViolationLegend = () => {
+    const legendItems = [
+      { short: '連', color: 'bg-yellow-400 text-yellow-900', label: '連戦' },
+      { short: '3+', color: 'bg-orange-400 text-white', label: '1日3試合以上' },
+      { short: '5+', color: 'bg-orange-500 text-white', label: '2日間5試合以上' },
+      { short: '少', color: 'bg-purple-400 text-white', label: '試合数不足' },
+      { short: '地', color: 'bg-pink-400 text-white', label: '地元同士' },
+      { short: '域', color: 'bg-indigo-400 text-white', label: '同地域' },
+      { short: 'L', color: 'bg-blue-400 text-white', label: '同リーグ' },
+    ]
+    return (
+      <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+        <span className="font-medium">凡例:</span>
+        {legendItems.map(item => (
+          <span key={item.short} className="inline-flex items-center gap-0.5">
+            <span className={`px-1 py-0.5 rounded font-bold ${item.color}`}>{item.short}</span>
+            <span>{item.label}</span>
+          </span>
+        ))}
+      </div>
     )
   }
 
@@ -709,6 +754,13 @@ export default function DraggableMatchList({
       {!compact && (
         <div className="text-xs text-gray-400 text-center mt-4">
           ※ チームをクリックして選択後、入れ替えたいチームをクリックしてください
+        </div>
+      )}
+
+      {/* 凡例（警告がある場合のみ表示） */}
+      {!compact && enableConstraintCheck && violations.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <ViolationLegend />
         </div>
       )}
     </div>
