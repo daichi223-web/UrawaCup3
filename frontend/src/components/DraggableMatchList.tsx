@@ -8,8 +8,8 @@ import type { MatchWithDetails } from '@/types'
 import { validateMatches, getViolationsForMatch, type ConstraintViolation, type MatchForValidation, type ConstraintCheckSettings } from '@/lib/matchConstraints'
 import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 
-// 選択状態の型
-interface SelectedTeam {
+// 選択状態の型（外部からも使用可能にexport）
+export interface SelectedTeam {
   matchId: number
   position: 'home' | 'away'
   teamId: number
@@ -182,6 +182,12 @@ interface ClickableMatchListProps {
   enableConstraintCheck?: boolean
   /** コンパクト表示モード */
   compact?: boolean
+  /** 外部管理の選択状態（会場を超えた選択に使用） */
+  externalSelectedTeam?: SelectedTeam | null
+  /** 外部選択状態の変更ハンドラ */
+  onExternalSelect?: (selected: SelectedTeam | null) => void
+  /** 全試合リスト（会場を超えた交換時に相手の試合を検索するため） */
+  allMatches?: MatchWithDetails[]
 }
 
 /**
@@ -201,8 +207,17 @@ export default function DraggableMatchList({
   teams = [],
   enableConstraintCheck = true,
   compact = false,
+  externalSelectedTeam,
+  onExternalSelect,
+  allMatches,
 }: ClickableMatchListProps) {
-  const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
+  // 内部状態（外部状態が提供されない場合に使用）
+  const [internalSelectedTeam, setInternalSelectedTeam] = useState<SelectedTeam | null>(null)
+
+  // 外部状態が提供されている場合はそれを使用、そうでなければ内部状態を使用
+  const useExternalState = externalSelectedTeam !== undefined && onExternalSelect !== undefined
+  const selectedTeam = useExternalState ? externalSelectedTeam : internalSelectedTeam
+  const setSelectedTeam = useExternalState ? onExternalSelect : setInternalSelectedTeam
 
   // 制約設定を取得
   const { settings: constraintSettings } = useConstraintSettingsStore()
@@ -328,7 +343,9 @@ export default function DraggableMatchList({
       onSwapTeams(match.id, match.awayTeamId!, match.homeTeamId!)
     } else {
       // 異なる試合間でのチーム交換
-      const selectedMatch = matches.find(m => m.id === selectedTeam.matchId)
+      // allMatchesが提供されている場合は会場を超えた検索、そうでなければ現在のリスト内のみ
+      const searchList = allMatches || matches
+      const selectedMatch = searchList.find(m => m.id === selectedTeam.matchId)
       if (selectedMatch) {
         // 選択元の試合を更新
         const newSelectedHome = selectedTeam.position === 'home' ? targetTeamId : selectedMatch.homeTeamId

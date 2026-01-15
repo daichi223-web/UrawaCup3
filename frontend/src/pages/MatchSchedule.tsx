@@ -12,7 +12,7 @@ import { tournamentsApi, venuesApi, matchesApi, teamsApi, standingsApi } from '@
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/stores/appStore'
 import FinalsBracket from '@/components/FinalsBracket'
-import DraggableMatchList from '@/components/DraggableMatchList'
+import DraggableMatchList, { type SelectedTeam } from '@/components/DraggableMatchList'
 import MatchScheduleEditor from '@/components/MatchScheduleEditor'
 import { Modal } from '@/components/ui/Modal'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
@@ -97,6 +97,7 @@ function MatchSchedule() {
     matchOrder: number
   } | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)  // 組み合わせ編集モード
+  const [crossVenueSelectedTeam, setCrossVenueSelectedTeam] = useState<SelectedTeam | null>(null)  // 会場を超えた選択状態（1リーグ制用）
 
   // 大会情報を取得
   const { data: tournament, isLoading: isLoadingTournament } = useQuery({
@@ -1302,64 +1303,86 @@ function MatchSchedule() {
                   })}
                 </div>
               ) : (
-                /* 1リーグ制：会場ごとにコンパクト表示 */
-                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                  {venues.filter(v => v.forPreliminary || v.for_preliminary).map((venue, idx) => {
-                    const day1VenueMatches = day1Matches.filter(m => (m.venueId || m.venue_id) === venue.id)
-                    const day2VenueMatches = day2Matches.filter(m => (m.venueId || m.venue_id) === venue.id)
+                /* 1リーグ制：会場ごとにコンパクト表示（会場を超えたチーム変更対応） */
+                <>
+                  {/* 選択中のチーム表示 */}
+                  {crossVenueSelectedTeam && (
+                    <div className="mb-2 p-2 bg-primary-50 border border-primary-200 rounded flex items-center justify-between">
+                      <span className="text-sm text-primary-700">
+                        「{crossVenueSelectedTeam.teamName}」を選択中 - 入れ替えたいチームをクリック
+                      </span>
+                      <button
+                        onClick={() => setCrossVenueSelectedTeam(null)}
+                        className="text-xs text-gray-500 hover:text-gray-700 underline"
+                      >
+                        解除
+                      </button>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                    {venues.filter(v => v.forPreliminary || v.for_preliminary).map((venue, idx) => {
+                      const day1VenueMatches = day1Matches.filter(m => (m.venueId || m.venue_id) === venue.id)
+                      const day2VenueMatches = day2Matches.filter(m => (m.venueId || m.venue_id) === venue.id)
 
-                    const venueColorsList = [
-                      { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
-                      { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
-                      { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
-                      { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
-                      { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-800' },
-                      { bg: 'bg-pink-50', border: 'border-pink-200', header: 'bg-pink-100 text-pink-800' },
-                    ]
-                    const colors = venueColorsList[idx % venueColorsList.length]
+                      const venueColorsList = [
+                        { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800' },
+                        { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800' },
+                        { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800' },
+                        { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
+                        { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-800' },
+                        { bg: 'bg-pink-50', border: 'border-pink-200', header: 'bg-pink-100 text-pink-800' },
+                      ]
+                      const colors = venueColorsList[idx % venueColorsList.length]
 
-                    if (day1VenueMatches.length === 0 && day2VenueMatches.length === 0) return null
+                      if (day1VenueMatches.length === 0 && day2VenueMatches.length === 0) return null
 
-                    return (
-                      <div key={venue.id} className={`rounded border ${colors.border} ${colors.bg} overflow-hidden`}>
-                        <div className={`px-2 py-1 ${colors.header} font-medium text-xs`}>
-                          {venue.name}
+                      return (
+                        <div key={venue.id} className={`rounded border ${colors.border} ${colors.bg} overflow-hidden`}>
+                          <div className={`px-2 py-1 ${colors.header} font-medium text-xs`}>
+                            {venue.name}
+                          </div>
+                          {/* Day1 */}
+                          <div className="px-1 py-0.5 bg-gray-100 text-xs text-gray-600 font-medium">Day1</div>
+                          <div className="p-1 bg-white">
+                            <DraggableMatchList
+                              matches={day1VenueMatches}
+                              onSwapTeams={handleSwapTeams}
+                              title=""
+                              emptyMessage=""
+                              consecutiveMatchTeams={consecutiveMatchTeams}
+                              teams={allTeams}
+                              enableConstraintCheck
+                              compact
+                              externalSelectedTeam={crossVenueSelectedTeam}
+                              onExternalSelect={setCrossVenueSelectedTeam}
+                              allMatches={[...day1Matches, ...day2Matches]}
+                            />
+                          </div>
+                          {/* Day2 */}
+                          <div className="px-1 py-0.5 bg-gray-100 text-xs text-gray-600 font-medium">Day2</div>
+                          <div className="p-1 bg-white">
+                            <DraggableMatchList
+                              matches={day2VenueMatches}
+                              onSwapTeams={handleSwapTeams}
+                              title=""
+                              emptyMessage=""
+                              consecutiveMatchTeams={consecutiveMatchTeams}
+                              teams={allTeams}
+                              enableConstraintCheck
+                              compact
+                              externalSelectedTeam={crossVenueSelectedTeam}
+                              onExternalSelect={setCrossVenueSelectedTeam}
+                              allMatches={[...day1Matches, ...day2Matches]}
+                            />
+                          </div>
                         </div>
-                        {/* Day1 */}
-                        <div className="px-1 py-0.5 bg-gray-100 text-xs text-gray-600 font-medium">Day1</div>
-                        <div className="p-1 bg-white">
-                          <DraggableMatchList
-                            matches={day1VenueMatches}
-                            onSwapTeams={handleSwapTeams}
-                            title=""
-                            emptyMessage=""
-                            consecutiveMatchTeams={consecutiveMatchTeams}
-                            teams={allTeams}
-                            enableConstraintCheck
-                            compact
-                          />
-                        </div>
-                        {/* Day2 */}
-                        <div className="px-1 py-0.5 bg-gray-100 text-xs text-gray-600 font-medium">Day2</div>
-                        <div className="p-1 bg-white">
-                          <DraggableMatchList
-                            matches={day2VenueMatches}
-                            onSwapTeams={handleSwapTeams}
-                            title=""
-                            emptyMessage=""
-                            consecutiveMatchTeams={consecutiveMatchTeams}
-                            teams={allTeams}
-                            enableConstraintCheck
-                            compact
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                </>
               )}
               <div className="text-xs text-gray-400 text-center">
-                ※ チームをクリックして選択後、入れ替えたいチームをクリック
+                ※ チームをクリックして選択後、入れ替えたいチームをクリック（会場を超えた変更可能）
               </div>
             </div>
           ) : (

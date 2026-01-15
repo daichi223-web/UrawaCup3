@@ -189,6 +189,22 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
     return team.shortName || team.short_name || team.name.slice(0, 4)
   }
 
+  // チーム名をU18などで改行して表示（縦ヘッダー用）
+  const formatTeamNameForHeader = (team: Team) => {
+    const name = getShortName(team)
+    // U18, U15などのパターンを改行
+    const match = name.match(/^(.+?)(U\d+)$/)
+    if (match) {
+      return (
+        <span className="flex flex-col items-center leading-tight">
+          <span>{match[1]}</span>
+          <span className="text-xs">{match[2]}</span>
+        </span>
+      )
+    }
+    return name
+  }
+
   // 結果記号を取得
   const getResultSymbol = (result: 'win' | 'draw' | 'loss' | null) => {
     switch (result) {
@@ -217,7 +233,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                 className="border border-gray-300 px-1 py-1 text-center font-medium w-12"
                 title={stats.team.name}
               >
-                {getShortName(stats.team)}
+                {formatTeamNameForHeader(stats.team)}
               </th>
             ))}
             <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">勝</th>
