@@ -7,6 +7,9 @@ export * from './tournaments';
 // 会場管理
 export * from './venues';
 
+// 会場割り当て（新フォーマット対応）
+export * from './venue-assignments';
+
 // チーム管理
 export * from './teams';
 

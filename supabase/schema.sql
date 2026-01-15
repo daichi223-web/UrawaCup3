@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS tournaments (
     sender_organization VARCHAR(100),
     sender_name VARCHAR(100),
     sender_contact VARCHAR(100),
+    -- 新フォーマット対応カラム
+    venue_count INTEGER DEFAULT 6,                         -- 会場数
+    teams_per_venue INTEGER DEFAULT 4,                     -- 1会場のチーム数
+    matches_per_team_per_day INTEGER DEFAULT 2,            -- 1日の試合数/チーム
+    preliminary_days INTEGER DEFAULT 2,                    -- 予選日数
+    b_match_slots INTEGER[] DEFAULT '{3, 6}',              -- B戦スロット（第何試合がB戦か）
+    use_group_system BOOLEAN DEFAULT TRUE,                 -- グループ制使用フラグ（後方互換のためTRUE）
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -195,6 +202,9 @@ CREATE TABLE IF NOT EXISTS matches (
     referee_main VARCHAR(100),
     referee_assistant VARCHAR(100),
     venue_manager VARCHAR(100),
+    -- 新フォーマット対応カラム
+    is_b_match BOOLEAN DEFAULT FALSE,                      -- B戦フラグ（順位計算から除外）
+    match_day INTEGER,                                     -- 試合日（1 or 2）
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (tournament_id, group_id) REFERENCES groups(tournament_id, id) ON DELETE SET NULL
@@ -231,11 +241,24 @@ CREATE TABLE IF NOT EXISTS goals (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 会場配置テーブル（新フォーマット対応: チームの会場・日別配置を管理）
+CREATE TABLE IF NOT EXISTS venue_assignments (
+    id SERIAL PRIMARY KEY,
+    tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+    venue_id INTEGER NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
+    team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+    match_day INTEGER NOT NULL,                            -- 試合日（1 or 2）
+    slot_order INTEGER NOT NULL,                           -- 会場内の順番（1, 2, 3, 4...）
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(tournament_id, team_id, match_day)              -- 同一大会・同一チーム・同一日は1エントリのみ
+);
+
 -- 順位テーブル
 CREATE TABLE IF NOT EXISTS standings (
     id SERIAL PRIMARY KEY,
     tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
-    group_id VARCHAR(1) NOT NULL,
+    group_id VARCHAR(1),                                   -- NULL許可（新フォーマット: 全体順位表の場合）
     team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     rank INTEGER NOT NULL DEFAULT 0,
     played INTEGER NOT NULL DEFAULT 0,
@@ -524,6 +547,12 @@ DO $$ BEGIN
 END $$;
 
 DO $$ BEGIN
+    DROP TRIGGER IF EXISTS update_venue_assignments_updated_at ON venue_assignments;
+    CREATE TRIGGER update_venue_assignments_updated_at BEFORE UPDATE ON venue_assignments
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+END $$;
+
+DO $$ BEGIN
     DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
     CREATE TRIGGER on_auth_user_created
         AFTER INSERT ON auth.users
@@ -552,6 +581,7 @@ ALTER TABLE venue_staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sender_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE report_recipients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE outstanding_players ENABLE ROW LEVEL SECURITY;
+ALTER TABLE venue_assignments ENABLE ROW LEVEL SECURITY;
 
 -- Clean up existing policies to avoid duplicates/errors
 DO $$ BEGIN
@@ -571,6 +601,7 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Public read access" ON sender_settings;
     DROP POLICY IF EXISTS "Public read access" ON report_recipients;
     DROP POLICY IF EXISTS "Public read access" ON outstanding_players;
+    DROP POLICY IF EXISTS "Public read access" ON venue_assignments;
 
     -- Profiles
     DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON profiles;
@@ -592,6 +623,7 @@ DO $$ BEGIN
     DROP POLICY IF EXISTS "Admin full access" ON sender_settings;
     DROP POLICY IF EXISTS "Admin full access" ON report_recipients;
     DROP POLICY IF EXISTS "Admin full access" ON outstanding_players;
+    DROP POLICY IF EXISTS "Admin full access" ON venue_assignments;
 
     -- Venue Staff
     DROP POLICY IF EXISTS "Venue staff can update matches" ON matches;
@@ -616,6 +648,7 @@ CREATE POLICY "Public read access" ON venue_staff FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON sender_settings FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON report_recipients FOR SELECT USING (true);
 CREATE POLICY "Public read access" ON outstanding_players FOR SELECT USING (true);
+CREATE POLICY "Public read access" ON venue_assignments FOR SELECT USING (true);
 
 CREATE POLICY "Public profiles are viewable by everyone" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
@@ -635,6 +668,7 @@ CREATE POLICY "Admin full access" ON venue_staff FOR ALL USING (is_admin());
 CREATE POLICY "Admin full access" ON sender_settings FOR ALL USING (is_admin());
 CREATE POLICY "Admin full access" ON report_recipients FOR ALL USING (is_admin());
 CREATE POLICY "Admin full access" ON outstanding_players FOR ALL USING (is_admin());
+CREATE POLICY "Admin full access" ON venue_assignments FOR ALL USING (is_admin());
 
 CREATE POLICY "Venue staff can update matches" ON matches
     FOR UPDATE USING (can_edit_match(venue_id));
@@ -718,3 +752,24 @@ CREATE INDEX IF NOT EXISTS idx_outstanding_players_team_id ON outstanding_player
 CREATE INDEX IF NOT EXISTS idx_outstanding_players_player_id ON outstanding_players(player_id);
 CREATE INDEX IF NOT EXISTS idx_outstanding_players_award_type ON outstanding_players(award_type);
 CREATE INDEX IF NOT EXISTS idx_outstanding_players_display_order ON outstanding_players(display_order);
+
+-- =====================================================
+-- 9. Indexes for New Format Tables (venue_assignments, matches)
+-- =====================================================
+
+-- venue_assignments indexes
+CREATE INDEX IF NOT EXISTS idx_venue_assignments_tournament_id ON venue_assignments(tournament_id);
+CREATE INDEX IF NOT EXISTS idx_venue_assignments_venue_id ON venue_assignments(venue_id);
+CREATE INDEX IF NOT EXISTS idx_venue_assignments_team_id ON venue_assignments(team_id);
+CREATE INDEX IF NOT EXISTS idx_venue_assignments_match_day ON venue_assignments(match_day);
+CREATE INDEX IF NOT EXISTS idx_venue_assignments_tournament_match_day ON venue_assignments(tournament_id, match_day);
+CREATE INDEX IF NOT EXISTS idx_venue_assignments_venue_match_day ON venue_assignments(venue_id, match_day);
+
+-- matches indexes for new format columns
+CREATE INDEX IF NOT EXISTS idx_matches_is_b_match ON matches(is_b_match);
+CREATE INDEX IF NOT EXISTS idx_matches_match_day ON matches(match_day);
+CREATE INDEX IF NOT EXISTS idx_matches_tournament_match_day ON matches(tournament_id, match_day);
+CREATE INDEX IF NOT EXISTS idx_matches_tournament_is_b_match ON matches(tournament_id, is_b_match);
+
+-- tournaments indexes for new format columns
+CREATE INDEX IF NOT EXISTS idx_tournaments_use_group_system ON tournaments(use_group_system);

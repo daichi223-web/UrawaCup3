@@ -47,6 +47,9 @@ export interface Match {
   version: number;
   createdAt: string;
   updatedAt: string;
+  // 新フォーマット対応フィールド
+  isBMatch?: boolean; // B戦かどうか
+  matchDay?: number | null; // 試合日（予選の何日目か）
 
   // 結合データ
   homeTeam?: { id: number; name: string; shortName: string };

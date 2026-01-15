@@ -39,6 +39,7 @@ const ScorerRanking = lazy(() => import('./pages/ScorerRanking'))
 const PlayerManagement = lazy(() => import('./pages/PlayerManagement'))
 const FinalDaySchedule = lazy(() => import('./pages/FinalDaySchedule'))
 const TrainingMatchEditor = lazy(() => import('./pages/TrainingMatchEditor'))
+const VenueAssignment = lazy(() => import('./pages/VenueAssignment'))
 
 /**
  * 設定エラー表示コンポーネント
@@ -161,6 +162,16 @@ function App() {
               element={
                 <RequireAdmin>
                   <MatchSchedule />
+                </RequireAdmin>
+              }
+            />
+
+            {/* チーム配置（管理者専用） */}
+            <Route
+              path="/venue-assignment"
+              element={
+                <RequireAdmin>
+                  <VenueAssignment />
                 </RequireAdmin>
               }
             />

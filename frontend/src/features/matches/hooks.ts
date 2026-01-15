@@ -11,12 +11,25 @@ import type {
 
 const QUERY_KEY = ['matches'];
 
+/**
+ * 試合一覧取得
+ * @param params フィルタオプション
+ *   - tournamentId: 大会ID
+ *   - groupId: グループID
+ *   - venueId: 会場ID
+ *   - matchDate: 試合日（YYYY-MM-DD形式）
+ *   - stage: 試合ステージ（preliminary, training, semifinal等）
+ *   - isBMatch: B戦フィルタ（新フォーマット用）
+ *   - matchDay: 試合日番号（新フォーマット用、1=1日目, 2=2日目...）
+ */
 export function useMatches(params?: {
   tournamentId?: number;
   groupId?: string;
   venueId?: number;
   matchDate?: string;
   stage?: MatchStage;
+  isBMatch?: boolean;
+  matchDay?: number;
 }) {
   return useQuery({
     queryKey: [...QUERY_KEY, params],

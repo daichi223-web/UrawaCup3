@@ -80,13 +80,13 @@ export const standingApi = {
   // 抽選結果を登録（タイブレーカー解決）
   resolveTiebreaker: async (data: ResolveTiebreakerInput): Promise<void> => {
     // タイブレーカーの解決（順位を直接更新）
-    for (let i = 0; i < data.teamOrder.length; i++) {
+    for (const ranking of data.rankings) {
       const { error } = await supabase
         .from('standings')
-        .update({ rank: i + 1, tiebreaker_resolved: true })
+        .update({ rank: ranking.rank })
         .eq('tournament_id', data.tournamentId)
         .eq('group_id', data.groupId)
-        .eq('team_id', data.teamOrder[i]);
+        .eq('team_id', ranking.teamId);
 
       if (error) throw error;
     }
@@ -161,8 +161,10 @@ export const standingApi = {
       if (a.goalDifference !== b.goalDifference) return b.goalDifference - a.goalDifference;
       // 3. 総得点
       if (a.goalsFor !== b.goalsFor) return b.goalsFor - a.goalsFor;
-      // 同点の場合はグループID順（安定ソート）
-      return a.groupId.localeCompare(b.groupId);
+      // 同点の場合はグループID順（安定ソート）- null チェックを追加
+      const groupA = a.groupId || '';
+      const groupB = b.groupId || '';
+      return groupA.localeCompare(groupB);
     });
 
     // 総合順位を付与
@@ -215,7 +217,6 @@ export const standingApi = {
         points: 0,
         rank: 0,
         overall_rank: null,
-        tiebreaker_resolved: false,
       })
       .eq('tournament_id', tournamentId);
 

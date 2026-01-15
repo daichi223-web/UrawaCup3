@@ -14,10 +14,11 @@ export type {
 export interface GroupStandings {
   groupId: string;
   standings: Array<{
-    id: number;
-    tournamentId: number;
-    groupId: string;
+    id?: number;
+    tournamentId?: number;
+    groupId?: string;
     teamId: number;
+    teamName?: string;
     rank: number;
     overallRank?: number; // 総合順位
     played: number;
@@ -28,9 +29,7 @@ export interface GroupStandings {
     goalsAgainst: number;
     goalDifference: number;
     points: number;
-    rankReason: string | null;
-    version: number;
-    calculatedAt: string;
+    rankReason?: string | null;
     team?: {
       id: number;
       name: string;

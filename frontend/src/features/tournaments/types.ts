@@ -19,6 +19,13 @@ export interface Tournament {
   createdAt: string;
   updatedAt: string;
   version: number;
+  // 新フォーマット対応フィールド
+  venueCount?: number; // 会場数
+  teamsPerVenue?: number; // 会場あたりのチーム数
+  matchesPerTeamPerDay?: number; // 1日あたりの各チームの試合数
+  preliminaryDays?: number; // 予選日数
+  bMatchSlots?: number[]; // B戦スロット（例: [3, 6]）
+  useGroupSystem?: boolean; // グループ制を使用するか
 }
 
 export type TournamentStatus = 'draft' | 'active' | 'completed';
@@ -82,3 +89,7 @@ export interface GenerateFinalScheduleInput {
   finalDate: string;
   format: 'tournament' | 'ranking_league';
 }
+
+// VenueAssignment型は venue-assignments/types.ts で定義
+// 重複を避けるため、ここでは再エクスポートのみ
+export type { VenueAssignment } from '@/features/venue-assignments/types';

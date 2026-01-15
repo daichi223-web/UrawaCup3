@@ -43,6 +43,7 @@ const navItems: NavItem[] = [
   { path: '/standings', label: '順位表', icon: Trophy, group: 'main' },
   { path: '/scorer-ranking', label: '得点ランキング', icon: Award, group: 'main' },
   { path: '/schedule', label: '日程管理', icon: Calendar, group: 'main' },
+  { path: '/venue-assignment', label: 'チーム配置', icon: MapPin, group: 'main', roles: ['admin'] },
   { path: '/reports', label: '報告書出力', icon: FileText, group: 'main', roles: ['admin'] },
   { path: '/approval', label: '結果承認', icon: ClipboardCheck, group: 'main', roles: ['admin'] },
 

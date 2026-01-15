@@ -21,6 +21,8 @@ export const matchApi = {
     venueId?: number;
     matchDate?: string;
     stage?: MatchStage;
+    isBMatch?: boolean; // 新フォーマット: B戦フィルタ
+    matchDay?: number; // 新フォーマット: 試合日フィルタ
   }): Promise<Match[]> => {
     let query = supabase
       .from('matches')
@@ -47,6 +49,14 @@ export const matchApi = {
     }
     if (params?.stage) {
       query = query.eq('stage', params.stage);
+    }
+    // 新フォーマット対応: B戦フィルタ
+    if (params?.isBMatch !== undefined) {
+      query = query.eq('is_b_match', params.isBMatch);
+    }
+    // 新フォーマット対応: 試合日フィルタ
+    if (params?.matchDay !== undefined) {
+      query = query.eq('match_day', params.matchDay);
     }
 
     const { data, error } = await query;
