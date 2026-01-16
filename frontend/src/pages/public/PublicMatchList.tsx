@@ -42,6 +42,7 @@ export default function PublicMatchList() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [tournamentName, setTournamentName] = useState<string>('');
+    const [useGroupSystem, setUseGroupSystem] = useState<boolean>(true);
 
     useEffect(() => {
         let mounted = true;
@@ -66,6 +67,7 @@ export default function PublicMatchList() {
                 const latestTournament = tournaments[0];
                 const tournamentId = latestTournament.id;
                 setTournamentName(latestTournament.name || latestTournament.short_name || '');
+                setUseGroupSystem(latestTournament.use_group_system ?? true);
 
                 // タイムアウト付きで試合データをフェッチ
                 const fetchPromise = matchesApi.getAll(tournamentId);
@@ -232,8 +234,10 @@ export default function PublicMatchList() {
         return timeA - timeB;
     });
 
-    // グループ一覧を取得
-    const groupKeys = ['all', 'A', 'B', 'C', 'D', 'finals', 'training'];
+    // グループ一覧を取得（1リーグ制の場合はグループタブを非表示）
+    const groupKeys = useGroupSystem
+        ? ['all', 'A', 'B', 'C', 'D', 'finals', 'training']
+        : ['all', 'finals', 'training'];
     const groupLabels: Record<string, string> = {
         all: 'すべて',
         A: 'Aグループ',
@@ -250,7 +254,7 @@ export default function PublicMatchList() {
         return matchList.filter(m => getGroupKey(m) === selectedGroup);
     };
 
-    // グループ別ビュー用: グループごとに試合を分類
+    // グループ別ビュー用: グループごとに試合を分類（利用可能なグループキーのみ）
     const matchesByGroup = groupKeys.slice(1).reduce((acc, groupKey) => {
         acc[groupKey] = sortedMatches.filter(m => getGroupKey(m) === groupKey);
         return acc;

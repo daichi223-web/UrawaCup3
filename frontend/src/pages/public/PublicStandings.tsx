@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
 export default function PublicStandings() {
-    const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'overall'>('A');
+    const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'overall'>('overall');
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const tournamentId = 1; // デフォルトの大会ID
@@ -36,6 +36,9 @@ export default function PublicStandings() {
     });
 
     const isOverallRanking = tournament?.qualification_rule === 'overall_ranking';
+
+    // 大会形式（グループ制か1リーグ制か）
+    const useGroupSystem = tournament?.use_group_system ?? true;
 
     // 総合順位を取得（総合タブまたは総合順位ルールの場合）
     const { data: overallStandings, isLoading: isLoadingOverall, refetch: refetchOverall } = useQuery<OverallStandings>({
@@ -119,32 +122,41 @@ export default function PublicStandings() {
         D: { header: 'bg-yellow-500', highlight: 'bg-yellow-50' },
     };
 
+    // 表示するタブ（1リーグ制の場合は総合のみ）
+    const availableTabs = useGroupSystem
+        ? (['A', 'B', 'C', 'D', 'overall'] as const)
+        : (['overall'] as const);
+
     return (
         <div className="space-y-4 pb-20">
-            <h1 className="text-xl font-bold text-gray-800 px-1">予選リーグ 順位表</h1>
+            <h1 className="text-xl font-bold text-gray-800 px-1">
+                {useGroupSystem ? '予選リーグ 順位表' : '順位表'}
+            </h1>
 
-            {/* Tabs */}
-            <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-                {(['A', 'B', 'C', 'D', 'overall'] as const).map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${activeTab === tab
-                            ? tab === 'overall'
-                                ? 'bg-amber-500 text-white shadow-sm'
-                                : 'bg-white text-red-600 shadow-sm'
-                            : 'text-gray-500 hover:bg-gray-200'
-                            }`}
-                    >
-                        {tab === 'overall' ? '総合' : `${tab}グループ`}
-                    </button>
-                ))}
-            </div>
+            {/* Tabs（グループ制の場合のみ表示） */}
+            {useGroupSystem && (
+                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                    {availableTabs.map(tab => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${activeTab === tab
+                                ? tab === 'overall'
+                                    ? 'bg-amber-500 text-white shadow-sm'
+                                    : 'bg-white text-red-600 shadow-sm'
+                                : 'text-gray-500 hover:bg-gray-200'
+                                }`}
+                        >
+                            {tab === 'overall' ? '総合' : `${tab}グループ`}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {/* コンテンツ */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                {activeTab === 'overall' ? (
-                    // 総合順位表
+                {(activeTab === 'overall' || !useGroupSystem) ? (
+                    // 総合順位表（1リーグ制の場合は常に表示）
                     overallStandings && overallStandings.entries.length > 0 ? (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
@@ -152,7 +164,7 @@ export default function PublicStandings() {
                                     <tr className="bg-amber-500 text-white">
                                         <th className="px-2 py-2 text-center w-12">順位</th>
                                         <th className="px-2 py-2 text-left">チーム</th>
-                                        <th className="px-2 py-2 text-center w-12">G</th>
+                                        {useGroupSystem && <th className="px-2 py-2 text-center w-12">G</th>}
                                         <th className="px-2 py-2 text-center w-10">試</th>
                                         <th className="px-2 py-2 text-center w-10">勝</th>
                                         <th className="px-2 py-2 text-center w-10">分</th>
@@ -180,9 +192,11 @@ export default function PublicStandings() {
                                                 <td className="px-2 py-2 font-medium">
                                                     {entry.shortName || entry.teamName}
                                                 </td>
-                                                <td className="px-2 py-2 text-center text-xs text-gray-500">
-                                                    {entry.groupId}
-                                                </td>
+                                                {useGroupSystem && (
+                                                    <td className="px-2 py-2 text-center text-xs text-gray-500">
+                                                        {entry.groupId}
+                                                    </td>
+                                                )}
                                                 <td className="px-2 py-2 text-center">{entry.played}</td>
                                                 <td className="px-2 py-2 text-center text-green-600">{entry.won}</td>
                                                 <td className="px-2 py-2 text-center text-gray-500">{entry.drawn}</td>
