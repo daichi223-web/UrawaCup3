@@ -23,6 +23,8 @@ export interface TeamSlot {
   displayName: string;
   /** 参照元試合ID（type='winner'/'loser' の場合） */
   sourceMatchId?: number;
+  /** グループID（色判定用） */
+  groupId?: string;
 }
 
 /** 最終日試合 */
@@ -59,6 +61,8 @@ export interface FinalMatch {
   };
   /** 備考 */
   notes?: string;
+  /** 組み合わせ確定済みか */
+  isConfirmed?: boolean;
 }
 
 /** 会場別スケジュール */
@@ -77,6 +81,8 @@ export interface VenueSchedule {
   isMixedUse?: boolean;
   /** 混合会場での決勝試合数 */
   finalsMatchCount?: number;
+  /** 会場のグループID（色判定用） */
+  groupId?: string;
 }
 
 /** 試合notesからリーグ情報を抽出 */
