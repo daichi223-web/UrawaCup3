@@ -26,6 +26,8 @@ interface TeamSlotProps {
   hasConsecutiveError?: boolean
   compact?: boolean
   isChanged?: boolean  // 未確定の変更があるか
+  venueGroupId?: string  // 会場のグループID（確定後の色決定用）
+  isConfirmed?: boolean  // 変更が確定済みか
 }
 
 // グループごとの色設定
@@ -39,11 +41,13 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 /**
  * クリック可能なチームスロット
  */
-function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError, compact, isChanged }: TeamSlotProps) {
+function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError, compact, isChanged, venueGroupId, isConfirmed }: TeamSlotProps) {
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
-  const groupId = team?.groupId || team?.group_id || null
-  const groupColors = groupId ? GROUP_COLORS[groupId] : null
+  const teamGroupId = team?.groupId || team?.group_id || null
+  // 確定後は会場色、未確定時はチーム色を使用
+  const effectiveGroupId = isConfirmed && venueGroupId ? venueGroupId : teamGroupId
+  const groupColors = effectiveGroupId ? GROUP_COLORS[effectiveGroupId] : null
 
   return (
     <button
@@ -193,6 +197,10 @@ interface ClickableMatchListProps {
   allMatches?: MatchWithDetails[]
   /** 変更されたチームID（未確定の変更をハイライト） */
   changedTeamIds?: Set<number>
+  /** 会場のグループID（確定後の色決定用） */
+  venueGroupId?: string
+  /** 変更が確定済みか（確定後は会場色を使用） */
+  isConfirmed?: boolean
 }
 
 /**
@@ -216,6 +224,8 @@ export default function DraggableMatchList({
   onExternalSelect,
   allMatches,
   changedTeamIds,
+  venueGroupId,
+  isConfirmed = false,
 }: ClickableMatchListProps) {
   // 内部状態（外部状態が提供されない場合に使用）
   const [internalSelectedTeam, setInternalSelectedTeam] = useState<SelectedTeam | null>(null)
@@ -611,6 +621,8 @@ export default function DraggableMatchList({
                   hasConsecutiveError={homeHasConsecutiveError}
                   compact
                   isChanged={homeIsChanged}
+                  venueGroupId={venueGroupId}
+                  isConfirmed={isConfirmed}
                 />
                 <span className="text-gray-400 text-xs flex-shrink-0">vs</span>
                 <ClickableTeamSlot
@@ -623,6 +635,8 @@ export default function DraggableMatchList({
                   hasConsecutiveError={awayHasConsecutiveError}
                   compact
                   isChanged={awayIsChanged}
+                  venueGroupId={venueGroupId}
+                  isConfirmed={isConfirmed}
                 />
               </div>
 
@@ -685,6 +699,8 @@ export default function DraggableMatchList({
                     disabled={isDisabled}
                     hasConsecutiveError={homeHasConsecutiveError}
                     isChanged={homeIsChanged}
+                    venueGroupId={venueGroupId}
+                    isConfirmed={isConfirmed}
                   />
                 </div>
 
@@ -701,6 +717,8 @@ export default function DraggableMatchList({
                     disabled={isDisabled}
                     hasConsecutiveError={awayHasConsecutiveError}
                     isChanged={awayIsChanged}
+                    venueGroupId={venueGroupId}
+                    isConfirmed={isConfirmed}
                   />
                 </div>
               </div>

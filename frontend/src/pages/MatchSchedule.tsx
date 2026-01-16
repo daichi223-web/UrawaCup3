@@ -1418,6 +1418,9 @@ function MatchSchedule() {
 
                       if (day1VenueMatches.length === 0 && day2VenueMatches.length === 0) return null
 
+                      // 会場のグループID（snake_case対応）
+                      const venueGroupId = venue.groupId || venue.group_id
+
                       return (
                         <div key={venue.id} className={`rounded border ${colors.border} ${colors.bg} overflow-hidden`}>
                           <div className={`px-2 py-1 ${colors.header} font-medium text-xs`}>
@@ -1439,6 +1442,8 @@ function MatchSchedule() {
                               onExternalSelect={setCrossVenueSelectedTeam}
                               allMatches={[...day1Matches, ...day2Matches]}
                               changedTeamIds={getChangedTeamIds([...day1Matches, ...day2Matches])}
+                              venueGroupId={venueGroupId}
+                              isConfirmed={isChangeConfirmed}
                             />
                           </div>
                           {/* Day2 */}
@@ -1457,6 +1462,8 @@ function MatchSchedule() {
                               onExternalSelect={setCrossVenueSelectedTeam}
                               allMatches={[...day1Matches, ...day2Matches]}
                               changedTeamIds={getChangedTeamIds([...day1Matches, ...day2Matches])}
+                              venueGroupId={venueGroupId}
+                              isConfirmed={isChangeConfirmed}
                             />
                           </div>
                         </div>
@@ -1510,6 +1517,8 @@ function MatchSchedule() {
                         consecutiveMatchTeams={consecutiveMatchTeams}
                         teams={venueGroupId ? allTeams.filter(t => t.groupId === venueGroupId) : allTeams}
                         enableConstraintCheck
+                        venueGroupId={venueGroupId}
+                        isConfirmed={isChangeConfirmed}
                       />
                     </div>
                   </div>
