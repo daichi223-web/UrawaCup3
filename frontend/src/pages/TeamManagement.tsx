@@ -63,6 +63,8 @@ function TeamManagement() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteAllValidation, setDeleteAllValidation] = useState<{ canDelete: boolean; matchCount: number; goalCount: number } | null>(null);
   const [editForm, setEditForm] = useState({ name: '', groupId: '', teamType: 'invited', isVenueHost: false, region: '', leagueId: '' });
   const [addForm, setAddForm] = useState({ name: '', groupId: '', teamType: 'invited', isVenueHost: false, region: '', leagueId: '' });
   const [bulkText, setBulkText] = useState('');
@@ -292,6 +294,39 @@ function TeamManagement() {
     }
   };
 
+  // 一括削除モーダルを開く（バリデーションチェック）
+  const openDeleteAllModal = async () => {
+    if (!tournamentId) return;
+    setSaving(true);
+    try {
+      const validation = await teamsApi.validateDeleteAll(tournamentId);
+      setDeleteAllValidation(validation);
+      setShowDeleteAllModal(true);
+    } catch (error) {
+      toast.error('削除可否の確認に失敗しました');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // 全チーム一括削除処理
+  const handleDeleteAllTeams = async () => {
+    if (!tournamentId) return;
+    setSaving(true);
+    try {
+      await teamsApi.deleteAll(tournamentId);
+      setTeams([]);
+      setShowDeleteAllModal(false);
+      setDeleteAllValidation(null);
+      toast.success('全チームを削除しました');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '削除に失敗しました';
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner />;
   return (
     <div className="space-y-6">
@@ -313,6 +348,15 @@ function TeamManagement() {
             一括登録
           </button>
           <button className="btn-primary" onClick={() => setShowAddModal(true)}>チーム追加</button>
+          {teams.length > 0 && (
+            <button
+              className="btn-secondary bg-red-600 text-white hover:bg-red-700"
+              onClick={openDeleteAllModal}
+              disabled={saving}
+            >
+              全削除
+            </button>
+          )}
           <Link to="/players" className="btn-secondary bg-green-600 text-white hover:bg-green-700">
             選手管理
           </Link>
@@ -787,6 +831,77 @@ function TeamManagement() {
               {saving ? '削除中...' : '削除する'}
             </button>
           </div>
+        </div>
+      </Modal>
+
+      {/* 全チーム一括削除確認モーダル */}
+      <Modal
+        isOpen={showDeleteAllModal}
+        onClose={() => {
+          setShowDeleteAllModal(false);
+          setDeleteAllValidation(null);
+        }}
+        title="全チーム削除の確認"
+      >
+        <div className="space-y-4">
+          {deleteAllValidation && !deleteAllValidation.canDelete ? (
+            <>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-yellow-800 font-bold">削除できません</p>
+                <p className="text-yellow-700 text-sm mt-2">
+                  以下の関連データが存在するため、チームを削除できません。先にこれらのデータを削除してください。
+                </p>
+                <ul className="list-disc list-inside mt-2 text-yellow-700 text-sm">
+                  {deleteAllValidation.matchCount > 0 && (
+                    <li>試合データ: {deleteAllValidation.matchCount}件</li>
+                  )}
+                  {deleteAllValidation.goalCount > 0 && (
+                    <li>得点データ: {deleteAllValidation.goalCount}件</li>
+                  )}
+                </ul>
+              </div>
+              <div className="flex justify-end pt-4">
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowDeleteAllModal(false);
+                    setDeleteAllValidation(null);
+                  }}
+                >
+                  閉じる
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-800 font-bold">
+                  全{teams.length}チームを削除しますか？
+                </p>
+                <p className="text-red-600 text-sm mt-2">
+                  この操作は取り消せません。全チームと関連する選手データがすべて削除されます。
+                </p>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowDeleteAllModal(false);
+                    setDeleteAllValidation(null);
+                  }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  onClick={handleDeleteAllTeams}
+                  disabled={saving}
+                >
+                  {saving ? '削除中...' : '全て削除する'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </Modal>
     </div>

@@ -187,15 +187,14 @@ export default function PublicStandings() {
 
             {/* 成績表タブ */}
             {mainTab === 'results' && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden -mx-4 px-1">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 -mx-4">
                     {teams.length > 0 && matches.length > 0 ? (
-                        <div className="py-2">
+                        <div className="overflow-x-auto p-2">
                             <StarTable
                                 teams={teams}
                                 matches={matches}
                                 groupId="all"
                                 showOverallRank={false}
-                                compact={true}
                             />
                         </div>
                     ) : (

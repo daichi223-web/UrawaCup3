@@ -246,6 +246,62 @@ export const teamsApi = {
       .eq('id', id)
     if (error) handleSupabaseError(error)
   },
+
+  // 一括削除前のバリデーション（試合・得点データの存在チェック）
+  async validateDeleteAll(tournamentId: number): Promise<{ canDelete: boolean; matchCount: number; goalCount: number }> {
+    await ensureValidSession()
+
+    // 大会のチームIDを取得
+    const { data: teams } = await supabase
+      .from('teams')
+      .select('id')
+      .eq('tournament_id', tournamentId)
+
+    if (!teams || teams.length === 0) {
+      return { canDelete: true, matchCount: 0, goalCount: 0 }
+    }
+
+    const teamIds = teams.map(t => t.id)
+
+    // 試合データのチェック
+    const { count: matchCount } = await supabase
+      .from('matches')
+      .select('id', { count: 'exact', head: true })
+      .eq('tournament_id', tournamentId)
+
+    // 得点データのチェック
+    const { count: goalCount } = await supabase
+      .from('goals')
+      .select('id', { count: 'exact', head: true })
+      .in('team_id', teamIds)
+
+    return {
+      canDelete: (matchCount || 0) === 0 && (goalCount || 0) === 0,
+      matchCount: matchCount || 0,
+      goalCount: goalCount || 0,
+    }
+  },
+
+  // 全チーム一括削除
+  async deleteAll(tournamentId: number) {
+    await ensureValidSession()
+    validateId(tournamentId, '大会ID')
+
+    // 削除前バリデーション
+    const validation = await this.validateDeleteAll(tournamentId)
+    if (!validation.canDelete) {
+      throw new Error(
+        `削除できません: ${validation.matchCount}件の試合、${validation.goalCount}件の得点データが存在します。先に試合データを削除してください。`
+      )
+    }
+
+    const { error } = await supabase
+      .from('teams')
+      .delete()
+      .eq('tournament_id', tournamentId)
+
+    if (error) handleSupabaseError(error)
+  },
 }
 
 // ============================================

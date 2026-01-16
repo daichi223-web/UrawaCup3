@@ -22,7 +22,9 @@ import { standingApi } from '@/features/standings/api'
 import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 import {
   generateUrawaCupSchedule,
+  generateSingleLeagueSchedule,
   validateSchedule,
+  validateSingleLeagueSchedule,
   checkConsecutiveMatches,
   type TeamInfo,
 } from '@/lib/urawaCupScheduleGenerator'
@@ -346,7 +348,7 @@ function MatchSchedule() {
     )
   }, [allMatches])
 
-  // 予選リーグ日程生成（浦和カップ方式）
+  // 予選リーグ日程生成（グループ制 or 1リーグ制）
   const generatePreliminaryMutation = useMutation({
     mutationFn: async () => {
       // 大会データの確認
@@ -357,47 +359,12 @@ function MatchSchedule() {
       // チーム一覧を取得
       const teamsResult = await teamsApi.getAll(tournamentId)
       const teams = teamsResult.teams || []
-      // group_idが設定されているチームを予選リーグ対象とする
-      const groupTeams = teams.filter((t: any) => t.group_id)
-      if (groupTeams.length === 0) {
-        throw new Error('グループに所属するチームが登録されていません')
-      }
 
       // 大会日程を取得（Day1 = start_date, Day2 = start_date + 1日）
       const day1Date = tournament.startDate
       const day2DateObj = new Date(day1Date)
       day2DateObj.setDate(day2DateObj.getDate() + 1)
       const day2Date = day2DateObj.toISOString().split('T')[0]
-
-      console.log('[Schedule] 浦和カップ方式で生成')
-      console.log('[Schedule] Day1:', day1Date, 'Day2:', day2Date)
-      console.log('[Schedule] チーム数:', groupTeams.length)
-
-      // チーム情報を浦和カップ形式に変換
-      // seed_numberがない場合は、グループ内での登録順でシード番号を付与
-      const groupedTeams: Record<string, any[]> = {}
-      for (const team of groupTeams) {
-        const groupId = team.group_id
-        if (!groupedTeams[groupId]) groupedTeams[groupId] = []
-        groupedTeams[groupId].push(team)
-      }
-
-      const teamInfoList: TeamInfo[] = []
-      for (const [groupId, gTeams] of Object.entries(groupedTeams)) {
-        // シード番号順にソート（seed_numberがない場合はID順）
-        gTeams.sort((a, b) => (a.seed_number || a.id) - (b.seed_number || b.id))
-        gTeams.forEach((team, index) => {
-          teamInfoList.push({
-            id: team.id,
-            name: team.name,
-            shortName: team.short_name,
-            groupId: groupId,
-            seedNumber: team.seed_number || (index + 1), // 1-6
-          })
-        })
-      }
-
-      console.log('[Schedule] チーム情報:', teamInfoList)
 
       // 会場情報を取得（APIから直接取得）
       const venuesResult = await venuesApi.getAll(tournamentId)
@@ -416,16 +383,6 @@ function MatchSchedule() {
 
       const targetVenues = preliminaryVenues.length > 0 ? preliminaryVenues : fetchedVenues
 
-      // maxMatchesPerDay チェック（浦和カップは1日6試合必要）
-      const venuesWithWarning = targetVenues.filter((v: any) => {
-        const maxMatches = v.max_matches_per_day || v.maxMatchesPerDay || 6
-        return maxMatches < 6
-      })
-      if (venuesWithWarning.length > 0) {
-        const names = venuesWithWarning.map((v: any) => v.name).join(', ')
-        console.warn(`[Schedule] 以下の会場は1日の最大試合数が6未満です: ${names}`)
-      }
-
       const venueList = targetVenues.map((v: any) => ({
         id: v.id,
         name: v.name,
@@ -433,32 +390,122 @@ function MatchSchedule() {
       }))
       console.log('[Schedule] 予選用会場リスト:', venueList)
 
-      // 浦和カップ方式で日程生成（設定値を使用）
+      // 設定値を取得
       const scheduleConfig = {
         startTime: tournament.preliminaryStartTime || (tournament as any).preliminary_start_time || '09:00',
         matchDuration: tournament.matchDuration || (tournament as any).match_duration || 50,
         intervalMinutes: tournament.intervalMinutes || (tournament as any).interval_minutes || 15,
       }
       console.log('[Schedule] Config:', scheduleConfig)
-      const result = generateUrawaCupSchedule(teamInfoList, venueList, day1Date, day2Date, scheduleConfig)
 
-      if (!result.success || result.matches.length === 0) {
-        throw new Error('日程生成に失敗しました: ' + result.warnings.join(', '))
+      let result
+      let teamInfoList: TeamInfo[] = []
+      let validationErrors: string[] = []
+
+      // === 1リーグ制（総当たり） ===
+      if (!useGroupSystem) {
+        console.log('[Schedule] 1リーグ制（総当たり）で生成')
+        console.log('[Schedule] Day1:', day1Date, 'Day2:', day2Date)
+        console.log('[Schedule] チーム数:', teams.length)
+
+        if (teams.length < 2) {
+          throw new Error('チームが2チーム以上必要です')
+        }
+
+        // チーム情報を変換（グループは'all'固定）
+        teamInfoList = teams.map((team: any, index: number) => ({
+          id: team.id,
+          name: team.name,
+          shortName: team.short_name,
+          groupId: 'all',
+          seedNumber: index + 1,
+        }))
+
+        console.log('[Schedule] チーム情報:', teamInfoList)
+
+        // 1リーグ制の総当たり日程を生成
+        result = generateSingleLeagueSchedule(teamInfoList, venueList, day1Date, day2Date, scheduleConfig)
+
+        if (!result.success || result.matches.length === 0) {
+          throw new Error('日程生成に失敗しました: ' + result.warnings.join(', '))
+        }
+
+        // 検証
+        validationErrors = validateSingleLeagueSchedule(result.matches, teamInfoList)
+        if (validationErrors.length > 0) {
+          console.warn('[Schedule] 検証エラー:', validationErrors)
+        }
+      }
+      // === グループ制（浦和カップ方式） ===
+      else {
+        console.log('[Schedule] グループ制（浦和カップ方式）で生成')
+        console.log('[Schedule] Day1:', day1Date, 'Day2:', day2Date)
+
+        // group_idが設定されているチームを予選リーグ対象とする
+        const groupTeams = teams.filter((t: any) => t.group_id)
+        if (groupTeams.length === 0) {
+          throw new Error('グループに所属するチームが登録されていません')
+        }
+
+        console.log('[Schedule] チーム数:', groupTeams.length)
+
+        // チーム情報を浦和カップ形式に変換
+        // seed_numberがない場合は、グループ内での登録順でシード番号を付与
+        const groupedTeams: Record<string, any[]> = {}
+        for (const team of groupTeams) {
+          const groupId = team.group_id
+          if (!groupedTeams[groupId]) groupedTeams[groupId] = []
+          groupedTeams[groupId].push(team)
+        }
+
+        for (const [groupId, gTeams] of Object.entries(groupedTeams)) {
+          // シード番号順にソート（seed_numberがない場合はID順）
+          gTeams.sort((a, b) => (a.seed_number || a.id) - (b.seed_number || b.id))
+          gTeams.forEach((team, index) => {
+            teamInfoList.push({
+              id: team.id,
+              name: team.name,
+              shortName: team.short_name,
+              groupId: groupId,
+              seedNumber: team.seed_number || (index + 1), // 1-6
+            })
+          })
+        }
+
+        console.log('[Schedule] チーム情報:', teamInfoList)
+
+        // maxMatchesPerDay チェック（浦和カップは1日6試合必要）
+        const venuesWithWarning = targetVenues.filter((v: any) => {
+          const maxMatches = v.max_matches_per_day || v.maxMatchesPerDay || 6
+          return maxMatches < 6
+        })
+        if (venuesWithWarning.length > 0) {
+          const names = venuesWithWarning.map((v: any) => v.name).join(', ')
+          console.warn(`[Schedule] 以下の会場は1日の最大試合数が6未満です: ${names}`)
+        }
+
+        // 浦和カップ方式で日程生成
+        result = generateUrawaCupSchedule(teamInfoList, venueList, day1Date, day2Date, scheduleConfig)
+
+        if (!result.success || result.matches.length === 0) {
+          throw new Error('日程生成に失敗しました: ' + result.warnings.join(', '))
+        }
+
+        // 検証
+        validationErrors = validateSchedule(result.matches, teamInfoList)
+        if (validationErrors.length > 0) {
+          console.warn('[Schedule] 検証エラー:', validationErrors)
+        }
+
+        // 連戦チェック（グループ制のみ）
+        const consecutiveWarnings = checkConsecutiveMatches(result.matches)
+        if (consecutiveWarnings.length > 0) {
+          console.warn('[Schedule] 連戦警告:', consecutiveWarnings)
+          validationErrors = [...validationErrors, ...consecutiveWarnings]
+        }
       }
 
-      // 検証
-      const validationErrors = validateSchedule(result.matches, teamInfoList)
-      if (validationErrors.length > 0) {
-        console.warn('[Schedule] 検証エラー:', validationErrors)
-      }
-
-      // 連戦チェック
-      const consecutiveWarnings = checkConsecutiveMatches(result.matches)
-      if (consecutiveWarnings.length > 0) {
-        console.warn('[Schedule] 連戦警告:', consecutiveWarnings)
-      }
-
-      // 制約設定チェック
+      // 制約設定チェック（両方式共通）
       const constraintSettings = useConstraintSettingsStore.getState().settings
       const constraintWarnings: string[] = []
 
@@ -473,21 +520,21 @@ function MatchSchedule() {
 
         // 地元チーム同士の対戦チェック
         if (constraintSettings.avoidLocalVsLocal) {
-          if (homeTeam.teamType === 'local' && awayTeam.teamType === 'local') {
+          if ((homeTeam as any).teamType === 'local' && (awayTeam as any).teamType === 'local') {
             constraintWarnings.push(`地元校同士: ${match.homeTeamName} vs ${match.awayTeamName}`)
           }
         }
 
         // 同一地域チェック
         if (constraintSettings.avoidSameRegion) {
-          if (homeTeam.region && awayTeam.region && homeTeam.region === awayTeam.region) {
-            constraintWarnings.push(`同一地域(${homeTeam.region}): ${match.homeTeamName} vs ${match.awayTeamName}`)
+          if ((homeTeam as any).region && (awayTeam as any).region && (homeTeam as any).region === (awayTeam as any).region) {
+            constraintWarnings.push(`同一地域(${(homeTeam as any).region}): ${match.homeTeamName} vs ${match.awayTeamName}`)
           }
         }
 
         // 同一リーグチェック
         if (constraintSettings.avoidSameLeague) {
-          if (homeTeam.leagueId && awayTeam.leagueId && homeTeam.leagueId === awayTeam.leagueId) {
+          if ((homeTeam as any).leagueId && (awayTeam as any).leagueId && (homeTeam as any).leagueId === (awayTeam as any).leagueId) {
             constraintWarnings.push(`同一リーグ: ${match.homeTeamName} vs ${match.awayTeamName}`)
           }
         }
@@ -530,7 +577,7 @@ function MatchSchedule() {
 
       return {
         created: matchesToInsert.length,
-        warnings: [...result.warnings, ...validationErrors, ...consecutiveWarnings, ...constraintWarnings],
+        warnings: [...result.warnings, ...validationErrors, ...constraintWarnings],
       }
     },
     onSuccess: (data) => {
