@@ -3,12 +3,16 @@
 
 import type { TeamSlot } from '../types';
 
-// グループ色の定義
+// グループ色の定義（A〜Hまで対応）
 const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   A: { bg: 'bg-red-100', border: 'border-red-300', text: 'text-red-800' },
   B: { bg: 'bg-blue-100', border: 'border-blue-300', text: 'text-blue-800' },
   C: { bg: 'bg-green-100', border: 'border-green-300', text: 'text-green-800' },
   D: { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-800' },
+  E: { bg: 'bg-purple-100', border: 'border-purple-300', text: 'text-purple-800' },
+  F: { bg: 'bg-pink-100', border: 'border-pink-300', text: 'text-pink-800' },
+  G: { bg: 'bg-orange-100', border: 'border-orange-300', text: 'text-orange-800' },
+  H: { bg: 'bg-cyan-100', border: 'border-cyan-300', text: 'text-cyan-800' },
 };
 
 interface DraggableTeamSlotProps {
