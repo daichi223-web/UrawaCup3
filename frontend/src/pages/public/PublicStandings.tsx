@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { standingApi } from '@/features/standings/api';
 import type { OverallStandings, GroupStandings } from '@/features/standings/types';
 import { supabase } from '@/lib/supabase';
+import { teamsApi, matchesApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
+import StarTable from '@/components/StarTable';
 
 export default function PublicStandings() {
     const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'overall'>('overall');
@@ -39,6 +41,41 @@ export default function PublicStandings() {
 
     // 大会形式（グループ制か1リーグ制か）
     const useGroupSystem = tournament?.use_group_system ?? true;
+
+    // チーム一覧を取得（星取表用）
+    const { data: teamsData } = useQuery({
+        queryKey: ['public-teams', tournamentId],
+        queryFn: () => teamsApi.getAll(tournamentId),
+        staleTime: 60000,
+        retry: 2,
+    });
+    const teams = useMemo(() => {
+        const rawTeams = teamsData?.teams || [];
+        return rawTeams.map((t: any) => ({
+            ...t,
+            shortName: t.short_name || t.shortName,
+            groupId: t.group_id || t.groupId,
+        }));
+    }, [teamsData]);
+
+    // 試合一覧を取得（星取表用）
+    const { data: matchesData } = useQuery({
+        queryKey: ['public-matches', tournamentId],
+        queryFn: () => matchesApi.getAll(tournamentId),
+        staleTime: 30000,
+        retry: 2,
+    });
+    const matches = useMemo(() => {
+        const rawMatches = matchesData?.matches || [];
+        return rawMatches.map((m: any) => ({
+            ...m,
+            homeTeamId: m.home_team_id || m.homeTeamId,
+            awayTeamId: m.away_team_id || m.awayTeamId,
+            homeScoreTotal: m.home_score_total ?? m.homeScoreTotal,
+            awayScoreTotal: m.away_score_total ?? m.awayScoreTotal,
+            groupId: m.group_id || m.groupId,
+        }));
+    }, [matchesData]);
 
     // 総合順位を取得（総合タブまたは総合順位ルールの場合）
     const { data: overallStandings, isLoading: isLoadingOverall, refetch: refetchOverall } = useQuery<OverallStandings>({
@@ -308,6 +345,25 @@ export default function PublicStandings() {
                     )
                 )}
             </div>
+
+            {/* 星取表セクション */}
+            {teams.length > 0 && matches.length > 0 && (
+                <div className="mt-6">
+                    <h2 className="text-lg font-bold text-gray-800 px-1 mb-3">
+                        {useGroupSystem ? '対戦成績表' : '星取表'}
+                    </h2>
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-3">
+                        <div className="overflow-x-auto">
+                            <StarTable
+                                teams={teams}
+                                matches={matches}
+                                groupId="all"
+                                showOverallRank={false}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 最終更新時刻 */}
             {lastUpdated && (
