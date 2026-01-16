@@ -7,8 +7,11 @@ import { teamsApi, matchesApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StarTable from '@/components/StarTable';
 
+type MainTab = 'results' | 'standings';  // 成績表 or 順位表
+
 export default function PublicStandings() {
-    const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'overall'>('overall');
+    const [mainTab, setMainTab] = useState<MainTab>('results');  // デフォルトは成績表
+    const [groupTab, setGroupTab] = useState<'A' | 'B' | 'C' | 'D' | 'overall'>('overall');
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const tournamentId = 1; // デフォルトの大会ID
@@ -42,7 +45,7 @@ export default function PublicStandings() {
     // 大会形式（グループ制か1リーグ制か）
     const useGroupSystem = tournament?.use_group_system ?? true;
 
-    // チーム一覧を取得（星取表用）
+    // チーム一覧を取得（成績表用）
     const { data: teamsData } = useQuery({
         queryKey: ['public-teams', tournamentId],
         queryFn: () => teamsApi.getAll(tournamentId),
@@ -58,7 +61,7 @@ export default function PublicStandings() {
         }));
     }, [teamsData]);
 
-    // 試合一覧を取得（星取表用）
+    // 試合一覧を取得（成績表用）
     const { data: matchesData } = useQuery({
         queryKey: ['public-matches', tournamentId],
         queryFn: () => matchesApi.getAll(tournamentId),
@@ -77,13 +80,12 @@ export default function PublicStandings() {
         }));
     }, [matchesData]);
 
-    // 総合順位を取得（総合タブまたは総合順位ルールの場合）
+    // 総合順位を取得
     const { data: overallStandings, isLoading: isLoadingOverall, refetch: refetchOverall } = useQuery<OverallStandings>({
         queryKey: ['public-overall-standings', tournamentId],
         queryFn: () => standingApi.getOverallStandings(tournamentId),
         staleTime: 30000,
         retry: 2,
-        enabled: activeTab === 'overall' || isOverallRanking,
     });
 
     // 総合順位マップを作成（グループ別表示で総合順位を表示するため）
@@ -99,11 +101,9 @@ export default function PublicStandings() {
     // データ更新関数
     const refreshData = useCallback(async () => {
         await refetchStandings();
-        if (activeTab === 'overall' || isOverallRanking) {
-            await refetchOverall();
-        }
+        await refetchOverall();
         setLastUpdated(new Date());
-    }, [refetchStandings, refetchOverall, activeTab, isOverallRanking]);
+    }, [refetchStandings, refetchOverall]);
 
     // 初回読み込み時に更新時刻を設定
     useEffect(() => {
@@ -120,7 +120,7 @@ export default function PublicStandings() {
         return () => clearInterval(interval);
     }, [refreshData]);
 
-    const isLoading = isLoadingStandings || (activeTab === 'overall' && isLoadingOverall);
+    const isLoading = isLoadingStandings || isLoadingOverall;
     const hasError = standingsError;
 
     if (isLoading) {
@@ -147,8 +147,8 @@ export default function PublicStandings() {
     }
 
     // 現在のグループの順位表を取得
-    const currentGroupStandings = activeTab !== 'overall'
-        ? groupStandings?.find(g => g.groupId === activeTab)
+    const currentGroupStandings = groupTab !== 'overall'
+        ? groupStandings?.find(g => g.groupId === groupTab)
         : null;
 
     // グループ色設定
@@ -159,201 +159,37 @@ export default function PublicStandings() {
         D: { header: 'bg-yellow-500', highlight: 'bg-yellow-50' },
     };
 
-    // 表示するタブ（1リーグ制の場合は総合のみ）
-    const availableTabs = useGroupSystem
-        ? (['A', 'B', 'C', 'D', 'overall'] as const)
-        : (['overall'] as const);
-
     return (
-        <div className="space-y-4 pb-20">
-            <h1 className="text-xl font-bold text-gray-800 px-1">
-                {useGroupSystem ? '予選リーグ 順位表' : '順位表'}
-            </h1>
-
-            {/* Tabs（グループ制の場合のみ表示） */}
-            {useGroupSystem && (
-                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-                    {availableTabs.map(tab => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${activeTab === tab
-                                ? tab === 'overall'
-                                    ? 'bg-amber-500 text-white shadow-sm'
-                                    : 'bg-white text-red-600 shadow-sm'
-                                : 'text-gray-500 hover:bg-gray-200'
-                                }`}
-                        >
-                            {tab === 'overall' ? '総合' : `${tab}グループ`}
-                        </button>
-                    ))}
-                </div>
-            )}
-
-            {/* コンテンツ */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                {(activeTab === 'overall' || !useGroupSystem) ? (
-                    // 総合順位表（1リーグ制の場合は常に表示）
-                    overallStandings && overallStandings.entries.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="bg-amber-500 text-white">
-                                        <th className="px-2 py-2 text-center w-12">順位</th>
-                                        <th className="px-2 py-2 text-left">チーム</th>
-                                        {useGroupSystem && <th className="px-2 py-2 text-center w-12">G</th>}
-                                        <th className="px-2 py-2 text-center w-10">試</th>
-                                        <th className="px-2 py-2 text-center w-10">勝</th>
-                                        <th className="px-2 py-2 text-center w-10">分</th>
-                                        <th className="px-2 py-2 text-center w-10">負</th>
-                                        <th className="px-2 py-2 text-center w-12">得失</th>
-                                        <th className="px-2 py-2 text-center w-12 font-bold">勝点</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {overallStandings.entries.map((entry) => {
-                                        const isQualifying = entry.overallRank <= overallStandings.qualifyingCount;
-                                        return (
-                                            <tr
-                                                key={entry.teamId}
-                                                className={`border-b ${isQualifying ? 'bg-amber-50' : ''}`}
-                                            >
-                                                <td className="px-2 py-2 text-center font-bold">
-                                                    {isQualifying && (
-                                                        <span className="inline-block w-6 h-6 bg-amber-500 text-white rounded-full leading-6 text-xs mr-1">
-                                                            {entry.overallRank}
-                                                        </span>
-                                                    )}
-                                                    {!isQualifying && entry.overallRank}
-                                                </td>
-                                                <td className="px-2 py-2 font-medium">
-                                                    {entry.shortName || entry.teamName}
-                                                </td>
-                                                {useGroupSystem && (
-                                                    <td className="px-2 py-2 text-center text-xs text-gray-500">
-                                                        {entry.groupId}
-                                                    </td>
-                                                )}
-                                                <td className="px-2 py-2 text-center">{entry.played}</td>
-                                                <td className="px-2 py-2 text-center text-green-600">{entry.won}</td>
-                                                <td className="px-2 py-2 text-center text-gray-500">{entry.drawn}</td>
-                                                <td className="px-2 py-2 text-center text-red-500">{entry.lost}</td>
-                                                <td className="px-2 py-2 text-center">
-                                                    <span className={entry.goalDifference > 0 ? 'text-green-600' : entry.goalDifference < 0 ? 'text-red-500' : ''}>
-                                                        {entry.goalDifference > 0 ? '+' : ''}{entry.goalDifference}
-                                                    </span>
-                                                </td>
-                                                <td className="px-2 py-2 text-center font-bold">{entry.points}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                            <p className="text-xs text-amber-600 mt-3 px-4 pb-3">
-                                ※ 上位{overallStandings.qualifyingCount}チームが決勝トーナメント進出
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-gray-400">
-                            順位データがありません
-                        </div>
-                    )
-                ) : (
-                    // グループ別順位表
-                    currentGroupStandings && currentGroupStandings.standings.length > 0 ? (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className={`${groupColors[activeTab]?.header || 'bg-gray-600'} text-white`}>
-                                        <th className="px-2 py-2 text-center w-10">順位</th>
-                                        {isOverallRanking && (
-                                            <th className="px-2 py-2 text-center w-10">総合</th>
-                                        )}
-                                        <th className="px-2 py-2 text-left">チーム</th>
-                                        <th className="px-2 py-2 text-center w-10">試</th>
-                                        <th className="px-2 py-2 text-center w-10">勝</th>
-                                        <th className="px-2 py-2 text-center w-10">分</th>
-                                        <th className="px-2 py-2 text-center w-10">負</th>
-                                        <th className="px-2 py-2 text-center w-10">得</th>
-                                        <th className="px-2 py-2 text-center w-10">失</th>
-                                        <th className="px-2 py-2 text-center w-12">得失</th>
-                                        <th className="px-2 py-2 text-center w-12 font-bold">勝点</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {currentGroupStandings.standings.map((standing) => {
-                                        const isTop2 = standing.rank <= 2;
-                                        const overallRank = overallRankingsMap.get(standing.teamId);
-                                        return (
-                                            <tr
-                                                key={standing.teamId}
-                                                className={`border-b ${isTop2 ? groupColors[activeTab]?.highlight || 'bg-gray-50' : ''}`}
-                                            >
-                                                <td className="px-2 py-2 text-center font-bold">
-                                                    {isTop2 ? (
-                                                        <span className={`inline-block w-6 h-6 ${groupColors[activeTab]?.header || 'bg-gray-600'} text-white rounded-full leading-6 text-xs`}>
-                                                            {standing.rank}
-                                                        </span>
-                                                    ) : (
-                                                        standing.rank
-                                                    )}
-                                                </td>
-                                                {isOverallRanking && (
-                                                    <td className="px-2 py-2 text-center">
-                                                        {overallRank && overallRank <= 4 ? (
-                                                            <span className="inline-block w-5 h-5 bg-amber-500 text-white rounded-full leading-5 text-xs">
-                                                                {overallRank}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-gray-400 text-xs">{overallRank || '-'}</span>
-                                                        )}
-                                                    </td>
-                                                )}
-                                                <td className="px-2 py-2 font-medium">{standing.teamName}</td>
-                                                <td className="px-2 py-2 text-center">{standing.played}</td>
-                                                <td className="px-2 py-2 text-center text-green-600">{standing.won}</td>
-                                                <td className="px-2 py-2 text-center text-gray-500">{standing.drawn}</td>
-                                                <td className="px-2 py-2 text-center text-red-500">{standing.lost}</td>
-                                                <td className="px-2 py-2 text-center">{standing.goalsFor}</td>
-                                                <td className="px-2 py-2 text-center">{standing.goalsAgainst}</td>
-                                                <td className="px-2 py-2 text-center">
-                                                    <span className={standing.goalDifference > 0 ? 'text-green-600' : standing.goalDifference < 0 ? 'text-red-500' : ''}>
-                                                        {standing.goalDifference > 0 ? '+' : ''}{standing.goalDifference}
-                                                    </span>
-                                                </td>
-                                                <td className="px-2 py-2 text-center font-bold">{standing.points}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                            {!isOverallRanking && (
-                                <p className="text-xs text-gray-500 mt-3 px-4 pb-3">
-                                    ※ 上位2チームが決勝トーナメント進出
-                                </p>
-                            )}
-                            {isOverallRanking && (
-                                <p className="text-xs text-amber-600 mt-3 px-4 pb-3">
-                                    ※ 総合順位で上位4チームが決勝トーナメント進出
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="text-center py-8 text-gray-400">
-                            順位データがありません
-                        </div>
-                    )
-                )}
+        <div className="space-y-3 pb-20">
+            {/* メインタブ: 成績表 / 順位表 */}
+            <div className="flex space-x-1 bg-gray-200 p-1 rounded-lg">
+                <button
+                    onClick={() => setMainTab('results')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+                        mainTab === 'results'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-300'
+                    }`}
+                >
+                    成績表
+                </button>
+                <button
+                    onClick={() => setMainTab('standings')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+                        mainTab === 'standings'
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'text-gray-600 hover:bg-gray-300'
+                    }`}
+                >
+                    順位表
+                </button>
             </div>
 
-            {/* 星取表セクション */}
-            {teams.length > 0 && matches.length > 0 && (
-                <div className="mt-6">
-                    <h2 className="text-lg font-bold text-gray-800 px-1 mb-3">
-                        {useGroupSystem ? '対戦成績表' : '星取表'}
-                    </h2>
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden p-3">
-                        <div className="overflow-x-auto">
+            {/* 成績表タブ */}
+            {mainTab === 'results' && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    {teams.length > 0 && matches.length > 0 ? (
+                        <div className="overflow-x-auto p-2">
                             <StarTable
                                 teams={teams}
                                 matches={matches}
@@ -361,8 +197,193 @@ export default function PublicStandings() {
                                 showOverallRank={false}
                             />
                         </div>
-                    </div>
+                    ) : (
+                        <div className="text-center py-8 text-gray-400">
+                            成績データがありません
+                        </div>
+                    )}
                 </div>
+            )}
+
+            {/* 順位表タブ */}
+            {mainTab === 'standings' && (
+                <>
+                    {/* グループタブ（グループ制の場合のみ表示） */}
+                    {useGroupSystem && (
+                        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                            {(['A', 'B', 'C', 'D', 'overall'] as const).map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setGroupTab(tab)}
+                                    className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${groupTab === tab
+                                        ? tab === 'overall'
+                                            ? 'bg-amber-500 text-white shadow-sm'
+                                            : 'bg-white text-red-600 shadow-sm'
+                                        : 'text-gray-500 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    {tab === 'overall' ? '総合' : `${tab}グループ`}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* 順位表コンテンツ */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        {(groupTab === 'overall' || !useGroupSystem) ? (
+                            // 総合順位表
+                            overallStandings && overallStandings.entries.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="bg-amber-500 text-white">
+                                                <th className="px-2 py-2 text-center w-12">順位</th>
+                                                <th className="px-2 py-2 text-left">チーム</th>
+                                                {useGroupSystem && <th className="px-2 py-2 text-center w-12">G</th>}
+                                                <th className="px-2 py-2 text-center w-10">試</th>
+                                                <th className="px-2 py-2 text-center w-10">勝</th>
+                                                <th className="px-2 py-2 text-center w-10">分</th>
+                                                <th className="px-2 py-2 text-center w-10">負</th>
+                                                <th className="px-2 py-2 text-center w-12">得失</th>
+                                                <th className="px-2 py-2 text-center w-12 font-bold">勝点</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {overallStandings.entries.map((entry) => {
+                                                const isQualifying = entry.overallRank <= overallStandings.qualifyingCount;
+                                                return (
+                                                    <tr
+                                                        key={entry.teamId}
+                                                        className={`border-b ${isQualifying ? 'bg-amber-50' : ''}`}
+                                                    >
+                                                        <td className="px-2 py-2 text-center font-bold">
+                                                            {isQualifying && (
+                                                                <span className="inline-block w-6 h-6 bg-amber-500 text-white rounded-full leading-6 text-xs mr-1">
+                                                                    {entry.overallRank}
+                                                                </span>
+                                                            )}
+                                                            {!isQualifying && entry.overallRank}
+                                                        </td>
+                                                        <td className="px-2 py-2 font-medium">
+                                                            {entry.shortName || entry.teamName}
+                                                        </td>
+                                                        {useGroupSystem && (
+                                                            <td className="px-2 py-2 text-center text-xs text-gray-500">
+                                                                {entry.groupId}
+                                                            </td>
+                                                        )}
+                                                        <td className="px-2 py-2 text-center">{entry.played}</td>
+                                                        <td className="px-2 py-2 text-center text-green-600">{entry.won}</td>
+                                                        <td className="px-2 py-2 text-center text-gray-500">{entry.drawn}</td>
+                                                        <td className="px-2 py-2 text-center text-red-500">{entry.lost}</td>
+                                                        <td className="px-2 py-2 text-center">
+                                                            <span className={entry.goalDifference > 0 ? 'text-green-600' : entry.goalDifference < 0 ? 'text-red-500' : ''}>
+                                                                {entry.goalDifference > 0 ? '+' : ''}{entry.goalDifference}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center font-bold">{entry.points}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                    <p className="text-xs text-amber-600 mt-3 px-4 pb-3">
+                                        ※ 上位{overallStandings.qualifyingCount}チームが決勝トーナメント進出
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-gray-400">
+                                    順位データがありません
+                                </div>
+                            )
+                        ) : (
+                            // グループ別順位表
+                            currentGroupStandings && currentGroupStandings.standings.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className={`${groupColors[groupTab]?.header || 'bg-gray-600'} text-white`}>
+                                                <th className="px-2 py-2 text-center w-10">順位</th>
+                                                {isOverallRanking && (
+                                                    <th className="px-2 py-2 text-center w-10">総合</th>
+                                                )}
+                                                <th className="px-2 py-2 text-left">チーム</th>
+                                                <th className="px-2 py-2 text-center w-10">試</th>
+                                                <th className="px-2 py-2 text-center w-10">勝</th>
+                                                <th className="px-2 py-2 text-center w-10">分</th>
+                                                <th className="px-2 py-2 text-center w-10">負</th>
+                                                <th className="px-2 py-2 text-center w-10">得</th>
+                                                <th className="px-2 py-2 text-center w-10">失</th>
+                                                <th className="px-2 py-2 text-center w-12">得失</th>
+                                                <th className="px-2 py-2 text-center w-12 font-bold">勝点</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {currentGroupStandings.standings.map((standing) => {
+                                                const isTop2 = standing.rank <= 2;
+                                                const overallRank = overallRankingsMap.get(standing.teamId);
+                                                return (
+                                                    <tr
+                                                        key={standing.teamId}
+                                                        className={`border-b ${isTop2 ? groupColors[groupTab]?.highlight || 'bg-gray-50' : ''}`}
+                                                    >
+                                                        <td className="px-2 py-2 text-center font-bold">
+                                                            {isTop2 ? (
+                                                                <span className={`inline-block w-6 h-6 ${groupColors[groupTab]?.header || 'bg-gray-600'} text-white rounded-full leading-6 text-xs`}>
+                                                                    {standing.rank}
+                                                                </span>
+                                                            ) : (
+                                                                standing.rank
+                                                            )}
+                                                        </td>
+                                                        {isOverallRanking && (
+                                                            <td className="px-2 py-2 text-center">
+                                                                {overallRank && overallRank <= 4 ? (
+                                                                    <span className="inline-block w-5 h-5 bg-amber-500 text-white rounded-full leading-5 text-xs">
+                                                                        {overallRank}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-gray-400 text-xs">{overallRank || '-'}</span>
+                                                                )}
+                                                            </td>
+                                                        )}
+                                                        <td className="px-2 py-2 font-medium">{standing.teamName}</td>
+                                                        <td className="px-2 py-2 text-center">{standing.played}</td>
+                                                        <td className="px-2 py-2 text-center text-green-600">{standing.won}</td>
+                                                        <td className="px-2 py-2 text-center text-gray-500">{standing.drawn}</td>
+                                                        <td className="px-2 py-2 text-center text-red-500">{standing.lost}</td>
+                                                        <td className="px-2 py-2 text-center">{standing.goalsFor}</td>
+                                                        <td className="px-2 py-2 text-center">{standing.goalsAgainst}</td>
+                                                        <td className="px-2 py-2 text-center">
+                                                            <span className={standing.goalDifference > 0 ? 'text-green-600' : standing.goalDifference < 0 ? 'text-red-500' : ''}>
+                                                                {standing.goalDifference > 0 ? '+' : ''}{standing.goalDifference}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-2 py-2 text-center font-bold">{standing.points}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                    {!isOverallRanking && (
+                                        <p className="text-xs text-gray-500 mt-3 px-4 pb-3">
+                                            ※ 上位2チームが決勝トーナメント進出
+                                        </p>
+                                    )}
+                                    {isOverallRanking && (
+                                        <p className="text-xs text-amber-600 mt-3 px-4 pb-3">
+                                            ※ 総合順位で上位4チームが決勝トーナメント進出
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center py-8 text-gray-400">
+                                    順位データがありません
+                                </div>
+                            )
+                        )}
+                    </div>
+                </>
             )}
 
             {/* 最終更新時刻 */}

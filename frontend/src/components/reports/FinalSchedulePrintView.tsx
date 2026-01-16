@@ -67,7 +67,7 @@ interface FinalScheduleData {
   outstandingPlayers?: OutstandingPlayerData[]
 }
 
-// 星取表で使う対戦結果の型
+// 成績表で使う対戦結果の型
 interface HeadToHeadResult {
   score: string // "2-1" など
   isWin: boolean
@@ -91,7 +91,7 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
     return names[stage] || stage
   }
 
-  // 星取表用: 対戦結果を取得
+  // 成績表用: 対戦結果を取得
   const getHeadToHeadResult = (
     teamId: number,
     opponentId: number,
@@ -149,10 +149,10 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
         <p className="text-sm text-gray-500 mt-1">{data.date}</p>
       </div>
 
-      {/* 予選順位表（星取表形式） */}
+      {/* 予選順位表（成績表形式） */}
       <section className="mb-8">
         <h2 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
-          📊 予選リーグ星取表
+          📊 予選リーグ成績表
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {data.standings.map((group) => (
@@ -413,7 +413,7 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          /* 星取表のセル */
+          /* 成績表のセル */
           table {
             border-collapse: collapse !important;
           }

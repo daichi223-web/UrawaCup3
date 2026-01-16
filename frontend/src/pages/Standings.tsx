@@ -1,5 +1,5 @@
 /**
- * 星取表・総合順位表画面
+ * 成績表・総合順位表画面
  * グループ別の対戦結果マトリックス表示と総合順位表（リアルタイム更新対応）
  *
  * リアルタイム更新対応:
@@ -85,7 +85,7 @@ function Standings() {
   const { currentTournament } = useAppStore();
   const tournamentId = currentTournament?.id;
 
-  // 表示モード（星取表 or 総合順位）
+  // 表示モード（成績表 or 総合順位）
   const [viewMode, setViewMode] = useState<ViewMode>('star');
 
   // アニメーション用の更新フラグ
@@ -118,7 +118,7 @@ function Standings() {
     enabled: !!tournamentId, // tournamentIdが確定してから実行
   });
 
-  // 星取表用の試合データを取得
+  // 成績表用の試合データを取得
   const { data: matchesData, isLoading: isLoadingMatches } = useQuery({
     queryKey: ['matches', tournamentId],
     queryFn: () => matchesApi.getAll(tournamentId!),
@@ -126,7 +126,7 @@ function Standings() {
     enabled: !!tournamentId,
   });
 
-  // 星取表用のチームデータを取得
+  // 成績表用のチームデータを取得
   const { data: teamsData, isLoading: isLoadingTeams } = useQuery({
     queryKey: ['teams', tournamentId],
     queryFn: () => teamsApi.getAll(tournamentId!),
@@ -193,7 +193,7 @@ function Standings() {
     return (
       <div className="text-center py-8">
         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <p className="text-red-500">星取表の取得に失敗しました</p>
+        <p className="text-red-500">成績表の取得に失敗しました</p>
         <p className="text-gray-500 text-sm mt-2">{(error as Error)?.message}</p>
         <button
           onClick={() => refetch()}
@@ -215,7 +215,7 @@ function Standings() {
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              {viewMode === 'star' ? '星取表' : '総合順位表'}
+              {viewMode === 'star' ? '成績表' : '総合順位表'}
             </h1>
             <p className="text-gray-600 mt-1">
               {viewMode === 'star'
@@ -289,7 +289,7 @@ function Standings() {
           }`}
         >
           <Grid3X3 className="w-4 h-4" />
-          星取表
+          成績表
         </button>
         <button
           onClick={() => setViewMode('overall')}
@@ -309,7 +309,7 @@ function Standings() {
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2 no-print">
         <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
         <div className="text-sm text-amber-800">
-          <p className="font-medium">暫定{viewMode === 'star' ? '星取表' : '順位表'}</p>
+          <p className="font-medium">暫定{viewMode === 'star' ? '成績表' : '順位表'}</p>
           <p className="text-amber-700">
             試合結果が入力されるとリアルタイムで更新されます。
           </p>
@@ -317,10 +317,10 @@ function Standings() {
       </div>
 
       {viewMode === 'star' ? (
-        // 星取表表示
+        // 成績表表示
         <>
           {useGroupSystem ? (
-            /* グループ制：グループ別星取表 */
+            /* グループ制：グループ別成績表 */
             <div className={`standings-grid grid grid-cols-1 xl:grid-cols-2 gap-6 transition-opacity duration-300 ${
               recentlyUpdated ? 'opacity-80' : 'opacity-100'
             }`}>
@@ -338,7 +338,7 @@ function Standings() {
                     recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
                   }`}>
                     <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
-                      <h3 className="text-lg font-semibold">{groupData.groupId}グループ 星取表</h3>
+                      <h3 className="text-lg font-semibold">{groupData.groupId}グループ 成績表</h3>
                     </div>
                     <div className="card-body p-4">
                       {groupTeams.length > 0 ? (
@@ -360,12 +360,12 @@ function Standings() {
               })}
             </div>
           ) : (
-            /* 1リーグ制：全チーム統合星取表 */
+            /* 1リーグ制：全チーム統合成績表 */
             <div className={`card transition-shadow ${
               recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
             }`}>
               <div className="card-header bg-primary-600 text-white flex justify-between items-center">
-                <h3 className="text-lg font-semibold">全チーム 星取表</h3>
+                <h3 className="text-lg font-semibold">全チーム 成績表</h3>
                 <span className="text-sm opacity-80">{teamsData?.teams?.length || 0}チーム</span>
               </div>
               <div className="card-body p-4 overflow-x-auto">

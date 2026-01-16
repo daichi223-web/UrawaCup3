@@ -140,7 +140,7 @@ function Dashboard() {
               <QuickActionButton
                 href="/standings"
                 label="順位表"
-                description="グループ別順位・星取表"
+                description="グループ別順位・成績表"
                 icon={Trophy}
               />
               <QuickActionButton
@@ -180,7 +180,7 @@ function Dashboard() {
               <QuickActionButton
                 href="/standings"
                 label="順位表確認"
-                description="グループ別順位・星取表"
+                description="グループ別順位・成績表"
                 icon={Trophy}
               />
               <QuickActionButton

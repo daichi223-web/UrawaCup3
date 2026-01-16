@@ -120,7 +120,7 @@ export interface FinalScheduleData {
   standings: GroupStanding[]
   tournament: Match[]
   training: Match[]
-  /** グループステージの試合結果（星取表用） */
+  /** グループステージの試合結果（成績表用） */
   groupMatches: Match[]
   /** 優秀選手 */
   outstandingPlayers: OutstandingPlayerData[]
@@ -1050,7 +1050,7 @@ export const reportApi = {
 
     const { data: trainingMatches } = await trainingQuery;
 
-    // グループステージの試合を取得（星取表用）
+    // グループステージの試合を取得（成績表用）
     const { data: groupMatches, error: groupMatchError } = await supabase
       .from('matches')
       .select(`
