@@ -66,9 +66,9 @@ export interface Tournament {
   endDate: string;
   /** 試合時間（分）デフォルト: 50 */
   matchDuration: number;
-  /** ハーフタイム（分）デフォルト: 25 */
+  /** ハーフタイム（前後半間の休憩時間・分）デフォルト: 10 */
   halfDuration: number;
-  /** 試合間インターバル（分）デフォルト: 15 */
+  /** 試合間インターバル（分）デフォルト: 10 */
   intervalMinutes: number;
   /** グループ数（2/4/8）デフォルト: 4 */
   groupCount: number;

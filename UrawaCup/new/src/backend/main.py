@@ -60,7 +60,7 @@ def create_default_tournament():
                 start_date=date(2025, 3, 25),
                 end_date=date(2025, 3, 28),
                 match_duration=50,
-                half_duration=25,
+                half_duration=10,
                 interval_minutes=10,
             )
             db.add(tournament)

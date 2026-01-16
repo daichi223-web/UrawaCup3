@@ -77,8 +77,8 @@ function Settings() {
     startDate: '',
     endDate: '',
     matchDuration: 50,
-    halfDuration: 25,
-    intervalMinutes: 15,
+    halfDuration: 10,
+    intervalMinutes: 10,
   })
 
   // 大会セレクター
@@ -280,8 +280,8 @@ function Settings() {
         edition: (source.edition || 0) + 1,
         year: new Date().getFullYear(),
         matchDuration: source.matchDuration || 50,
-        halfDuration: 25,
-        intervalMinutes: source.intervalMinutes || 15,
+        halfDuration: 10,
+        intervalMinutes: source.intervalMinutes || 5,
       }))
     }
   }
@@ -321,8 +321,8 @@ function Settings() {
             startDate: '',
             endDate: '',
             matchDuration: 50,
-            halfDuration: 25,
-            intervalMinutes: 15,
+            halfDuration: 10,
+            intervalMinutes: 10,
           })
           // 作成した大会に自動切り替え
           setCurrentTournament(newTournament)
@@ -448,8 +448,8 @@ function Settings() {
                 startDate: '',
                 endDate: '',
                 matchDuration: 50,
-                halfDuration: 25,
-                intervalMinutes: 15,
+                halfDuration: 10,
+                intervalMinutes: 10,
               })
               setShowNewTournamentModal(true)
             }}
@@ -728,8 +728,8 @@ function Settings() {
                   startDate: '',
                   endDate: '',
                   matchDuration: 50,
-                  halfDuration: 25,
-                  intervalMinutes: 15,
+                  halfDuration: 10,
+                  intervalMinutes: 10,
                 })
               }}
             >
@@ -849,14 +849,14 @@ function Settings() {
               />
             </div>
             <div>
-              <label className="form-label">ハーフタイム（分）</label>
+              <label className="form-label">ハーフタイム（前後半間の休憩・分）</label>
               <input
                 type="number"
                 className="form-input"
-                min={5}
+                min={1}
                 max={60}
                 value={newTournamentForm.halfDuration}
-                onChange={(e) => setNewTournamentForm(prev => ({ ...prev, halfDuration: parseInt(e.target.value) || 25 }))}
+                onChange={(e) => setNewTournamentForm(prev => ({ ...prev, halfDuration: parseInt(e.target.value) || 5 }))}
               />
             </div>
             <div>
@@ -867,7 +867,7 @@ function Settings() {
                 min={5}
                 max={60}
                 value={newTournamentForm.intervalMinutes}
-                onChange={(e) => setNewTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 15 }))}
+                onChange={(e) => setNewTournamentForm(prev => ({ ...prev, intervalMinutes: parseInt(e.target.value) || 5 }))}
               />
             </div>
           </div>

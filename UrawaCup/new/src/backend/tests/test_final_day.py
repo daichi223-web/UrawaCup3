@@ -44,8 +44,8 @@ def create_test_tournament(session: Session) -> Tournament:
         start_date=date(2024, 3, 25),
         end_date=date(2024, 3, 27),
         match_duration=50,
-        half_duration=25,
-        interval_minutes=15,
+        half_duration=10,
+        interval_minutes=10,
     )
     session.add(tournament)
     session.commit()

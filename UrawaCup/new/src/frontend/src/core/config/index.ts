@@ -15,8 +15,8 @@ export const config = {
     groups: ['A', 'B', 'C', 'D'] as const,
     teamsPerGroup: 6,
     matchDuration: 50,
-    halfDuration: 25,
-    interval: 15,
+    halfDuration: 10,  // 前後半間の休憩時間
+    interval: 10,
     matchesPerDay: 6,
     days: 3,
   },

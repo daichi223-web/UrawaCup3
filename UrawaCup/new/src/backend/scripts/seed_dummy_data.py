@@ -23,8 +23,8 @@ TOURNAMENT_CONFIG = {
     "start_date": date(2026, 3, 21),
     "end_date": date(2026, 3, 23),
     "match_duration": 50,
-    "half_duration": 25,
-    "interval_minutes": 15,
+    "half_duration": 10,
+    "interval_minutes": 10,
 }
 
 # チームリスト（4グループ x 6チーム = 24チーム）

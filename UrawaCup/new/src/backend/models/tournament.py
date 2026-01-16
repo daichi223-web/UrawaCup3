@@ -26,8 +26,8 @@ class Tournament(Base, TimestampMixin):
     start_date = Column(Date, nullable=False, comment="開始日")
     end_date = Column(Date, nullable=False, comment="終了日")
     match_duration = Column(Integer, nullable=False, default=50, comment="試合時間（分）")
-    half_duration = Column(Integer, nullable=False, default=25, comment="ハーフタイム（分）")
-    interval_minutes = Column(Integer, nullable=False, default=15, comment="試合間インターバル（分）")
+    half_duration = Column(Integer, nullable=False, default=10, comment="ハーフタイム（前後半間の休憩時間・分）")
+    interval_minutes = Column(Integer, nullable=False, default=10, comment="試合間インターバル（分）")
 
     # チーム構成設定（既存DBへの後方互換のためnullable=True）
     group_count = Column(Integer, nullable=True, default=4, comment="グループ数（2/4/8）")

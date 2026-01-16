@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     
     # 大会デフォルト設定
     default_match_duration: int = 50
-    default_half_duration: int = 25
-    default_interval_minutes: int = 15
+    default_half_duration: int = 10  # ハーフタイム（前後半間の休憩時間）
+    default_interval_minutes: int = 10  # 試合間隔（half_durationと同じ）
     default_matches_per_day: int = 6
     
     # ログ設定

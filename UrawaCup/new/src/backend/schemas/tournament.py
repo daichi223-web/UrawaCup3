@@ -18,8 +18,8 @@ class TournamentBase(CamelCaseModel):
     start_date: date = Field(..., description="開始日")
     end_date: date = Field(..., description="終了日")
     match_duration: int = Field(default=50, ge=10, le=120, description="試合時間（分）")
-    half_duration: int = Field(default=25, ge=5, le=60, description="ハーフタイム（分）")
-    interval_minutes: int = Field(default=15, ge=5, le=60, description="試合間インターバル（分）")
+    half_duration: int = Field(default=10, ge=1, le=30, description="ハーフタイム（前後半間の休憩時間・分）")
+    interval_minutes: int = Field(default=10, ge=1, le=60, description="試合間インターバル（分）")
     # チーム構成設定
     group_count: int = Field(default=4, description="グループ数（2/4/8）")
     teams_per_group: int = Field(default=4, ge=3, le=6, description="グループ内チーム数（3-6）")

@@ -99,8 +99,8 @@ def sample_tournament_data():
         "start_date": "2024-03-25",
         "end_date": "2024-03-27",
         "match_duration": 50,
-        "half_duration": 25,
-        "interval_minutes": 15,
+        "half_duration": 10,
+        "interval_minutes": 10,
     }
 
 
@@ -194,8 +194,8 @@ def tournament(test_session):
         start_date=date(2024, 3, 25),
         end_date=date(2024, 3, 27),
         match_duration=50,
-        half_duration=25,
-        interval_minutes=15,
+        half_duration=10,
+        interval_minutes=10,
     )
     test_session.add(tournament)
     test_session.commit()
