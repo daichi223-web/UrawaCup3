@@ -13,6 +13,7 @@ interface StarTableProps {
   byePairs?: [number, number][]  // 対戦しないペア
   overallRankings?: Map<number, number>  // チームID → 総合順位
   showOverallRank?: boolean  // 総合順位を表示するか
+  compact?: boolean  // コンパクト表示（モバイル用）
 }
 
 interface TeamStats {
@@ -29,7 +30,7 @@ interface TeamStats {
   headToHead: Map<number, { result: 'win' | 'draw' | 'loss' | null; score: string; opponentScore: string }>
 }
 
-export default function StarTable({ teams, matches, groupId, byePairs = [], overallRankings, showOverallRank = false }: StarTableProps) {
+export default function StarTable({ teams, matches, groupId, byePairs = [], overallRankings, showOverallRank = false, compact = false }: StarTableProps) {
   // 予選試合をフィルタ（完了・予定含む）
   // groupId が 'all' の場合はグループフィルタをスキップ（1リーグ制用）
   const allPreliminaryMatches = useMemo(() => {
@@ -185,12 +186,22 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
   }, [teams, completedMatches])
 
   // チーム名の短縮表示
-  const getShortName = (team: Team) => {
-    return team.shortName || team.short_name || team.name.slice(0, 4)
+  const getShortName = (team: Team, forCompact = false) => {
+    const name = team.shortName || team.short_name || team.name
+    if (forCompact) {
+      // コンパクト: 2文字まで短縮
+      return name.slice(0, 2)
+    }
+    return name.slice(0, 4)
   }
 
   // チーム名をU18などで改行して表示（縦ヘッダー用）
   const formatTeamNameForHeader = (team: Team) => {
+    if (compact) {
+      // コンパクト: 番号だけ表示
+      const index = teamStats.findIndex(s => s.teamId === team.id)
+      return <span style={{ fontSize: '0.6rem' }}>{index + 1}</span>
+    }
     const name = getShortName(team)
     // U18, U15などのパターンを改行
     const match = name.match(/^(.+?)(U\d+)$/)
@@ -220,32 +231,59 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
     return <div className="text-center py-4 text-gray-500">チームデータがありません</div>
   }
 
+  // コンパクト用スタイル
+  const cellWidth = compact ? '1.2rem' : '2.5rem'
+  const cellStyle = { width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }
+  const fontSize = compact ? 'text-[10px]' : 'text-sm'
+  const padding = compact ? 'px-0.5 py-0.5' : 'px-1 py-1'
+  const teamColWidth = compact ? 'w-12' : 'w-24'
+
   return (
-    <div className="overflow-x-auto">
-      <table className="text-sm border-collapse table-fixed">
+    <div className={compact ? 'w-full' : 'overflow-x-auto'}>
+      <table className={`${fontSize} border-collapse ${compact ? 'w-full table-auto' : 'table-fixed'}`}>
         <thead>
           <tr className="bg-gray-100">
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-green-100 w-8">順</th>
-            <th className="border border-gray-300 px-2 py-1 text-left font-medium w-24">チーム</th>
-            {teamStats.map(stats => (
+            <th className={`border border-gray-300 ${padding} text-center font-medium bg-green-100 ${compact ? 'w-5' : 'w-8'}`}>
+              {compact ? '#' : '順'}
+            </th>
+            <th className={`border border-gray-300 ${padding} text-left font-medium ${teamColWidth}`}>
+              {compact ? 'チーム' : 'チーム'}
+            </th>
+            {teamStats.map((stats, idx) => (
               <th
                 key={`header-${stats.teamId}`}
-                className="border border-gray-300 px-0.5 py-1 text-center font-medium"
-                style={{ width: '2.5rem', minWidth: '2.5rem', maxWidth: '2.5rem' }}
+                className={`border border-gray-300 ${padding} text-center font-medium`}
+                style={cellStyle}
                 title={stats.team.name}
               >
-                {formatTeamNameForHeader(stats.team)}
+                {compact ? idx + 1 : formatTeamNameForHeader(stats.team)}
               </th>
             ))}
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">勝</th>
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">分</th>
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">負</th>
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-yellow-100 w-10">勝点</th>
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">得点</th>
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">失点</th>
-            <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">差</th>
+            <th className={`border border-gray-300 ${padding} text-center font-medium bg-gray-200 ${compact ? 'w-5' : 'w-8'}`}>
+              {compact ? '勝' : '勝'}
+            </th>
+            <th className={`border border-gray-300 ${padding} text-center font-medium bg-gray-200 ${compact ? 'w-5' : 'w-8'}`}>
+              {compact ? '分' : '分'}
+            </th>
+            <th className={`border border-gray-300 ${padding} text-center font-medium bg-gray-200 ${compact ? 'w-5' : 'w-8'}`}>
+              {compact ? '負' : '負'}
+            </th>
+            <th className={`border border-gray-300 ${padding} text-center font-medium bg-yellow-100 ${compact ? 'w-6' : 'w-10'}`}>
+              {compact ? '点' : '勝点'}
+            </th>
+            {!compact && (
+              <>
+                <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">得点</th>
+                <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-gray-200 w-8">失点</th>
+              </>
+            )}
+            <th className={`border border-gray-300 ${padding} text-center font-medium bg-gray-200 ${compact ? 'w-6' : 'w-8'}`}>
+              差
+            </th>
             {showOverallRank && (
-              <th className="border border-gray-300 px-1 py-1 text-center font-medium bg-amber-100 w-8" title="総合順位">総合</th>
+              <th className={`border border-gray-300 ${padding} text-center font-medium bg-amber-100 ${compact ? 'w-5' : 'w-8'}`} title="総合順位">
+                {compact ? '総' : '総合'}
+              </th>
             )}
           </tr>
         </thead>
@@ -256,7 +294,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
               className={rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
             >
               {/* 順位（左端） */}
-              <td className={`border border-gray-300 px-1 py-1 text-center font-bold ${
+              <td className={`border border-gray-300 ${padding} text-center font-bold ${
                 rowStats.rank === 1 ? 'text-yellow-600 bg-yellow-50' :
                 rowStats.rank === 2 ? 'text-gray-500 bg-green-50' :
                 'bg-green-50'
@@ -265,23 +303,20 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
               </td>
               {/* チーム名 */}
               <td
-                className="border border-gray-300 px-2 py-1 font-medium whitespace-nowrap"
+                className={`border border-gray-300 ${padding} font-medium whitespace-nowrap ${compact ? 'text-[9px]' : ''}`}
                 title={rowStats.team.name}
               >
-                {getShortName(rowStats.team)}
+                {getShortName(rowStats.team, compact)}
               </td>
 
               {/* 対戦結果マトリックス */}
               {teamStats.map(colStats => {
-                // セルの共通スタイル
-                const cellStyle = { width: '2.5rem', minWidth: '2.5rem', maxWidth: '2.5rem' }
-
                 // 自分自身のセル
                 if (rowStats.teamId === colStats.teamId) {
                   return (
                     <td
                       key={`cell-${rowStats.teamId}-${colStats.teamId}`}
-                      className="border border-gray-300 px-0.5 py-1 text-center bg-gray-200"
+                      className={`border border-gray-300 ${padding} text-center bg-gray-200`}
                       style={cellStyle}
                     >
                       -
@@ -294,7 +329,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                   return (
                     <td
                       key={`cell-${rowStats.teamId}-${colStats.teamId}`}
-                      className="border border-gray-300 px-0.5 py-1 text-center bg-gray-100"
+                      className={`border border-gray-300 ${padding} text-center bg-gray-100`}
                       style={cellStyle}
                       title="対戦なし"
                     >
@@ -310,15 +345,19 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                 return (
                   <td
                     key={`cell-${rowStats.teamId}-${colStats.teamId}`}
-                    className="border border-gray-300 px-0.5 py-1 text-center"
+                    className={`border border-gray-300 ${padding} text-center`}
                     style={cellStyle}
                     title={h2h ? `${h2h.score}-${h2h.opponentScore}` : '未対戦'}
                   >
                     {h2h ? (
-                      <div className="flex flex-col items-center leading-tight">
+                      compact ? (
                         <span className={className}>{symbol}</span>
-                        <span className="text-xs text-gray-500">{h2h.score}-{h2h.opponentScore}</span>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col items-center leading-tight">
+                          <span className={className}>{symbol}</span>
+                          <span className="text-xs text-gray-500">{h2h.score}-{h2h.opponentScore}</span>
+                        </div>
+                      )
                     ) : (
                       <span className="text-gray-300">-</span>
                     )}
@@ -327,17 +366,21 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
               })}
 
               {/* 統計列 */}
-              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.won}</td>
-              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.drawn}</td>
-              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.lost}</td>
-              <td className="border border-gray-300 px-1 py-1 text-center font-bold bg-yellow-50">{rowStats.points}</td>
-              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.goalsFor}</td>
-              <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.goalsAgainst}</td>
-              <td className="border border-gray-300 px-1 py-1 text-center">
+              <td className={`border border-gray-300 ${padding} text-center`}>{rowStats.won}</td>
+              <td className={`border border-gray-300 ${padding} text-center`}>{rowStats.drawn}</td>
+              <td className={`border border-gray-300 ${padding} text-center`}>{rowStats.lost}</td>
+              <td className={`border border-gray-300 ${padding} text-center font-bold bg-yellow-50`}>{rowStats.points}</td>
+              {!compact && (
+                <>
+                  <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.goalsFor}</td>
+                  <td className="border border-gray-300 px-1 py-1 text-center">{rowStats.goalsAgainst}</td>
+                </>
+              )}
+              <td className={`border border-gray-300 ${padding} text-center`}>
                 {rowStats.goalDiff > 0 ? `+${rowStats.goalDiff}` : rowStats.goalDiff}
               </td>
               {showOverallRank && (
-                <td className={`border border-gray-300 px-1 py-1 text-center font-bold ${
+                <td className={`border border-gray-300 ${padding} text-center font-bold ${
                   overallRankings?.get(rowStats.teamId) && overallRankings.get(rowStats.teamId)! <= 4
                     ? 'text-amber-600 bg-amber-50'
                     : 'bg-amber-50'
@@ -351,7 +394,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
       </table>
 
       {/* 凡例 */}
-      <div className="mt-2 flex gap-4 text-xs text-gray-600">
+      <div className={`mt-2 flex gap-4 ${compact ? 'text-[10px]' : 'text-xs'} text-gray-600`}>
         <span><span className="text-red-600 font-bold">○</span> 勝ち</span>
         <span><span className="text-gray-600">△</span> 引き分け</span>
         <span><span className="text-blue-600">●</span> 負け</span>
