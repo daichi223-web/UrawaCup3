@@ -58,10 +58,13 @@ function generateKickoffTimes(
   const times: string[] = []
   const [startHour, startMinute] = startTime.split(':').map(Number)
   let currentMinutes = startHour * 60 + startMinute
+  const MAX_MINUTES = 23 * 60 + 59 // 23:59
 
   for (let i = 0; i < matchCount; i++) {
-    const hours = Math.floor(currentMinutes / 60)
-    const minutes = currentMinutes % 60
+    // 23:59を超えないようにキャップ
+    const cappedMinutes = Math.min(currentMinutes, MAX_MINUTES)
+    const hours = Math.floor(cappedMinutes / 60)
+    const minutes = cappedMinutes % 60
     times.push(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`)
     // 次の試合開始時刻 = 試合時間 + 間隔
     currentMinutes += matchDuration + interval
@@ -491,6 +494,13 @@ export function generateSingleLeagueSchedule(
   console.log('[SingleLeague] 総試合数:', totalMatches, '1日あたり:', matchesPerDay)
   console.log('[SingleLeague] 会場数:', venues.length, '会場あたり試合数:', matchesPerVenuePerDay)
   console.log('[SingleLeague] キックオフ時刻:', kickoffTimes)
+
+  // 時間オーバーフローのチェック
+  const [startHour, startMinute] = startTime.split(':').map(Number)
+  const totalMinutesNeeded = (startHour * 60 + startMinute) + (matchesPerVenuePerDay - 1) * (matchDuration + interval)
+  if (totalMinutesNeeded > 23 * 60 + 59) {
+    warnings.push(`1日の試合数が多すぎます。会場あたり${matchesPerVenuePerDay}試合は時間内に収まりません。会場を増やすか、試合間隔を短くしてください。`)
+  }
 
   // Day1の試合を生成
   const day1Pairs = allPairs.slice(0, matchesPerDay)
