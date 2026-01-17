@@ -165,10 +165,13 @@ export const finalDayApi = {
     }
 
     const qualificationRule = tournament.qualification_rule || 'group_based';
+    const bracketMethod = tournament.bracket_method || 'seed_order'; // 'diagonal' or 'seed_order'
     const finalDate = tournament.end_date;
     const finalsStartTime = tournament.finals_start_time || '09:00';
     const finalsMatchDuration = tournament.finals_match_duration || 60;
     const finalsIntervalMinutes = tournament.finals_interval_minutes || 20;
+
+    console.log(`[Finals] 組み合わせ方式: ${bracketMethod}, 進出ルール: ${qualificationRule}`);
 
     // 2. 決勝進出チームを取得
     const qualifyingTeams = await getQualifyingTeams(tournamentId, qualificationRule);
@@ -197,23 +200,48 @@ export const finalDayApi = {
       .eq('match_date', finalDate);
 
     // 5. 準決勝の組み合わせを決定
-    // グループ順位ルール: A1 vs C1, B1 vs D1
-    // 総合順位ルール: 1位 vs 4位, 2位 vs 3位
+    // bracket_method:
+    //   'diagonal': A1 vs C1, B1 vs D1 (対角線)
+    //   'seed_order': 1位 vs 4位, 2位 vs 3位 (シード順)
     let semifinalPairs: [QualifyingTeam, QualifyingTeam][];
 
     if (qualificationRule === 'overall_ranking') {
-      // 総合順位: 1位vs4位, 2位vs3位
-      semifinalPairs = [
-        [qualifyingTeams[0], qualifyingTeams[3]], // 1位 vs 4位
-        [qualifyingTeams[1], qualifyingTeams[2]], // 2位 vs 3位
-      ];
+      // 総合順位からの進出の場合
+      if (bracketMethod === 'diagonal') {
+        // 対角線方式: 1位vsC順位相当(3番目), 2位vsD順位相当(4番目)
+        // 総合順位では対角線は意味がないので、1vs3, 2vs4 にする
+        semifinalPairs = [
+          [qualifyingTeams[0], qualifyingTeams[2]], // 1位 vs 3位
+          [qualifyingTeams[1], qualifyingTeams[3]], // 2位 vs 4位
+        ];
+        console.log('[Finals] 総合順位+対角線: 1vs3, 2vs4');
+      } else {
+        // シード順: 1位vs4位, 2位vs3位
+        semifinalPairs = [
+          [qualifyingTeams[0], qualifyingTeams[3]], // 1位 vs 4位
+          [qualifyingTeams[1], qualifyingTeams[2]], // 2位 vs 3位
+        ];
+        console.log('[Finals] 総合順位+シード順: 1vs4, 2vs3');
+      }
     } else {
-      // グループ順位: A1 vs C1, B1 vs D1
+      // グループ順位からの進出の場合
       const sorted = [...qualifyingTeams].sort((a, b) => a.groupId.localeCompare(b.groupId));
-      semifinalPairs = [
-        [sorted[0], sorted[2]], // A1 vs C1
-        [sorted[1], sorted[3]], // B1 vs D1
-      ];
+
+      if (bracketMethod === 'diagonal') {
+        // 対角線方式: A1 vs C1, B1 vs D1
+        semifinalPairs = [
+          [sorted[0], sorted[2]], // A1 vs C1
+          [sorted[1], sorted[3]], // B1 vs D1
+        ];
+        console.log(`[Finals] グループ順位+対角線: ${sorted[0].groupId}1 vs ${sorted[2].groupId}1, ${sorted[1].groupId}1 vs ${sorted[3].groupId}1`);
+      } else {
+        // シード順方式: A1 vs D1, B1 vs C1 (上位グループが下位グループと対戦)
+        semifinalPairs = [
+          [sorted[0], sorted[3]], // A1 vs D1
+          [sorted[1], sorted[2]], // B1 vs C1
+        ];
+        console.log(`[Finals] グループ順位+シード順: ${sorted[0].groupId}1 vs ${sorted[3].groupId}1, ${sorted[1].groupId}1 vs ${sorted[2].groupId}1`);
+      }
     }
 
     // 6. 時間計算用ヘルパー
@@ -230,6 +258,17 @@ export const finalDayApi = {
     let currentTime = finalsStartTime;
     let matchOrder = 1;
 
+    // 準決勝のノートを作成
+    const getSemifinalNote = (pairIndex: number, pair: [QualifyingTeam, QualifyingTeam]): string => {
+      if (qualificationRule === 'overall_ranking') {
+        const rank1 = pair[0].overallRank || 1;
+        const rank2 = pair[1].overallRank || 4;
+        return `準決勝${pairIndex + 1}（総合${rank1}位 vs 総合${rank2}位）`;
+      } else {
+        return `準決勝${pairIndex + 1}（${pair[0].groupId}1位 vs ${pair[1].groupId}1位）`;
+      }
+    };
+
     // 準決勝1
     matchesToInsert.push({
       tournament_id: tournamentId,
@@ -241,9 +280,7 @@ export const finalDayApi = {
       match_order: matchOrder++,
       stage: 'semifinal',
       status: 'scheduled',
-      notes: qualificationRule === 'overall_ranking'
-        ? `準決勝1（総合1位 vs 総合4位）`
-        : `準決勝1（${semifinalPairs[0][0].groupId}1位 vs ${semifinalPairs[0][1].groupId}1位）`,
+      notes: getSemifinalNote(0, semifinalPairs[0]),
     });
     currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
 
@@ -258,9 +295,7 @@ export const finalDayApi = {
       match_order: matchOrder++,
       stage: 'semifinal',
       status: 'scheduled',
-      notes: qualificationRule === 'overall_ranking'
-        ? `準決勝2（総合2位 vs 総合3位）`
-        : `準決勝2（${semifinalPairs[1][0].groupId}1位 vs ${semifinalPairs[1][1].groupId}1位）`,
+      notes: getSemifinalNote(1, semifinalPairs[1]),
     });
     currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
 
@@ -668,8 +703,12 @@ export const finalDayApi = {
     const qualificationRule = tournament.qualification_rule || 'group_based';
     const finalDate = tournament.end_date;
     const startTime = tournament.preliminary_start_time || '09:00';
-    const matchDuration = tournament.preliminary_match_duration || 40; // 試合時間（分）
-    const intervalMinutes = tournament.preliminary_interval_minutes || 5; // 試合間隔（分）
+    // 研修試合専用の設定を使用（なければ予選設定にフォールバック）
+    const matchDuration = tournament.training_match_duration || tournament.preliminary_match_duration || 40;
+    const intervalMinutes = tournament.training_interval_minutes || tournament.preliminary_interval_minutes || 5;
+    const matchesPerTeam = tournament.training_matches_per_team || 2; // チームあたり試合数
+
+    console.log(`[Training] 設定 - 試合時間: ${matchDuration}分, 間隔: ${intervalMinutes}分, 試合数/チーム: ${matchesPerTeam}`);
 
     // 時間計算用ヘルパー
     const addMinutes = (time: string, minutes: number): string => {
@@ -858,9 +897,8 @@ export const finalDayApi = {
       }).join(' | ')
     );
 
-    // 11. 各会場でリーグ戦（総当たり）を生成（最大6試合に制限）
+    // 11. 各会場でリーグ戦を生成（各チームがmatchesPerTeam試合になるよう調整）
     const matchesToInsert: any[] = [];
-    const MAX_MATCHES_PER_VENUE = 6;
 
     for (const venue of venues) {
       const teamsInVenue = venueAssignments.get(venue.id) || [];
@@ -875,35 +913,68 @@ export const finalDayApi = {
       // 会場内の平均順位（リーグ名用）
       const avgRank = Math.round(teamsInVenue.reduce((sum, t) => sum + t.rank, 0) / teamsInVenue.length);
 
-      // 全ペアを生成（リーグ戦 = 総当たり）
+      // 各チームの試合数をカウント
+      const teamMatchCounts: Record<number, number> = {};
+      teamsInVenue.forEach(t => { teamMatchCounts[t.teamId] = 0; });
+
+      // 全ペアを生成
       const pairs: { teamA: TeamInfo; teamB: TeamInfo; score: number }[] = [];
       for (let i = 0; i < teamsInVenue.length; i++) {
         for (let j = i + 1; j < teamsInVenue.length; j++) {
           const score = calculatePairScore(teamsInVenue[i], teamsInVenue[j]);
-          // 全ペアを対戦として追加（同グループも含む総当たり）
           pairs.push({ teamA: teamsInVenue[i], teamB: teamsInVenue[j], score });
-          // 同グループの場合はログ出力（対戦はするが優先度低）
-          if (teamsInVenue[i].groupId === teamsInVenue[j].groupId) {
-            console.log(`[Training] 同グループ対戦: ${teamsInVenue[i].teamName} vs ${teamsInVenue[j].teamName} (グループ${teamsInVenue[i].groupId})`);
-          }
         }
       }
 
       // スコア順にソート（警告が少ない試合を先に配置）
       pairs.sort((a, b) => a.score - b.score);
 
-      // 6試合に制限（警告が少ないペアを優先）
-      const limitedPairs = pairs.slice(0, MAX_MATCHES_PER_VENUE);
-      if (pairs.length > MAX_MATCHES_PER_VENUE) {
-        console.log(`[Training] 会場${venue.id}: ${MAX_MATCHES_PER_VENUE}試合に制限 (${pairs.length}→${MAX_MATCHES_PER_VENUE})`);
+      // 各チームがmatchesPerTeam試合になるようペアを選択
+      const selectedPairs: typeof pairs = [];
+      const teamsInPrevSlot = new Set<number>(); // 連戦回避用
+
+      for (const pair of pairs) {
+        // 両チームがまだ上限に達していなければ選択
+        if (teamMatchCounts[pair.teamA.teamId] < matchesPerTeam &&
+            teamMatchCounts[pair.teamB.teamId] < matchesPerTeam) {
+
+          // 連戦チェック（直前の試合に出場したチームは後回し）
+          const isConsecutive = teamsInPrevSlot.has(pair.teamA.teamId) || teamsInPrevSlot.has(pair.teamB.teamId);
+
+          if (!isConsecutive || pairs.indexOf(pair) === pairs.length - 1) {
+            selectedPairs.push(pair);
+            teamMatchCounts[pair.teamA.teamId]++;
+            teamMatchCounts[pair.teamB.teamId]++;
+
+            // 連戦回避用の更新
+            teamsInPrevSlot.clear();
+            teamsInPrevSlot.add(pair.teamA.teamId);
+            teamsInPrevSlot.add(pair.teamB.teamId);
+          }
+        }
       }
+
+      // 連戦を許容して残りを埋める（上限未満のチームがある場合）
+      for (const pair of pairs) {
+        if (selectedPairs.includes(pair)) continue;
+        if (teamMatchCounts[pair.teamA.teamId] < matchesPerTeam &&
+            teamMatchCounts[pair.teamB.teamId] < matchesPerTeam) {
+          selectedPairs.push(pair);
+          teamMatchCounts[pair.teamA.teamId]++;
+          teamMatchCounts[pair.teamB.teamId]++;
+        }
+      }
+
+      // 試合数の確認
+      const matchCountSummary = teamsInVenue.map(t => `${t.teamName}:${teamMatchCounts[t.teamId]}`).join(', ');
+      console.log(`[Training] 会場${venue.id}の試合数: ${matchCountSummary}`);
 
       // 会場ごとのキックオフ時間とmatch_orderを計算（1から開始）
       let currentTime = startTime;
       let matchOrder = 1;
 
-      // 制限されたペアを試合として生成
-      for (const pair of limitedPairs) {
+      // 選択されたペアを試合として生成
+      for (const pair of selectedPairs) {
         matchesToInsert.push({
           tournament_id: tournamentId,
           venue_id: venue.id,
@@ -920,7 +991,7 @@ export const finalDayApi = {
         currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
       }
 
-      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${limitedPairs.length}試合 (${avgRank}位リーグ, ${startTime}〜${currentTime})`);
+      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${selectedPairs.length}試合 (${avgRank}位リーグ, ${startTime}〜${currentTime})`);
     }
 
     // 10. 試合をDBに挿入
