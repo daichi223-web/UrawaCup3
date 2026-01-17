@@ -55,6 +55,7 @@ function Settings() {
     finalsMatchDuration: 60,
     finalsIntervalMinutes: 20,
     finalsStartTime: '09:00',
+    bracketMethod: 'seed_order' as 'diagonal' | 'seed_order',
     // チーム構成（グループ制用）
     groupCount: 4,
     teamsPerGroup: 4,
@@ -65,6 +66,10 @@ function Settings() {
     teamsPerVenue: 4,
     matchesPerTeamPerDay: 2,
     preliminaryDays: 2,
+    // 研修試合設定
+    trainingMatchDuration: 40,
+    trainingIntervalMinutes: 5,
+    trainingMatchesPerTeam: 2,
   })
 
   // 会場編集モーダル
@@ -203,6 +208,7 @@ function Settings() {
         finalsMatchDuration: (tournament as any).finalsMatchDuration || (tournament as any).finals_match_duration || 60,
         finalsIntervalMinutes: (tournament as any).finalsIntervalMinutes || (tournament as any).finals_interval_minutes || 20,
         finalsStartTime: (tournament as any).finalsStartTime || (tournament as any).finals_start_time || '09:00',
+        bracketMethod: (tournament as any).bracketMethod || (tournament as any).bracket_method || 'seed_order',
         // チーム構成（グループ制用）
         groupCount: tournament.groupCount || 4,
         teamsPerGroup: tournament.teamsPerGroup || 4,
@@ -213,6 +219,10 @@ function Settings() {
         teamsPerVenue: (tournament as any).teamsPerVenue ?? (tournament as any).teams_per_venue ?? 4,
         matchesPerTeamPerDay: (tournament as any).matchesPerTeamPerDay ?? (tournament as any).matches_per_team_per_day ?? 2,
         preliminaryDays: (tournament as any).preliminaryDays ?? (tournament as any).preliminary_days ?? 2,
+        // 研修試合設定
+        trainingMatchDuration: (tournament as any).trainingMatchDuration ?? (tournament as any).training_match_duration ?? 40,
+        trainingIntervalMinutes: (tournament as any).trainingIntervalMinutes ?? (tournament as any).training_interval_minutes ?? 5,
+        trainingMatchesPerTeam: (tournament as any).trainingMatchesPerTeam ?? (tournament as any).training_matches_per_team ?? 2,
       })
     }
   }, [tournament])
@@ -232,6 +242,7 @@ function Settings() {
       finalsMatchDuration: number;
       finalsIntervalMinutes: number;
       finalsStartTime: string;
+      bracketMethod: 'diagonal' | 'seed_order';
       groupCount: number;
       teamsPerGroup: number;
       advancingTeams: number;
@@ -240,6 +251,9 @@ function Settings() {
       teamsPerVenue: number;
       matchesPerTeamPerDay: number;
       preliminaryDays: number;
+      trainingMatchDuration: number;
+      trainingIntervalMinutes: number;
+      trainingMatchesPerTeam: number;
     }) => {
       const { data: updated, error } = await supabase
         .from('tournaments')
@@ -255,6 +269,7 @@ function Settings() {
           finals_match_duration: data.finalsMatchDuration,
           finals_interval_minutes: data.finalsIntervalMinutes,
           finals_start_time: data.finalsStartTime,
+          bracket_method: data.bracketMethod,
           group_count: data.groupCount,
           teams_per_group: data.teamsPerGroup,
           advancing_teams: data.advancingTeams,
@@ -263,6 +278,9 @@ function Settings() {
           teams_per_venue: data.teamsPerVenue,
           matches_per_team_per_day: data.matchesPerTeamPerDay,
           preliminary_days: data.preliminaryDays,
+          training_match_duration: data.trainingMatchDuration,
+          training_interval_minutes: data.trainingIntervalMinutes,
+          training_matches_per_team: data.trainingMatchesPerTeam,
         })
         .eq('id', tournamentId)
         .select()
@@ -823,6 +841,68 @@ function Settings() {
                   min={5}
                   max={60}
                   onChange={(e) => setTournamentForm(prev => ({ ...prev, finalsIntervalMinutes: parseInt(e.target.value) || 20 }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">組み合わせ方式</label>
+                <select
+                  className="form-input"
+                  value={tournamentForm.bracketMethod}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, bracketMethod: e.target.value as 'diagonal' | 'seed_order' }))}
+                >
+                  <option value="seed_order">順位順（1位vs4位、2位vs3位）</option>
+                  <option value="diagonal">対角線（A1vsC1、B1vsD1）</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {tournamentForm.bracketMethod === 'seed_order'
+                    ? '総合順位で組み合わせ'
+                    : 'グループ対角線で組み合わせ'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 研修試合設定 */}
+          <div className="border-t pt-4 mt-4">
+            <h4 className="font-medium mb-3 text-gray-700">研修試合設定</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              ※ 最終日の研修試合（決勝進出チーム以外）に適用されます
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="form-label">試合時間（分）</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={tournamentForm.trainingMatchDuration}
+                  placeholder="40"
+                  min={10}
+                  max={90}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, trainingMatchDuration: parseInt(e.target.value) || 40 }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">試合間隔（分）</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={tournamentForm.trainingIntervalMinutes}
+                  placeholder="5"
+                  min={0}
+                  max={30}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, trainingIntervalMinutes: parseInt(e.target.value) || 5 }))}
+                />
+              </div>
+              <div>
+                <label className="form-label">チームあたり試合数</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={tournamentForm.trainingMatchesPerTeam}
+                  placeholder="2"
+                  min={1}
+                  max={5}
+                  onChange={(e) => setTournamentForm(prev => ({ ...prev, trainingMatchesPerTeam: parseInt(e.target.value) || 2 }))}
                 />
               </div>
             </div>

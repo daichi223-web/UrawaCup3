@@ -79,6 +79,14 @@ CREATE TABLE IF NOT EXISTS tournaments (
     preliminary_days INTEGER DEFAULT 2,                    -- 予選日数
     b_match_slots INTEGER[] DEFAULT '{3, 6}',              -- B戦スロット（第何試合がB戦か）
     use_group_system BOOLEAN DEFAULT TRUE,                 -- グループ制使用フラグ（後方互換のためTRUE）
+    -- 決勝トーナメント設定
+    bracket_method VARCHAR(20) DEFAULT 'seed_order',       -- 組み合わせ方式: diagonal or seed_order
+    -- 研修試合設定
+    training_match_duration INTEGER DEFAULT 40,            -- 研修試合時間（分）
+    training_interval_minutes INTEGER DEFAULT 5,           -- 研修試合間隔（分）
+    training_matches_per_team INTEGER DEFAULT 2,           -- チームあたり試合数
+    -- 対戦制約スコア
+    match_constraint_scores JSONB DEFAULT '{"already_played":200,"same_league":100,"same_region":50,"local_teams":30,"consecutive_match":20}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
