@@ -518,7 +518,7 @@ export function generateSingleLeagueSchedule(
   // 使用済みペアを追跡
   const usedPairs = new Set<string>()
 
-  // 各日の試合を生成する関数
+  // 各日の試合を生成する関数（時間帯ごとにチーム重複を回避）
   const generateDayMatches = (
     day: 1 | 2,
     matchDate: string,
@@ -530,40 +530,63 @@ export function generateSingleLeagueSchedule(
     // 各チームの試合数を初期化
     teams.forEach(t => { teamMatchCount[t.id] = 0 })
 
-    // 試合を選択
-    for (const pair of availablePairs) {
-      const pairKey = `${Math.min(pair.home.id, pair.away.id)}-${Math.max(pair.home.id, pair.away.id)}`
+    // 時間帯（slot）ごとに試合を割り当て
+    const numSlots = matchesPerVenuePerDay
 
-      // すでに使用済みのペアはスキップ
-      if (usedPairs.has(pairKey)) continue
+    for (let slotIndex = 0; slotIndex < numSlots; slotIndex++) {
+      // この時間帯で既に出場するチームを追跡
+      const teamsInThisSlot = new Set<number>()
 
-      // 両チームがまだ2試合未満か確認
-      if (teamMatchCount[pair.home.id] >= matchesPerTeamPerDay) continue
-      if (teamMatchCount[pair.away.id] >= matchesPerTeamPerDay) continue
+      // この時間帯に割り当てる試合（最大で会場数分）
+      let matchesInSlot = 0
 
-      // この試合を追加
-      const venueIndex = dayMatches.length % venues.length
-      const slotIndex = Math.floor(dayMatches.length / venues.length)
-      const venue = venues[venueIndex]
+      for (const pair of availablePairs) {
+        // この時間帯の会場数に達したら次のslotへ
+        if (matchesInSlot >= venues.length) break
 
-      dayMatches.push({
-        homeTeamId: pair.home.id,
-        awayTeamId: pair.away.id,
-        homeTeamName: pair.home.shortName || pair.home.name,
-        awayTeamName: pair.away.shortName || pair.away.name,
-        groupId: null as any, // 1リーグ制はグループなし
-        venueId: venue.id,
-        venueName: venue.name,
-        matchDate,
-        matchTime: kickoffTimes[slotIndex] || kickoffTimes[kickoffTimes.length - 1],
-        matchOrder: matchOrder++,
-        day,
-        slot: slotIndex + 1,
-      })
+        const pairKey = `${Math.min(pair.home.id, pair.away.id)}-${Math.max(pair.home.id, pair.away.id)}`
 
-      teamMatchCount[pair.home.id]++
-      teamMatchCount[pair.away.id]++
-      usedPairs.add(pairKey)
+        // すでに使用済みのペアはスキップ
+        if (usedPairs.has(pairKey)) continue
+
+        // 両チームがまだ1日の試合数上限未満か確認
+        if (teamMatchCount[pair.home.id] >= matchesPerTeamPerDay) continue
+        if (teamMatchCount[pair.away.id] >= matchesPerTeamPerDay) continue
+
+        // この時間帯に既に出場しているチームはスキップ（重複回避）
+        if (teamsInThisSlot.has(pair.home.id)) continue
+        if (teamsInThisSlot.has(pair.away.id)) continue
+
+        // この試合を追加
+        const venue = venues[matchesInSlot]
+
+        dayMatches.push({
+          homeTeamId: pair.home.id,
+          awayTeamId: pair.away.id,
+          homeTeamName: pair.home.shortName || pair.home.name,
+          awayTeamName: pair.away.shortName || pair.away.name,
+          groupId: null as any, // 1リーグ制はグループなし
+          venueId: venue.id,
+          venueName: venue.name,
+          matchDate,
+          matchTime: kickoffTimes[slotIndex] || kickoffTimes[kickoffTimes.length - 1],
+          matchOrder: matchOrder++,
+          day,
+          slot: slotIndex + 1,
+        })
+
+        // この時間帯に出場するチームとして記録
+        teamsInThisSlot.add(pair.home.id)
+        teamsInThisSlot.add(pair.away.id)
+
+        teamMatchCount[pair.home.id]++
+        teamMatchCount[pair.away.id]++
+        usedPairs.add(pairKey)
+        matchesInSlot++
+
+        // 必要な試合数に達したら終了
+        if (dayMatches.length >= matchesPerDay) break
+      }
 
       // 必要な試合数に達したら終了
       if (dayMatches.length >= matchesPerDay) break

@@ -1311,6 +1311,8 @@ function MatchSchedule() {
                     { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
                     { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-800' },
                     { bg: 'bg-pink-50', border: 'border-pink-200', header: 'bg-pink-100 text-pink-800' },
+                    { bg: 'bg-orange-50', border: 'border-orange-200', header: 'bg-orange-100 text-orange-800' },
+                    { bg: 'bg-cyan-50', border: 'border-cyan-200', header: 'bg-cyan-100 text-cyan-800' },
                   ]
                   const colors = venueColorsList[idx % venueColorsList.length]
 
@@ -1467,6 +1469,8 @@ function MatchSchedule() {
                         { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800' },
                         { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-800' },
                         { bg: 'bg-pink-50', border: 'border-pink-200', header: 'bg-pink-100 text-pink-800' },
+                        { bg: 'bg-orange-50', border: 'border-orange-200', header: 'bg-orange-100 text-orange-800' },
+                        { bg: 'bg-cyan-50', border: 'border-cyan-200', header: 'bg-cyan-100 text-cyan-800' },
                       ]
                       const colors = venueColorsList[idx % venueColorsList.length]
 
@@ -1603,10 +1607,20 @@ function MatchSchedule() {
                 予選リーグの日程を自動生成します。
                 <br />
                 <span className="text-sm text-gray-500">
-                  ※ 各グループ6チーム × 4試合（変則総当たり）<br />
-                  ※ 対角線ペア（1-6, 2-5, 3-4）は対戦しない<br />
-                  ※ 連戦回避対応<br />
-                  ※ 2日間で計48試合（4グループ × 12試合）
+                  {useGroupSystem ? (
+                    <>
+                      ※ 各グループ6チーム × 4試合（変則総当たり）<br />
+                      ※ 対角線ペア（1-6, 2-5, 3-4）は対戦しない<br />
+                      ※ 連戦回避対応<br />
+                      ※ 2日間で計48試合（4グループ × 12試合）
+                    </>
+                  ) : (
+                    <>
+                      ※ 1リーグ制：各チーム1日{(tournament as any)?.matchesPerTeamPerDay || 2}試合<br />
+                      ※ 同時刻の重複出場なし<br />
+                      ※ 2日間で計{teams.length * ((tournament as any)?.matchesPerTeamPerDay || 2)}試合
+                    </>
+                  )}
                 </span>
               </>
             )}
