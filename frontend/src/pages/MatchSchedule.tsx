@@ -1476,8 +1476,8 @@ function MatchSchedule() {
 
                       if (day1VenueMatches.length === 0 && day2VenueMatches.length === 0) return null
 
-                      // 会場のグループID（snake_case対応）
-                      const venueGroupId = venue.groupId || venue.group_id
+                      // 会場のグループID（snake_case対応）、なければインデックスから生成
+                      const venueGroupId = venue.groupId || venue.group_id || String.fromCharCode(65 + idx)
 
                       return (
                         <div key={venue.id} className={`rounded border ${colors.border} ${colors.bg} overflow-hidden`}>
