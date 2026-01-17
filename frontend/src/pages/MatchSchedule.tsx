@@ -418,7 +418,7 @@ function MatchSchedule() {
           id: team.id,
           name: team.name,
           shortName: team.short_name,
-          groupId: '-',
+          groupId: null as any, // 1リーグ制はグループなし
           seedNumber: index + 1,
         }))
 

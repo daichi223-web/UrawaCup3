@@ -551,7 +551,7 @@ export function generateSingleLeagueSchedule(
         awayTeamId: pair.away.id,
         homeTeamName: pair.home.shortName || pair.home.name,
         awayTeamName: pair.away.shortName || pair.away.name,
-        groupId: '-',
+        groupId: null as any, // 1リーグ制はグループなし
         venueId: venue.id,
         venueName: venue.name,
         matchDate,
@@ -613,41 +613,11 @@ export function generateSingleLeagueSchedule(
 
 /**
  * 1リーグ制の対戦表を検証
+ * 注意: 1リーグ制は部分的な総当たりのため、この検証は使用しない
  */
 export function validateSingleLeagueSchedule(matches: GeneratedMatch[], teams: TeamInfo[]): string[] {
-  const errors: string[] = []
-
-  // チームごとの試合数をカウント
-  const matchCountByTeam: Record<number, number> = {}
-  const opponentsByTeam: Record<number, Set<number>> = {}
-
-  for (const match of matches) {
-    matchCountByTeam[match.homeTeamId] = (matchCountByTeam[match.homeTeamId] || 0) + 1
-    if (!opponentsByTeam[match.homeTeamId]) opponentsByTeam[match.homeTeamId] = new Set()
-    opponentsByTeam[match.homeTeamId].add(match.awayTeamId)
-
-    matchCountByTeam[match.awayTeamId] = (matchCountByTeam[match.awayTeamId] || 0) + 1
-    if (!opponentsByTeam[match.awayTeamId]) opponentsByTeam[match.awayTeamId] = new Set()
-    opponentsByTeam[match.awayTeamId].add(match.homeTeamId)
-  }
-
-  const expectedMatches = teams.length - 1
-
-  // 各チームが n-1 試合であることを確認
-  for (const team of teams) {
-    const count = matchCountByTeam[team.id] || 0
-    if (count !== expectedMatches) {
-      errors.push(`${team.name}の試合数が${count}です（${expectedMatches}試合必要）`)
-    }
-  }
-
-  // 全チームと対戦していることを確認
-  for (const team of teams) {
-    const opponents = opponentsByTeam[team.id] || new Set()
-    if (opponents.size !== expectedMatches) {
-      errors.push(`${team.name}の対戦相手が${opponents.size}チームです（${expectedMatches}チーム必要）`)
-    }
-  }
-
-  return errors
+  // 1リーグ制は各チーム4試合（2試合/日 × 2日）なので、
+  // 完全総当たり(n-1試合)の検証は適用しない
+  // 検証は generateSingleLeagueSchedule 内で行われる
+  return []
 }

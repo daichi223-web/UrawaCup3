@@ -32,11 +32,11 @@ interface TeamStats {
 
 export default function StarTable({ teams, matches, groupId, byePairs = [], overallRankings, showOverallRank = false, compact = false }: StarTableProps) {
   // 予選試合をフィルタ（完了・予定含む）
-  // groupId が 'all' または '-' の場合はグループフィルタをスキップ（1リーグ制用）
+  // groupId が 'all' または null の場合はグループフィルタをスキップ（1リーグ制用）
   const allPreliminaryMatches = useMemo(() => {
     return matches.filter(m =>
       m.stage === 'preliminary' &&
-      (groupId === 'all' || groupId === '-' || m.groupId === groupId || m.group_id === groupId)
+      (groupId === 'all' || !groupId || m.groupId === groupId || m.group_id === groupId || !m.groupId && !m.group_id)
     )
   }, [matches, groupId])
 
@@ -73,7 +73,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
   const hasNoScheduledMatch = (team1Id: number, team2Id: number) => {
     if (byePairSet.has(`${team1Id}-${team2Id}`)) return true
     // 1リーグ制で対戦予定がない場合
-    if ((groupId === 'all' || groupId === '-') && !scheduledPairSet.has(`${team1Id}-${team2Id}`)) return true
+    if ((groupId === 'all' || !groupId) && !scheduledPairSet.has(`${team1Id}-${team2Id}`)) return true
     return false
   }
 
