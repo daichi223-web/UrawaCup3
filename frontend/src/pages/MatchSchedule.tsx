@@ -395,6 +395,7 @@ function MatchSchedule() {
         startTime: tournament.preliminaryStartTime || (tournament as any).preliminary_start_time || '09:00',
         matchDuration: tournament.matchDuration || (tournament as any).match_duration || 50,
         intervalMinutes: tournament.intervalMinutes || (tournament as any).interval_minutes || 15,
+        matchesPerTeamPerDay: (tournament as any).matchesPerTeamPerDay || (tournament as any).matches_per_team_per_day || 2,
       }
       console.log('[Schedule] Config:', scheduleConfig)
 

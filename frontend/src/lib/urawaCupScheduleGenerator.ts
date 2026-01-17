@@ -209,6 +209,7 @@ export interface ScheduleConfig {
   startTime?: string        // 開始時刻（デフォルト: 09:00）
   matchDuration?: number    // 試合時間（分、デフォルト: 15）
   intervalMinutes?: number  // 試合間隔（分、HT+入れ替え、デフォルト: 10）
+  matchesPerTeamPerDay?: number // 1日あたりのチーム試合数（デフォルト: 2）
 }
 
 /**
@@ -429,7 +430,8 @@ export function checkConsecutiveMatches(matches: GeneratedMatch[]): string[] {
 }
 
 /**
- * 1リーグ制（総当たり）の日程を生成
+ * 1リーグ制の日程を生成
+ * 各チーム1日2試合 × 2日間 = 計4試合
  * @param teams チーム一覧
  * @param venues 会場一覧
  * @param day1Date 初日の日付
@@ -451,6 +453,7 @@ export function generateSingleLeagueSchedule(
   const startTime = config?.startTime || DEFAULT_START_TIME
   const matchDuration = config?.matchDuration || DEFAULT_MATCH_DURATION
   const interval = config?.intervalMinutes || DEFAULT_INTERVAL
+  const matchesPerTeamPerDay = config?.matchesPerTeamPerDay || 2 // 1日あたりのチーム試合数
 
   if (teams.length < 2) {
     warnings.push('チームが2チーム以上必要です')
@@ -476,25 +479,19 @@ export function generateSingleLeagueSchedule(
     }
   }
 
-  // 総当たりペアを生成
-  const allPairs: { home: TeamInfo; away: TeamInfo }[] = []
-  for (let i = 0; i < teams.length; i++) {
-    for (let j = i + 1; j < teams.length; j++) {
-      allPairs.push({ home: teams[i], away: teams[j] })
-    }
-  }
+  // 各チーム2試合/日の場合、1日の試合数 = チーム数 * 2 / 2 = チーム数
+  const matchesPerDay = (teams.length * matchesPerTeamPerDay) / 2
+  const totalMatchesNeeded = matchesPerDay * 2 // 2日間
 
-  const totalMatches = allPairs.length
-  const matchesPerDay = Math.ceil(totalMatches / 2)
-
-  // 1日あたりの会場ごとの最大試合数を計算
+  // 1日あたりの会場ごとの試合数を計算
   const matchesPerVenuePerDay = Math.ceil(matchesPerDay / venues.length)
 
   // キックオフ時刻を動的に生成
   const kickoffTimes = generateKickoffTimes(startTime, matchDuration, interval, matchesPerVenuePerDay)
 
   console.log('[SingleLeague] 設定:', { startTime, matchDuration, interval })
-  console.log('[SingleLeague] 総試合数:', totalMatches, '1日あたり:', matchesPerDay)
+  console.log('[SingleLeague] チーム数:', teams.length, '1日の試合数/チーム:', matchesPerTeamPerDay)
+  console.log('[SingleLeague] 1日の総試合数:', matchesPerDay, '2日間合計:', totalMatchesNeeded)
   console.log('[SingleLeague] 会場数:', venues.length, '会場あたり試合数:', matchesPerVenuePerDay)
   console.log('[SingleLeague] キックオフ時刻:', kickoffTimes)
 
@@ -507,60 +504,98 @@ export function generateSingleLeagueSchedule(
     warnings.push(`1日の試合数が多すぎます。会場あたり${matchesPerVenuePerDay}試合は時間内に収まりません。会場を増やすか、試合間隔を短くしてください。`)
   }
 
+  // 全対戦ペアを生成（プール）
+  const allPairs: { home: TeamInfo; away: TeamInfo }[] = []
+  for (let i = 0; i < teams.length; i++) {
+    for (let j = i + 1; j < teams.length; j++) {
+      allPairs.push({ home: teams[i], away: teams[j] })
+    }
+  }
+
+  // ペアをシャッフル（ランダム性を持たせる）
+  const shuffledPairs = [...allPairs].sort(() => Math.random() - 0.5)
+
+  // 使用済みペアを追跡
+  const usedPairs = new Set<string>()
+
+  // 各日の試合を生成する関数
+  const generateDayMatches = (
+    day: 1 | 2,
+    matchDate: string,
+    availablePairs: { home: TeamInfo; away: TeamInfo }[]
+  ): GeneratedMatch[] => {
+    const dayMatches: GeneratedMatch[] = []
+    const teamMatchCount: Record<number, number> = {}
+
+    // 各チームの試合数を初期化
+    teams.forEach(t => { teamMatchCount[t.id] = 0 })
+
+    // 試合を選択
+    for (const pair of availablePairs) {
+      const pairKey = `${Math.min(pair.home.id, pair.away.id)}-${Math.max(pair.home.id, pair.away.id)}`
+
+      // すでに使用済みのペアはスキップ
+      if (usedPairs.has(pairKey)) continue
+
+      // 両チームがまだ2試合未満か確認
+      if (teamMatchCount[pair.home.id] >= matchesPerTeamPerDay) continue
+      if (teamMatchCount[pair.away.id] >= matchesPerTeamPerDay) continue
+
+      // この試合を追加
+      const venueIndex = dayMatches.length % venues.length
+      const slotIndex = Math.floor(dayMatches.length / venues.length)
+      const venue = venues[venueIndex]
+
+      dayMatches.push({
+        homeTeamId: pair.home.id,
+        awayTeamId: pair.away.id,
+        homeTeamName: pair.home.shortName || pair.home.name,
+        awayTeamName: pair.away.shortName || pair.away.name,
+        groupId: '-',
+        venueId: venue.id,
+        venueName: venue.name,
+        matchDate,
+        matchTime: kickoffTimes[slotIndex] || kickoffTimes[kickoffTimes.length - 1],
+        matchOrder: matchOrder++,
+        day,
+        slot: slotIndex + 1,
+      })
+
+      teamMatchCount[pair.home.id]++
+      teamMatchCount[pair.away.id]++
+      usedPairs.add(pairKey)
+
+      // 必要な試合数に達したら終了
+      if (dayMatches.length >= matchesPerDay) break
+    }
+
+    return dayMatches
+  }
+
   // Day1の試合を生成
-  const day1Pairs = allPairs.slice(0, matchesPerDay)
-  for (let i = 0; i < day1Pairs.length; i++) {
-    const pair = day1Pairs[i]
-    const venueIndex = i % venues.length
-    const slotIndex = Math.floor(i / venues.length)
-    const venue = venues[venueIndex]
+  const day1Matches = generateDayMatches(1, day1Date, shuffledPairs)
+  matches.push(...day1Matches)
 
-    matches.push({
-      homeTeamId: pair.home.id,
-      awayTeamId: pair.away.id,
-      homeTeamName: pair.home.shortName || pair.home.name,
-      awayTeamName: pair.away.shortName || pair.away.name,
-      groupId: '-', // 1リーグ制は'-'で統一
-      venueId: venue.id,
-      venueName: venue.name,
-      matchDate: day1Date,
-      matchTime: kickoffTimes[slotIndex] || kickoffTimes[kickoffTimes.length - 1],
-      matchOrder: matchOrder++,
-      day: 1,
-      slot: slotIndex + 1,
-    })
-  }
+  // Day2の試合を生成（残りのペアから）
+  const day2Matches = generateDayMatches(2, day2Date, shuffledPairs)
+  matches.push(...day2Matches)
 
-  // Day2の試合を生成
-  const day2Pairs = allPairs.slice(matchesPerDay)
-  for (let i = 0; i < day2Pairs.length; i++) {
-    const pair = day2Pairs[i]
-    const venueIndex = i % venues.length
-    const slotIndex = Math.floor(i / venues.length)
-    const venue = venues[venueIndex]
+  // 各チームの試合数を確認
+  const matchCountByTeam: Record<number, number> = {}
+  matches.forEach(m => {
+    matchCountByTeam[m.homeTeamId] = (matchCountByTeam[m.homeTeamId] || 0) + 1
+    matchCountByTeam[m.awayTeamId] = (matchCountByTeam[m.awayTeamId] || 0) + 1
+  })
 
-    matches.push({
-      homeTeamId: pair.home.id,
-      awayTeamId: pair.away.id,
-      homeTeamName: pair.home.shortName || pair.home.name,
-      awayTeamName: pair.away.shortName || pair.away.name,
-      groupId: '-',
-      venueId: venue.id,
-      venueName: venue.name,
-      matchDate: day2Date,
-      matchTime: kickoffTimes[slotIndex] || kickoffTimes[kickoffTimes.length - 1],
-      matchOrder: matchOrder++,
-      day: 2,
-      slot: slotIndex + 1,
-    })
-  }
+  const matchesPerTeam = matchesPerTeamPerDay * 2 // 2日間で4試合
 
-  // 日ごとに分類
-  const day1Matches = matches.filter(m => m.day === 1)
-  const day2Matches = matches.filter(m => m.day === 2)
-
-  // 各チームの試合数を計算
-  const matchesPerTeam = teams.length - 1 // 総当たりなので n-1 試合
+  // 試合数が足りないチームがあれば警告
+  teams.forEach(team => {
+    const count = matchCountByTeam[team.id] || 0
+    if (count < matchesPerTeam) {
+      warnings.push(`${team.name}の試合数が${count}試合です（${matchesPerTeam}試合必要）`)
+    }
+  })
 
   return {
     success: matches.length > 0,
@@ -570,7 +605,7 @@ export function generateSingleLeagueSchedule(
     warnings,
     stats: {
       totalMatches: matches.length,
-      matchesPerGroup: matches.length, // 1グループなので全試合
+      matchesPerGroup: matches.length,
       matchesPerTeam,
     },
   }
