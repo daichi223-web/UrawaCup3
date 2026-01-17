@@ -412,12 +412,12 @@ function MatchSchedule() {
           throw new Error('チームが2チーム以上必要です')
         }
 
-        // チーム情報を変換（グループは'all'固定）
+        // チーム情報を変換（グループは'-'固定）
         teamInfoList = teams.map((team: any, index: number) => ({
           id: team.id,
           name: team.name,
           shortName: team.short_name,
-          groupId: 'all',
+          groupId: '-',
           seedNumber: index + 1,
         }))
 

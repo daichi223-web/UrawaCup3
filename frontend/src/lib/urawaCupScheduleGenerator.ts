@@ -505,7 +505,7 @@ export function generateSingleLeagueSchedule(
       awayTeamId: pair.away.id,
       homeTeamName: pair.home.shortName || pair.home.name,
       awayTeamName: pair.away.shortName || pair.away.name,
-      groupId: 'all', // 1リーグ制は全て'all'グループ
+      groupId: '-', // 1リーグ制は'-'で統一
       venueId: venue.id,
       venueName: venue.name,
       matchDate: day1Date,
@@ -529,7 +529,7 @@ export function generateSingleLeagueSchedule(
       awayTeamId: pair.away.id,
       homeTeamName: pair.home.shortName || pair.home.name,
       awayTeamName: pair.away.shortName || pair.away.name,
-      groupId: 'all',
+      groupId: '-',
       venueId: venue.id,
       venueName: venue.name,
       matchDate: day2Date,
