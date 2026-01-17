@@ -1538,13 +1538,13 @@ function MatchSchedule() {
             // 通常の試合一覧（会場別カード表示 + クリック選択対応）
             <div className="space-y-6">
               {/* グループ（会場）ごとに表示 */}
-              {venues.map(venue => {
+              {venues.map((venue, venueIndex) => {
                 // venueIdまたはvenue_id（snake_case）でフィルタ
                 const venueMatches = filteredMatches.filter(m => (m.venueId || m.venue_id) === venue.id)
                 if (venueMatches.length === 0) return null
 
-                // 会場のグループID（snake_case対応）
-                const venueGroupId = venue.groupId || venue.group_id
+                // 会場のグループID（snake_case対応）、なければインデックスから生成
+                const venueGroupId = venue.groupId || venue.group_id || String.fromCharCode(65 + venueIndex)
 
                 // 会場ごとの配色
                 const venueColors = {
@@ -1552,7 +1552,11 @@ function MatchSchedule() {
                   B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800', dot: 'bg-blue-500' },
                   C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100 text-green-800', dot: 'bg-green-500' },
                   D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100 text-yellow-800', dot: 'bg-yellow-500' },
-                  default: { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-800', dot: 'bg-purple-500' },
+                  E: { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100 text-purple-800', dot: 'bg-purple-500' },
+                  F: { bg: 'bg-pink-50', border: 'border-pink-200', header: 'bg-pink-100 text-pink-800', dot: 'bg-pink-500' },
+                  G: { bg: 'bg-orange-50', border: 'border-orange-200', header: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500' },
+                  H: { bg: 'bg-cyan-50', border: 'border-cyan-200', header: 'bg-cyan-100 text-cyan-800', dot: 'bg-cyan-500' },
+                  default: { bg: 'bg-gray-50', border: 'border-gray-200', header: 'bg-gray-100 text-gray-800', dot: 'bg-gray-500' },
                 }
                 const colors = venueColors[venueGroupId as keyof typeof venueColors] || venueColors.default
 
