@@ -30,12 +30,16 @@ interface TeamSlotProps {
   isConfirmed?: boolean  // 変更が確定済みか
 }
 
-// グループごとの色設定
+// グループごとの色設定（8会場対応）
 const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   A: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', badge: 'bg-red-100 text-red-700' },
   B: { bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-800', badge: 'bg-blue-100 text-blue-700' },
   C: { bg: 'bg-green-50', border: 'border-green-300', text: 'text-green-800', badge: 'bg-green-100 text-green-700' },
   D: { bg: 'bg-yellow-50', border: 'border-yellow-300', text: 'text-yellow-800', badge: 'bg-yellow-100 text-yellow-700' },
+  E: { bg: 'bg-purple-50', border: 'border-purple-300', text: 'text-purple-800', badge: 'bg-purple-100 text-purple-700' },
+  F: { bg: 'bg-pink-50', border: 'border-pink-300', text: 'text-pink-800', badge: 'bg-pink-100 text-pink-700' },
+  G: { bg: 'bg-orange-50', border: 'border-orange-300', text: 'text-orange-800', badge: 'bg-orange-100 text-orange-700' },
+  H: { bg: 'bg-cyan-50', border: 'border-cyan-300', text: 'text-cyan-800', badge: 'bg-cyan-100 text-cyan-700' },
 }
 
 /**
