@@ -572,8 +572,14 @@ function MatchSchedule() {
         status: 'scheduled',
       }))
 
+      console.log('[Generate] 挿入データ件数:', matchesToInsert.length)
+      console.log('[Generate] 最初のデータ:', matchesToInsert[0])
+
       const { error } = await supabase.from('matches').insert(matchesToInsert)
-      if (error) throw error
+      if (error) {
+        console.error('[Generate] Insert error:', error)
+        throw new Error(error.message || JSON.stringify(error))
+      }
 
       return {
         created: matchesToInsert.length,
