@@ -1618,7 +1618,7 @@ function MatchSchedule() {
                     <>
                       ※ 1リーグ制：各チーム1日{(tournament as any)?.matchesPerTeamPerDay || 2}試合<br />
                       ※ 同時刻の重複出場なし<br />
-                      ※ 2日間で計{teams.length * ((tournament as any)?.matchesPerTeamPerDay || 2)}試合
+                      ※ 2日間で計{allTeams.length * ((tournament as any)?.matchesPerTeamPerDay || 2)}試合
                     </>
                   )}
                 </span>
