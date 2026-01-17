@@ -49,13 +49,13 @@ function PublicLayout() {
             </header>
 
             {/* Main Content */}
-            <main className="container mx-auto px-4 py-6 max-w-lg">
+            <main className="container mx-auto px-4 py-6 max-w-lg md:max-w-4xl lg:max-w-6xl">
                 <Outlet />
             </main>
 
             {/* Mobile Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 pb-safe">
-                <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+                <div className="flex justify-around items-center h-16 max-w-lg md:max-w-4xl lg:max-w-6xl mx-auto">
                     <NavLink
                         to="/public/matches"
                         isActive={location.pathname === '/public/matches'}

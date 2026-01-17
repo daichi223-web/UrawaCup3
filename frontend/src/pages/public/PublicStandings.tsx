@@ -187,7 +187,7 @@ export default function PublicStandings() {
 
             {/* 成績表タブ */}
             {mainTab === 'results' && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 -mx-4">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100">
                     {teams.length > 0 && matches.length > 0 ? (
                         <div className="overflow-x-auto p-2">
                             <StarTable
