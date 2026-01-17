@@ -623,8 +623,6 @@ export function generateSingleLeagueSchedule(
         if (dayMatches.length >= matchesPerDay) break
 
         const venue = venues[venueIndex]
-        // 会場インデックスからグループID（A-H）を生成（色分け用）
-        const venueGroupId = String.fromCharCode(65 + venueIndex) // 65 = 'A'
 
         // 会場校を1試合目に配置
         if (venueHostFirstMatch && slotIndex === 0 && venueHostTeams.has(venue.id)) {
@@ -645,7 +643,7 @@ export function generateSingleLeagueSchedule(
               awayTeamId: hostPair.away.id,
               homeTeamName: hostPair.home.shortName || hostPair.home.name,
               awayTeamName: hostPair.away.shortName || hostPair.away.name,
-              groupId: venueGroupId,
+              groupId: null as any, // 1リーグ制ではnull（色は表示時に会場インデックスから計算）
               venueId: venue.id,
               venueName: venue.name,
               matchDate,
@@ -701,7 +699,7 @@ export function generateSingleLeagueSchedule(
             awayTeamId: pair.away.id,
             homeTeamName: pair.home.shortName || pair.home.name,
             awayTeamName: pair.away.shortName || pair.away.name,
-            groupId: venueGroupId,
+            groupId: null as any, // 1リーグ制ではnull（色は表示時に会場インデックスから計算）
             venueId: venue.id,
             venueName: venue.name,
             matchDate,
