@@ -56,7 +56,10 @@ function generateKickoffTimes(
   matchCount: number
 ): string[] {
   const times: string[] = []
-  const [startHour, startMinute] = startTime.split(':').map(Number)
+  // HH:MM または HH:MM:SS 形式に対応
+  const timeParts = startTime.split(':').map(Number)
+  const startHour = timeParts[0] || 0
+  const startMinute = timeParts[1] || 0
   let currentMinutes = startHour * 60 + startMinute
   const MAX_MINUTES = 23 * 60 + 59 // 23:59
 
@@ -496,7 +499,9 @@ export function generateSingleLeagueSchedule(
   console.log('[SingleLeague] キックオフ時刻:', kickoffTimes)
 
   // 時間オーバーフローのチェック
-  const [startHour, startMinute] = startTime.split(':').map(Number)
+  const timeParts = startTime.split(':').map(Number)
+  const startHour = timeParts[0] || 0
+  const startMinute = timeParts[1] || 0
   const totalMinutesNeeded = (startHour * 60 + startMinute) + (matchesPerVenuePerDay - 1) * (matchDuration + interval)
   if (totalMinutesNeeded > 23 * 60 + 59) {
     warnings.push(`1日の試合数が多すぎます。会場あたり${matchesPerVenuePerDay}試合は時間内に収まりません。会場を増やすか、試合間隔を短くしてください。`)
