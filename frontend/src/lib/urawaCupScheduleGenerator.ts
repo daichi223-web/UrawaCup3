@@ -2230,21 +2230,11 @@ export function generateVenueBasedSchedule(
         if (venueTeams.length < 2) continue
       }
 
-      // 各会場で最適なB戦パターンを選択（地元同士B戦を避ける）
-      const teamsForPatternCheck = venueTeams.map(t => ({ teamType: t.teamType }))
-      const bestBMatchPattern = chooseBestBMatchPattern(teamsForPatternCheck)
-      const matchPattern = getMatchPattern(bestBMatchPattern)
-
-      // 地元チームが2つ以上いる場合はログ出力
-      const localCount = venueTeams.filter(t => t.teamType === 'local').length
-      if (localCount >= 2) {
-        const bMatchPairs = B_MATCH_PAIR_OPTIONS[bestBMatchPattern]
-        const bMatchTeams = bMatchPairs.map(([i, j]) => `${venueTeams[i]?.teamShortName || venueTeams[i]?.teamName}vs${venueTeams[j]?.teamShortName || venueTeams[j]?.teamName}`)
-        console.log(`[VenueBased] Day${day} ${venueName}: 地元${localCount}チーム → パターン${bestBMatchPattern} (B戦: ${bMatchTeams.join(', ')})`)
-      }
+      // 固定パターンB（A戦優先: A戦の地元同士を避け、B戦で許容）
+      // 会場配置最適化がA戦の地元同士を避けるよう配置済み
 
       // 4チームの総当たりパターンで試合を生成
-      for (const pattern of matchPattern) {
+      for (const pattern of FOUR_TEAM_MATCH_PATTERN) {
         const homeTeam = venueTeams[pattern.home - 1]
         const awayTeam = venueTeams[pattern.away - 1]
 
