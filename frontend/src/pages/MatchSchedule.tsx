@@ -414,15 +414,35 @@ function MatchSchedule() {
           throw new Error('チームが2チーム以上必要です')
         }
 
-        // 会場配置を取得
-        const day1Assignments = await venueAssignmentApi.getByTournament(tournamentId, 1)
-        const day2Assignments = await venueAssignmentApi.getByTournament(tournamentId, 2)
+        // 会場配置を取得（なければ自動生成）
+        let day1Assignments = await venueAssignmentApi.getByTournament(tournamentId, 1)
+        let day2Assignments = await venueAssignmentApi.getByTournament(tournamentId, 2)
 
         console.log('[Schedule] Day1会場配置:', day1Assignments.length, '件')
         console.log('[Schedule] Day2会場配置:', day2Assignments.length, '件')
 
-        if (day1Assignments.length === 0 && day2Assignments.length === 0) {
-          throw new Error('会場配置が設定されていません。先に「会場配置」画面でチームを会場に配置してください。')
+        // 会場配置がなければ自動生成
+        if (day1Assignments.length === 0) {
+          console.log('[Schedule] Day1会場配置を自動生成...')
+          const result1 = await venueAssignmentApi.autoGenerate({
+            tournamentId,
+            matchDay: 1,
+            strategy: 'balanced',
+          })
+          day1Assignments = result1.assignments
+          console.log('[Schedule] Day1会場配置を自動生成:', day1Assignments.length, '件')
+        }
+
+        if (day2Assignments.length === 0) {
+          console.log('[Schedule] Day2会場配置を自動生成...')
+          // Day2はDay1と異なる配置にするためランダム
+          const result2 = await venueAssignmentApi.autoGenerate({
+            tournamentId,
+            matchDay: 2,
+            strategy: 'random',
+          })
+          day2Assignments = result2.assignments
+          console.log('[Schedule] Day2会場配置を自動生成:', day2Assignments.length, '件')
         }
 
         // VenueAssignmentInfo形式に変換
