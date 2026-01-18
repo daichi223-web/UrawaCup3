@@ -1102,21 +1102,21 @@ function buildAssignmentsGreedyWithHosts(
     assignments.set(id, [])
   })
 
-  // ホストチームを先に配置
+  // 配置済みチームを追跡
   const placedTeamIds = new Set<number>()
 
+  // ホストチームを先に配置
   for (let idx = 0; idx < venueIds.length; idx++) {
     const venueId = venueIds[idx]
     const hostTeam = teams.find(t => t.isHost && t.hostVenueId === venueId)
 
-    if (hostTeam) {
+    if (hostTeam && !placedTeamIds.has(hostTeam.id)) {
       assignments.get(venueId)!.push(hostTeam)
       placedTeamIds.add(hostTeam.id)
     }
   }
 
-  // 残りのチームを貪欲に配置
-  const remainingTeams = teams.filter(t => !placedTeamIds.has(t.id))
+  console.log(`[Greedy] ホスト配置完了: ${placedTeamIds.size}チーム, 残り: ${teams.length - placedTeamIds.size}チーム`)
 
   // 会場ごとに残りの枠を埋める
   for (let idx = 0; idx < venueIds.length; idx++) {
@@ -1124,12 +1124,14 @@ function buildAssignmentsGreedyWithHosts(
     const venueTeams = assignments.get(venueId)!
     const targetSize = podSizes[idx] || 4
 
-    while (venueTeams.length < targetSize && remainingTeams.length > 0) {
-      let bestTeamIndex = 0
+    while (venueTeams.length < targetSize) {
+      let bestTeam: TeamForAssignment | null = null
       let bestScore = Infinity
 
-      for (let i = 0; i < remainingTeams.length; i++) {
-        const candidate = remainingTeams[i]
+      for (const candidate of teams) {
+        // 既に配置済みのチームはスキップ
+        if (placedTeamIds.has(candidate.id)) continue
+
         let score = 0
 
         // 既配置チームとの制約スコア
@@ -1140,14 +1142,21 @@ function buildAssignmentsGreedyWithHosts(
 
         if (score < bestScore) {
           bestScore = score
-          bestTeamIndex = i
+          bestTeam = candidate
         }
       }
 
-      venueTeams.push(remainingTeams[bestTeamIndex])
-      remainingTeams.splice(bestTeamIndex, 1)
+      if (!bestTeam) {
+        console.error(`[Greedy] 会場${venueId}: 配置可能なチームがありません (現在${venueTeams.length}/${targetSize})`)
+        break
+      }
+
+      venueTeams.push(bestTeam)
+      placedTeamIds.add(bestTeam.id)
     }
   }
+
+  console.log(`[Greedy] 配置完了: 合計${placedTeamIds.size}チーム配置`)
 
   return assignments
 }
@@ -1683,6 +1692,13 @@ export function generateOptimalVenueAssignment(
 
   console.log('[VenueOptimization] Best lex score:', bestLexScore, 'encoded:', bestEncodedScore)
 
+  // デバッグ: 各会場の配置チームを出力
+  if (bestAssignment) {
+    for (const [venueId, teams] of bestAssignment) {
+      console.log(`[VenueOptimization] 会場${venueId}: [${teams.map(t => `${t.id}:${t.shortName || t.name}`).join(', ')}]`)
+    }
+  }
+
   // 後方互換性のための details 変換
   const details: VenueAssignmentResult['details'] = {
     sameLeaguePairs: bestLexScore?.sameLeague || 0,
@@ -1709,12 +1725,13 @@ function randomInitialAssignmentWithHosts(
   const assignments = new Map<number, TeamForAssignment[]>()
   venueIds.forEach(id => assignments.set(id, []))
 
-  // ホストチームを先に配置
+  // 配置済みチームを追跡
   const placedTeamIds = new Set<number>()
 
+  // ホストチームを先に配置
   for (const venueId of venueIds) {
     const hostTeam = teams.find(t => t.isHost && t.hostVenueId === venueId)
-    if (hostTeam) {
+    if (hostTeam && !placedTeamIds.has(hostTeam.id)) {
       assignments.get(venueId)!.push(hostTeam)
       placedTeamIds.add(hostTeam.id)
     }
@@ -1732,7 +1749,11 @@ function randomInitialAssignmentWithHosts(
     const targetSize = podSizes[idx] || 4
 
     while (venueTeams.length < targetSize && teamIndex < shuffled.length) {
-      venueTeams.push(shuffled[teamIndex++])
+      const team = shuffled[teamIndex++]
+      if (!placedTeamIds.has(team.id)) {
+        venueTeams.push(team)
+        placedTeamIds.add(team.id)
+      }
     }
   }
 

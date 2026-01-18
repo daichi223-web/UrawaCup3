@@ -516,10 +516,20 @@ function MatchSchedule() {
         )
 
         // 既存の割り当てを削除してDB保存
-        await supabase
+        const { error: deleteError } = await supabase
           .from('venue_assignments')
           .delete()
           .eq('tournament_id', tournamentId)
+
+        if (deleteError) {
+          console.error('[Schedule] 既存配置の削除エラー:', deleteError)
+        } else {
+          console.log('[Schedule] 既存配置を削除しました')
+        }
+
+        // デバッグ: 配置内容を確認
+        console.log('[Schedule] Day1配置チーム:', day1AssignmentInfos.map(a => `${a.venueName}[${a.slotOrder}]: ${a.teamName}`))
+        console.log('[Schedule] Day2配置チーム:', day2AssignmentInfos.map(a => `${a.venueName}[${a.slotOrder}]: ${a.teamName}`))
 
         // Day1割り当てをDBに保存
         const day1DbAssignments = day1AssignmentInfos.map((a) => ({
