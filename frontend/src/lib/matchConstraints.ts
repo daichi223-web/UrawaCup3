@@ -352,9 +352,13 @@ function checkConsecutiveMatches(matches: MatchForValidation[]): ConstraintViola
   const violations: ConstraintViolation[] = []
 
   // 日付・チームごとにスロットを記録
+  // B戦は「空き」として扱うため、連戦チェックから除外
   const teamSlots: Record<string, Record<number, { slot: number; matchId: number }[]>> = {}
 
   for (const m of matches) {
+    // B戦は空き時間として扱う（連戦チェック対象外）
+    if (m.isBMatch) continue
+
     const key = m.matchDate
     if (!teamSlots[key]) teamSlots[key] = {}
 
@@ -370,6 +374,9 @@ function checkConsecutiveMatches(matches: MatchForValidation[]): ConstraintViola
       slots.sort((a, b) => a.slot - b.slot)
 
       for (let i = 0; i < slots.length - 1; i++) {
+        // スロット番号が連続していたら連戦
+        // ただしB戦スロット（3, 6）を挟む場合は連戦にならない
+        // 例: スロット2→4 は連戦ではない（スロット3がB戦=空き）
         if (slots[i + 1].slot - slots[i].slot === 1) {
           violations.push({
             level: 'warning',
