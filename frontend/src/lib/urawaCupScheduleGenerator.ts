@@ -2016,6 +2016,7 @@ export function convertToVenueAssignmentInfos(
         teamId: team.id,
         teamName: team.name,
         teamShortName: team.shortName,
+        teamType: team.teamType,  // 地元/ゲストの区分
         matchDay,
         slotOrder: index + 1,
       })
@@ -2035,6 +2036,7 @@ export interface VenueAssignmentInfo {
   teamId: number
   teamName: string
   teamShortName?: string
+  teamType?: string  // 'local' | 'guest' など
   matchDay: number
   slotOrder: number
 }
@@ -2067,23 +2069,80 @@ export interface VenueBasedScheduleResult {
  *
  * 完全マッチングの選択肢:
  *   A: (1vs2) + (3vs4)
- *   B: (1vs3) + (2vs4) ← 採用
+ *   B: (1vs3) + (2vs4)
  *   C: (1vs4) + (2vs3)
  *
- * 検証:
- *   チーム1: vs2(A), vs3(B), vs4(A) → 2A + 1B ✓
- *   チーム2: vs1(A), vs3(A), vs4(B) → 2A + 1B ✓
- *   チーム3: vs4(A), vs1(B), vs2(A) → 2A + 1B ✓
- *   チーム4: vs3(A), vs1(A), vs2(B) → 2A + 1B ✓
+ * 各会場でA/B/Cのうち最も制約が少ないものを動的に選択
  */
-const FOUR_TEAM_MATCH_PATTERN: { slot: number; home: number; away: number; isBMatch: boolean }[] = [
-  { slot: 1, home: 1, away: 2, isBMatch: false }, // A戦: チーム1 vs チーム2
-  { slot: 2, home: 3, away: 4, isBMatch: false }, // A戦: チーム3 vs チーム4
-  { slot: 3, home: 1, away: 3, isBMatch: true },  // B戦: チーム1 vs チーム3 ← 完全マッチング
-  { slot: 4, home: 2, away: 3, isBMatch: false }, // A戦: チーム2 vs チーム3
-  { slot: 5, home: 1, away: 4, isBMatch: false }, // A戦: チーム1 vs チーム4
-  { slot: 6, home: 2, away: 4, isBMatch: true },  // B戦: チーム2 vs チーム4 ← 完全マッチング
-]
+type BMatchPattern = 'A' | 'B' | 'C'
+
+// B戦ペアの定義（チームインデックス 0-3）
+const B_MATCH_PAIR_OPTIONS: Record<BMatchPattern, [number, number][]> = {
+  'A': [[0, 1], [2, 3]], // 1vs2 + 3vs4
+  'B': [[0, 2], [1, 3]], // 1vs3 + 2vs4
+  'C': [[0, 3], [1, 2]], // 1vs4 + 2vs3
+}
+
+/**
+ * 会場のチーム構成に基づいて最適なB戦パターンを選択
+ */
+function chooseBestBMatchPattern(teams: { teamType?: string }[]): BMatchPattern {
+  if (teams.length !== 4) return 'B' // デフォルト
+
+  let bestPattern: BMatchPattern = 'B'
+  let bestScore = Infinity
+
+  for (const pattern of ['A', 'B', 'C'] as BMatchPattern[]) {
+    const bMatchPairs = B_MATCH_PAIR_OPTIONS[pattern]
+    let score = 0
+
+    for (const [i, j] of bMatchPairs) {
+      // 地元同士のB戦はペナルティ
+      if (teams[i]?.teamType === 'local' && teams[j]?.teamType === 'local') {
+        score += 1000
+      }
+    }
+
+    if (score < bestScore) {
+      bestScore = score
+      bestPattern = pattern
+    }
+  }
+
+  return bestPattern
+}
+
+/**
+ * B戦パターンに基づいて試合パターンを生成
+ */
+function getMatchPattern(bMatchPattern: BMatchPattern): { slot: number; home: number; away: number; isBMatch: boolean }[] {
+  const bMatchPairs = B_MATCH_PAIR_OPTIONS[bMatchPattern]
+  const bMatchSet = new Set(bMatchPairs.map(([i, j]) => `${i}-${j}`))
+
+  // 6試合の全ペア（順序固定）
+  const allPairs: [number, number][] = [
+    [0, 1], // slot 1
+    [2, 3], // slot 2
+    [0, 2], // slot 3 (B戦候補)
+    [1, 2], // slot 4
+    [0, 3], // slot 5
+    [1, 3], // slot 6 (B戦候補)
+  ]
+
+  return allPairs.map(([home, away], index) => {
+    const pairKey = `${Math.min(home, away)}-${Math.max(home, away)}`
+    const isBMatch = bMatchSet.has(pairKey)
+    return {
+      slot: index + 1,
+      home: home + 1, // 1-indexed
+      away: away + 1, // 1-indexed
+      isBMatch,
+    }
+  })
+}
+
+// デフォルトパターン（後方互換性）
+const FOUR_TEAM_MATCH_PATTERN = getMatchPattern('B')
 
 /**
  * 会場配置ベースの日程生成（1リーグ制・新方式）
@@ -2156,8 +2215,21 @@ export function generateVenueBasedSchedule(
         if (venueTeams.length < 2) continue
       }
 
+      // 各会場で最適なB戦パターンを選択（地元同士B戦を避ける）
+      const teamsForPatternCheck = venueTeams.map(t => ({ teamType: t.teamType }))
+      const bestBMatchPattern = chooseBestBMatchPattern(teamsForPatternCheck)
+      const matchPattern = getMatchPattern(bestBMatchPattern)
+
+      // 地元チームが2つ以上いる場合はログ出力
+      const localCount = venueTeams.filter(t => t.teamType === 'local').length
+      if (localCount >= 2) {
+        const bMatchPairs = B_MATCH_PAIR_OPTIONS[bestBMatchPattern]
+        const bMatchTeams = bMatchPairs.map(([i, j]) => `${venueTeams[i]?.teamShortName || venueTeams[i]?.teamName}vs${venueTeams[j]?.teamShortName || venueTeams[j]?.teamName}`)
+        console.log(`[VenueBased] Day${day} ${venueName}: 地元${localCount}チーム → パターン${bestBMatchPattern} (B戦: ${bMatchTeams.join(', ')})`)
+      }
+
       // 4チームの総当たりパターンで試合を生成
-      for (const pattern of FOUR_TEAM_MATCH_PATTERN) {
+      for (const pattern of matchPattern) {
         const homeTeam = venueTeams[pattern.home - 1]
         const awayTeam = venueTeams[pattern.away - 1]
 
