@@ -2305,11 +2305,13 @@ export function generateVenueBasedSchedule(
         if (venueTeams.length < 2) continue
       }
 
-      // 固定パターンB（A戦優先: A戦の地元同士を避け、B戦で許容）
-      // 会場配置最適化がA戦の地元同士を避けるよう配置済み
+      // 会場ごとに最適なB戦パターンを選択（地元同士がB戦にならないよう）
+      const teamsForPattern = venueTeams.map(t => ({ teamType: t.teamType }))
+      const bestBMatchPattern = chooseBestBMatchPattern(teamsForPattern)
+      const matchPattern = getMatchPattern(bestBMatchPattern)
 
       // 4チームの総当たりパターンで試合を生成
-      for (const pattern of FOUR_TEAM_MATCH_PATTERN) {
+      for (const pattern of matchPattern) {
         const homeTeam = venueTeams[pattern.home - 1]
         const awayTeam = venueTeams[pattern.away - 1]
 
