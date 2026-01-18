@@ -869,10 +869,15 @@ export interface VenueAssignmentResult {
   assignments: Map<number, TeamForAssignment[]>  // venueId -> teams
   score: number                                   // トータルコンフリクトスコア
   details: {
+    // A戦の制約（メイン）
     sameLeaguePairs: number
     sameRegionPairs: number
     localVsLocalPairs: number
     day1RepeatPairs: number
+    // B戦の制約（参考情報）
+    bMatchSameLeaguePairs?: number
+    bMatchSameRegionPairs?: number
+    bMatchLocalVsLocalPairs?: number
   }
 }
 
@@ -912,7 +917,7 @@ function calculatePairConflict(
 
 /**
  * 会場配置のトータルスコアと詳細を計算
- * A戦ペアのみを対戦済みチェック対象とする
+ * A戦を優先、B戦も副次的に評価（制約解消のため）
  */
 function evaluateAssignment(
   assignments: Map<number, TeamForAssignment[]>,
@@ -925,19 +930,28 @@ function evaluateAssignment(
     sameRegionPairs: 0,
     localVsLocalPairs: 0,
     day1RepeatPairs: 0,
+    // B戦の制約（参考情報）
+    bMatchSameLeaguePairs: 0,
+    bMatchSameRegionPairs: 0,
+    bMatchLocalVsLocalPairs: 0,
   }
 
   // A戦ペアのインデックス（スロット順での位置）
-  // A戦: (0,1), (2,3), (1,2), (0,3)
-  // B戦: (0,2), (1,3) は除外
   const aMatchPairIndices: [number, number][] = [
     [0, 1], [2, 3], [1, 2], [0, 3]
   ]
+  // B戦ペアのインデックス
+  const bMatchPairIndices: [number, number][] = [
+    [0, 2], [1, 3]
+  ]
+
+  // B戦の重み（A戦優先のタイブレーカー）
+  const bMatchWeight = 0.1
 
   for (const [, teams] of assignments) {
     if (teams.length < 4) continue
 
-    // A戦ペアのみを評価
+    // A戦ペアを評価（フルウェイト）
     for (const [i, j] of aMatchPairIndices) {
       const conflict = calculatePairConflict(teams[i], teams[j], scores)
       totalScore += conflict.score
@@ -951,6 +965,25 @@ function evaluateAssignment(
         if (team1Opponents?.has(teams[j].id)) {
           totalScore += scores.alreadyPlayed
           details.day1RepeatPairs++
+        }
+      }
+    }
+
+    // B戦ペアを評価（低ウェイト = タイブレーカー）
+    for (const [i, j] of bMatchPairIndices) {
+      const conflict = calculatePairConflict(teams[i], teams[j], scores)
+      totalScore += conflict.score * bMatchWeight
+
+      // B戦の制約カウント（参考情報）
+      if (conflict.sameLeague) details.bMatchSameLeaguePairs++
+      if (conflict.sameRegion) details.bMatchSameRegionPairs++
+      if (conflict.localVsLocal) details.bMatchLocalVsLocalPairs++
+
+      // Day2の場合、Day1でのA戦対戦ペアをチェック（B戦でも低ウェイトで考慮）
+      if (day1Opponents) {
+        const team1Opponents = day1Opponents.get(teams[i].id)
+        if (team1Opponents?.has(teams[j].id)) {
+          totalScore += scores.alreadyPlayed * bMatchWeight
         }
       }
     }
