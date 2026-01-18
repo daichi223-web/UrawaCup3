@@ -1006,6 +1006,28 @@ export function encodeLexToScore(lex: LexPairScore): number {
 }
 
 /**
+ * A戦 + B戦を含む辞書式スコアをエンコード
+ * B戦はA戦より低い優先度（小数点以下）でタイブレーカーとして使用
+ */
+export function encodeLexToScoreWithBMatch(lex: LexPairScoreWithBMatch): number {
+  // A戦部分（整数）
+  const aMatchScore = (
+    lex.day1Repeat * 1_000_000_000 +
+    lex.sameLeague * 1_000_000 +
+    lex.sameRegion * 1_000 +
+    lex.localVsLocal
+  )
+  // B戦部分（小数点以下 = A戦優先のタイブレーカー）
+  // B戦内の優先度: sameLeague > sameRegion > localVsLocal
+  const bMatchScore = (
+    lex.bMatchSameLeague * 0.0001 +
+    lex.bMatchSameRegion * 0.00001 +
+    lex.bMatchLocalVsLocal * 0.000001
+  )
+  return aMatchScore + bMatchScore
+}
+
+/**
  * 2チーム間の辞書式制約を評価
  */
 function evaluatePairLex(
@@ -1935,8 +1957,8 @@ function optimizeBySwapLex(
             // ホストはスワップしない
             if (venue2Teams[t2].isHost && venue2Teams[t2].hostVenueId === venueIds[v2]) continue
 
-            // 現在のスコアを計算
-            const currentScore = encodeLexToScore(evaluateAssignmentLex(assignments, bannedPairs))
+            // 現在のスコアを計算（B戦も含めたタイブレーカー付き）
+            const currentScore = encodeLexToScoreWithBMatch(evaluateAssignmentLex(assignments, bannedPairs))
 
             // スワップ前の状態を保存（配列全体をコピー）
             const venue1Before = [...venue1Teams]
@@ -1954,7 +1976,7 @@ function optimizeBySwapLex(
             venue1Teams = assignments.get(venueIds[v1])!
             venue2Teams = assignments.get(venueIds[v2])!
 
-            const newScore = encodeLexToScore(evaluateAssignmentLex(assignments, bannedPairs))
+            const newScore = encodeLexToScoreWithBMatch(evaluateAssignmentLex(assignments, bannedPairs))
 
             if (newScore < currentScore) {
               improved = true
