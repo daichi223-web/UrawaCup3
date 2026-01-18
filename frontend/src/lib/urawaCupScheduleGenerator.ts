@@ -1049,25 +1049,39 @@ function evaluatePairLex(
 /**
  * 会場配置の辞書式スコアを計算（A戦のみ）
  */
+interface LexPairScoreWithBMatch extends LexPairScore {
+  bMatchSameLeague: number
+  bMatchSameRegion: number
+  bMatchLocalVsLocal: number
+}
+
 function evaluateAssignmentLex(
   assignments: Map<number, TeamForAssignment[]>,
   bannedPairs?: Set<string>
-): LexPairScore {
-  const total: LexPairScore = {
+): LexPairScoreWithBMatch {
+  const total: LexPairScoreWithBMatch = {
     sameLeague: 0,
     sameRegion: 0,
     localVsLocal: 0,
     day1Repeat: 0,
+    bMatchSameLeague: 0,
+    bMatchSameRegion: 0,
+    bMatchLocalVsLocal: 0,
   }
 
   // A戦ペアのインデックス
   const aMatchPairIndices: [number, number][] = [
     [0, 1], [2, 3], [1, 2], [0, 3]
   ]
+  // B戦ペアのインデックス
+  const bMatchPairIndices: [number, number][] = [
+    [0, 2], [1, 3]
+  ]
 
   for (const [, teams] of assignments) {
     if (teams.length < 4) continue
 
+    // A戦評価
     for (const [i, j] of aMatchPairIndices) {
       if (i < teams.length && j < teams.length) {
         const pairLex = evaluatePairLex(teams[i], teams[j], bannedPairs)
@@ -1075,6 +1089,16 @@ function evaluateAssignmentLex(
         total.sameRegion += pairLex.sameRegion
         total.localVsLocal += pairLex.localVsLocal
         total.day1Repeat += pairLex.day1Repeat
+      }
+    }
+
+    // B戦評価（統計用）
+    for (const [i, j] of bMatchPairIndices) {
+      if (i < teams.length && j < teams.length) {
+        const pairLex = evaluatePairLex(teams[i], teams[j], bannedPairs)
+        total.bMatchSameLeague += pairLex.sameLeague
+        total.bMatchSameRegion += pairLex.sameRegion
+        total.bMatchLocalVsLocal += pairLex.localVsLocal
       }
     }
   }
@@ -1691,11 +1715,26 @@ export function generateOptimalVenueAssignment(
   }
 
   console.log('[VenueOptimization] Best lex score:', bestLexScore, 'encoded:', bestEncodedScore)
+  if (bestLexScore) {
+    console.log('[VenueOptimization] A戦制約: 同リーグ=', bestLexScore.sameLeague, '同地域=', bestLexScore.sameRegion, '地元同士=', bestLexScore.localVsLocal, 'Day1再戦=', bestLexScore.day1Repeat)
+    console.log('[VenueOptimization] B戦制約: 同リーグ=', bestLexScore.bMatchSameLeague, '同地域=', bestLexScore.bMatchSameRegion, '地元同士=', bestLexScore.bMatchLocalVsLocal)
+  }
 
-  // デバッグ: 各会場の配置チームを出力
+  // デバッグ: 各会場の配置チームとB戦ペアを出力
   if (bestAssignment) {
+    const bMatchPairs = [[0, 2], [1, 3]]
     for (const [venueId, teams] of bestAssignment) {
-      console.log(`[VenueOptimization] 会場${venueId}: [${teams.map(t => `${t.id}:${t.shortName || t.name}`).join(', ')}]`)
+      const teamInfo = teams.map(t => `${t.id}:${t.shortName || t.name}${t.teamType === 'local' ? '(地)' : ''}`).join(', ')
+      // B戦ペアの地元同士チェック
+      const bMatchConflicts = bMatchPairs.map(([i, j]) => {
+        const isLocalVsLocal = teams[i]?.teamType === 'local' && teams[j]?.teamType === 'local'
+        return isLocalVsLocal ? `${teams[i].shortName || teams[i].name}vs${teams[j].shortName || teams[j].name}(地)` : null
+      }).filter(Boolean)
+      if (bMatchConflicts.length > 0) {
+        console.log(`[VenueOptimization] 会場${venueId}: [${teamInfo}] ⚠B戦地元: ${bMatchConflicts.join(', ')}`)
+      } else {
+        console.log(`[VenueOptimization] 会場${venueId}: [${teamInfo}]`)
+      }
     }
   }
 
@@ -1705,6 +1744,10 @@ export function generateOptimalVenueAssignment(
     sameRegionPairs: bestLexScore?.sameRegion || 0,
     localVsLocalPairs: bestLexScore?.localVsLocal || 0,
     day1RepeatPairs: bestLexScore?.day1Repeat || 0,
+    // B戦制約も追加
+    bMatchSameLeaguePairs: bestLexScore?.bMatchSameLeague || 0,
+    bMatchSameRegionPairs: bestLexScore?.bMatchSameRegion || 0,
+    bMatchLocalVsLocalPairs: bestLexScore?.bMatchLocalVsLocal || 0,
   }
 
   return {
@@ -1765,7 +1808,8 @@ function randomInitialAssignmentWithHosts(
  */
 function optimizeIntraVenueSlotsLex(
   assignments: Map<number, TeamForAssignment[]>,
-  bannedPairs?: Set<string>
+  bannedPairs?: Set<string>,
+  debug: boolean = false
 ): void {
   for (const [venueId, teams] of assignments) {
     if (teams.length !== 4) continue
@@ -1775,11 +1819,28 @@ function optimizeIntraVenueSlotsLex(
     let bestOrder = [0, 1, 2, 3]
     let bestScore = evaluateVenueLexScore(teams, bestOrder, bannedPairs)
 
+    // デバッグ: 地元チームがあるか確認
+    const localTeamIndices = teams.map((t, i) => t.teamType === 'local' ? i : -1).filter(i => i >= 0)
+
     for (const perm of permutations) {
       const score = evaluateVenueLexScore(teams, perm, bannedPairs)
       if (score < bestScore) {
         bestScore = score
         bestOrder = perm
+      }
+    }
+
+    // デバッグ: 地元チームが2つ以上ある場合はB戦ペアを確認
+    if (debug && localTeamIndices.length >= 2) {
+      const bMatchPairs = [[0, 2], [1, 3]]
+      const reorderedTeams = bestOrder.map(i => teams[i])
+      const bMatchLocalVsLocal = bMatchPairs.filter(([i, j]) =>
+        reorderedTeams[i].teamType === 'local' && reorderedTeams[j].teamType === 'local'
+      ).length
+      console.log(`[IntraVenue] 会場${venueId}: 地元チーム=${localTeamIndices.length}個, 選択順序=[${bestOrder}], B戦地元同士=${bMatchLocalVsLocal}`)
+      if (bMatchLocalVsLocal > 0) {
+        console.log(`[IntraVenue]   チーム: ${reorderedTeams.map((t, i) => `[${i}]${t.shortName || t.name}${t.teamType === 'local' ? '(地)' : ''}`).join(', ')}`)
+        console.log(`[IntraVenue]   B戦: ${bMatchPairs.map(([i, j]) => `${reorderedTeams[i].shortName || reorderedTeams[i].name} vs ${reorderedTeams[j].shortName || reorderedTeams[j].name}`).join(', ')}`)
       }
     }
 
