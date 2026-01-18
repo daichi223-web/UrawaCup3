@@ -120,78 +120,114 @@ generateUrawaCupSchedule(teams, venues, config)
 - チーム2 vs チーム5
 - チーム3 vs チーム4
 
-### 4.2 1リーグ制 会場配置最適化
+### 4.2 1リーグ制 会場配置最適化 (Anchor-Pod CP アルゴリズム)
 
-#### 4.2.1 全体フロー
-
-```
-generateOptimalVenueAssignment(teams, venues, scores, day1Assignments?)
-├── 1. Multi-start最適化（5回）
-│   ├── 初回: 貪欲法で初期配置
-│   └── 2回目以降: ランダム初期配置
-├── 2. 各試行で局所最適化
-│   ├── 会場内スロット最適化
-│   └── 会場間スワップ最適化
-├── 3. 最良解を保持
-└── 4. スコア0なら早期終了
-```
-
-#### 4.2.2 貪欲法（初期配置）
+#### 4.2.0 設計思想
 
 ```
-greedyAssignment(teams, venues, scores, day1Opponents?)
-├── 各会場を順番に処理
-│   └── 会場が満員になるまで:
-│       ├── 残りチームごとにスコア計算
-│       │   ├── 既配置チームとのコンフリクト
-│       │   └── Day1対戦相手との重複（Day2の場合）
-│       └── 最小スコアのチームを配置
+Anchor-Pod CP = ホストアンカー + 可変Podサイズ + 制約最適化
+├── ホストは自会場に固定（移動しない）
+├── Podサイズは 3/4/5 チームで可変（N,V に応じて計算）
+├── Day1/Day2 再戦は絶対禁止（ハード制約）
+└── 優先度: 同リーグ回避 > 同地域回避 > 地元同士回避
+```
+
+#### 4.2.1 PodPlan計算
+
+```
+computePodPlanOrThrow(N, V)
+├── 条件: 3a + 4b + 5c = N, a + b + c = V
+├── 全探索で解を発見
+└── 例:
+    ├── N=24, V=6 → 4×6=24 (a=0, b=6, c=0)
+    ├── N=20, V=5 → 4×5=20 (a=0, b=5, c=0)
+    └── N=19, V=5 → 3×1 + 4×4=19 (a=1, b=4, c=0)
+```
+
+#### 4.2.2 全体フロー
+
+```
+generateOptimalVenueAssignment(teams, venues, scores, day1Assignments?, bannedPairs?)
+├── 1. Day1配置から禁止ペア（bannedPairs）を抽出
+├── 2. PodPlan計算（各会場のチーム数を決定）
+├── 3. Multi-start最適化（5回）
+│   ├── 初回: ホストアンカー付き貪欲法
+│   └── 2回目以降: ホスト維持ランダム配置
+├── 4. 各試行で局所最適化
+│   ├── 会場内スロット最適化（辞書式スコア）
+│   └── 会場間スワップ最適化（ホスト除外）
+├── 5. 最良解を保持
+└── 6. Day1再戦なし＆同リーグなしなら早期終了
+```
+
+#### 4.2.3 辞書式スコアリング
+
+```typescript
+// 優先順位（上位が絶対的に優先）
+LexPairScore {
+  day1Repeat: number    // Day1再戦数（最優先＝ハード制約）
+  sameLeague: number    // 同リーグ数
+  sameRegion: number    // 同地域数
+  localVsLocal: number  // 地元同士数
+}
+
+// エンコード（数値化）
+encodeLexToScore(lex) =
+  day1Repeat * 10^9 + sameLeague * 10^6 + sameRegion * 10^3 + localVsLocal
+```
+
+#### 4.2.4 ホストアンカー付き貪欲法
+
+```
+buildAssignmentsGreedyWithHosts(teams, venues, podSizes, bannedPairs?)
+├── 1. ホストチームを自会場に配置
+│   └── isHost=true かつ hostVenueId が一致するチーム
+├── 2. 残りチームを貪欲に配置
+│   ├── 各会場のPodSizeまで枠を埋める
+│   ├── 既配置チームとの辞書式スコアを計算
+│   └── 最小スコアのチームを選択
 └── 全チーム配置完了
 ```
 
-#### 4.2.3 会場内スロット最適化
+#### 4.2.5 会場内スロット最適化（辞書式）
 
 ```
-optimizeIntraVenueSlots(assignments, scores, day1Opponents?)
+optimizeIntraVenueSlotsLex(assignments, bannedPairs?)
 ├── 各会場（4チーム）を処理
 │   ├── 24通りの順列を生成（4!）
-│   ├── 各順列のスコアを計算
+│   ├── 各順列の辞書式スコアを計算
 │   │   ├── A戦ペア: フルウェイト（×1.0）
-│   │   └── B戦ペア: 低ウェイト（×0.1）
+│   │   └── B戦ペア: 極低ウェイト（×0.001）
 │   └── 最小スコアの順列を採用
 └── 制約違反ペアをB戦に移動
 ```
 
-**目的**: 制約違反（地元同士等）をB戦スロットに配置して解消
-
-#### 4.2.4 会場間スワップ最適化
+#### 4.2.6 会場間スワップ最適化（辞書式）
 
 ```
-optimizeBySwap(assignments, scores, day1Opponents?, maxIter=50)
+optimizeBySwapLex(assignments, bannedPairs?, maxIter=50)
 ├── 改善がなくなるまで繰り返し:
 │   ├── 1. 全会場の内部スロット最適化
 │   ├── 2. 会場ペアごとにスワップ試行
+│   │   ├── ホストチームは除外（移動不可）
 │   │   ├── チームを入れ替え
 │   │   ├── 両会場の内部スロット再最適化
-│   │   ├── スコア比較
+│   │   ├── 辞書式スコア比較
 │   │   └── 改善なら確定、なければ戻す
 │   └── 3. 改善があれば継続
 └── 最終配置を返却
 ```
 
-#### 4.2.5 評価関数
+#### 4.2.7 評価関数（辞書式）
 
 ```
-evaluateAssignment(assignments, scores, day1Opponents?)
-├── totalScore = 0
+evaluateAssignmentLex(assignments, bannedPairs?)
+├── total = {day1Repeat:0, sameLeague:0, sameRegion:0, localVsLocal:0}
 ├── 各会場を処理:
-│   ├── A戦ペア（4組）:
-│   │   ├── コンフリクトスコア（×1.0）
-│   │   └── Day1再戦ペナルティ（200点）
-│   └── B戦ペア（2組）:
-│       ├── コンフリクトスコア（×0.1）
-│       └── Day1再戦ペナルティ（×0.1）
-└── return totalScore
+│   ├── A戦ペア（4組）: 辞書式スコアを加算
+│   └── B戦ペア（2組）: 評価対象外
+├── return encodeLexToScore(total)
+└── Day1再戦があれば 10^9 レベルのペナルティ
 ```
 
 ### 4.3 Day1対戦相手マップ
@@ -292,10 +328,35 @@ interface TeamForAssignment {
   region?: string           // 地域（埼玉、東京等）
   leagueId?: string | number  // 所属リーグID
   teamType?: 'local' | 'invited'  // 地元校 or 招待校
+  isHost?: boolean          // 会場ホストフラグ
+  hostVenueId?: number      // ホストの場合、その会場ID
 }
 ```
 
-### 7.2 会場配置結果
+### 7.2 PodPlan
+
+```typescript
+interface PodPlan {
+  pod3Count: number   // 3チームのPod数
+  pod4Count: number   // 4チームのPod数
+  pod5Count: number   // 5チームのPod数
+  totalVenues: number
+  totalTeams: number
+}
+```
+
+### 7.3 辞書式スコア
+
+```typescript
+interface LexPairScore {
+  sameLeague: number    // 同リーグペア数
+  sameRegion: number    // 同地域ペア数
+  localVsLocal: number  // 地元同士ペア数
+  day1Repeat: number    // Day1再戦ペア数（ハード制約）
+}
+```
+
+### 7.4 会場配置結果
 
 ```typescript
 interface VenueAssignmentResult {
@@ -315,7 +376,7 @@ interface VenueAssignmentResult {
 }
 ```
 
-### 7.3 制約違反
+### 7.5 制約違反
 
 ```typescript
 interface ConstraintViolation {
@@ -360,6 +421,11 @@ interface ConstraintViolation {
 
 | 日付 | 変更内容 |
 |------|---------|
+| 2026-01-19 | **Anchor-Pod CP アルゴリズム実装** |
+| 2026-01-19 | PodPlan計算（3/4/5チーム可変Pod）追加 |
+| 2026-01-19 | 辞書式スコアリング（Day1再戦 > 同リーグ > 同地域 > 地元同士）追加 |
+| 2026-01-19 | ホストアンカー付き貪欲法を追加 |
+| 2026-01-19 | Day1 A戦ペア抽出機能を追加 |
 | 2026-01-18 | B戦を対戦済みロジックから除外 |
 | 2026-01-18 | 会場内スロット最適化を追加 |
 | 2026-01-18 | B戦制約の副次的最適化を追加 |
