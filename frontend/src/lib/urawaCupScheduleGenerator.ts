@@ -863,17 +863,30 @@ export interface VenueBasedScheduleResult {
 
 /**
  * 4チームの総当たり対戦パターン（6試合）
- * スロット1,2,4,5がA戦、スロット3,6がB戦
- * A戦: 順位計算対象（各チーム1日2試合）
- * B戦: 順位計算対象外（各チーム1日1試合）
+ *
+ * 制約:
+ * - スロット3,6がB戦（順位計算対象外）
+ * - 各チームは2A戦 + 1B戦/日
+ * - B戦2試合で4チーム全員を1回ずつカバー（完全マッチング）
+ *
+ * 完全マッチングの選択肢:
+ *   A: (1vs2) + (3vs4)
+ *   B: (1vs3) + (2vs4) ← 採用
+ *   C: (1vs4) + (2vs3)
+ *
+ * 検証:
+ *   チーム1: vs2(A), vs3(B), vs4(A) → 2A + 1B ✓
+ *   チーム2: vs1(A), vs3(A), vs4(B) → 2A + 1B ✓
+ *   チーム3: vs4(A), vs1(B), vs2(A) → 2A + 1B ✓
+ *   チーム4: vs3(A), vs1(A), vs2(B) → 2A + 1B ✓
  */
 const FOUR_TEAM_MATCH_PATTERN: { slot: number; home: number; away: number; isBMatch: boolean }[] = [
   { slot: 1, home: 1, away: 2, isBMatch: false }, // A戦: チーム1 vs チーム2
   { slot: 2, home: 3, away: 4, isBMatch: false }, // A戦: チーム3 vs チーム4
-  { slot: 3, home: 1, away: 3, isBMatch: true },  // B戦: チーム1 vs チーム3
-  { slot: 4, home: 2, away: 4, isBMatch: false }, // A戦: チーム2 vs チーム4
+  { slot: 3, home: 1, away: 3, isBMatch: true },  // B戦: チーム1 vs チーム3 ← 完全マッチング
+  { slot: 4, home: 2, away: 3, isBMatch: false }, // A戦: チーム2 vs チーム3
   { slot: 5, home: 1, away: 4, isBMatch: false }, // A戦: チーム1 vs チーム4
-  { slot: 6, home: 2, away: 3, isBMatch: true },  // B戦: チーム2 vs チーム3
+  { slot: 6, home: 2, away: 4, isBMatch: true },  // B戦: チーム2 vs チーム4 ← 完全マッチング
 ]
 
 /**
