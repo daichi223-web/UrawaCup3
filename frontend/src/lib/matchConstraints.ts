@@ -31,6 +31,7 @@ export interface MatchForValidation {
   awayTeamName?: string
   groupId?: string
   refereeTeamIds?: number[]
+  isBMatch?: boolean  // B戦フラグ（順位計算・試合数カウント対象外）
 }
 
 export interface TeamInfo {
@@ -306,10 +307,13 @@ function checkSelfMatch(matches: MatchForValidation[]): ConstraintViolation[] {
 function checkDailyGameLimit(matches: MatchForValidation[]): ConstraintViolation[] {
   const violations: ConstraintViolation[] = []
 
-  // 日付ごとにチームの出場試合をカウント
+  // 日付ごとにチームの出場試合をカウント（B戦は除外）
   const dailyTeamMatches: Record<string, Record<number, number[]>> = {}
 
   for (const m of matches) {
+    // B戦は試合数カウントから除外
+    if (m.isBMatch) continue
+
     if (!dailyTeamMatches[m.matchDate]) dailyTeamMatches[m.matchDate] = {}
 
     if (!dailyTeamMatches[m.matchDate][m.homeTeamId]) {
@@ -448,7 +452,8 @@ function checkNotEnoughGames(matches: MatchForValidation[], teams: TeamInfo[]): 
   const preliminaryDates = dates.slice(0, 2)
 
   for (const date of preliminaryDates) {
-    const dailyMatches = matches.filter(m => m.matchDate === date)
+    // B戦を除外してカウント
+    const dailyMatches = matches.filter(m => m.matchDate === date && !m.isBMatch)
     const teamMatchCount: Record<number, number[]> = {}
 
     for (const m of dailyMatches) {
@@ -486,10 +491,13 @@ function checkNotEnoughGames(matches: MatchForValidation[], teams: TeamInfo[]): 
 function checkTooManyGamesTotal(matches: MatchForValidation[]): ConstraintViolation[] {
   const violations: ConstraintViolation[] = []
 
-  // チームごとの全試合をカウント
+  // チームごとの全試合をカウント（B戦は除外）
   const teamMatches: Record<number, number[]> = {}
 
   for (const m of matches) {
+    // B戦は試合数カウントから除外
+    if (m.isBMatch) continue
+
     if (!teamMatches[m.homeTeamId]) teamMatches[m.homeTeamId] = []
     if (!teamMatches[m.awayTeamId]) teamMatches[m.awayTeamId] = []
     teamMatches[m.homeTeamId].push(m.id)

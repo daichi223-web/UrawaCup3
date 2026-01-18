@@ -863,15 +863,17 @@ export interface VenueBasedScheduleResult {
 
 /**
  * 4チームの総当たり対戦パターン（6試合）
- * スロット1,2,5,6がA戦、スロット3,4がB戦
+ * スロット1,2,4,5がA戦、スロット3,6がB戦
+ * A戦: 順位計算対象（各チーム1日2試合）
+ * B戦: 順位計算対象外（各チーム1日1試合）
  */
 const FOUR_TEAM_MATCH_PATTERN: { slot: number; home: number; away: number; isBMatch: boolean }[] = [
   { slot: 1, home: 1, away: 2, isBMatch: false }, // A戦: チーム1 vs チーム2
   { slot: 2, home: 3, away: 4, isBMatch: false }, // A戦: チーム3 vs チーム4
   { slot: 3, home: 1, away: 3, isBMatch: true },  // B戦: チーム1 vs チーム3
-  { slot: 4, home: 2, away: 4, isBMatch: true },  // B戦: チーム2 vs チーム4
+  { slot: 4, home: 2, away: 4, isBMatch: false }, // A戦: チーム2 vs チーム4
   { slot: 5, home: 1, away: 4, isBMatch: false }, // A戦: チーム1 vs チーム4
-  { slot: 6, home: 2, away: 3, isBMatch: false }, // A戦: チーム2 vs チーム3
+  { slot: 6, home: 2, away: 3, isBMatch: true },  // B戦: チーム2 vs チーム3
 ]
 
 /**

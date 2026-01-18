@@ -471,6 +471,12 @@ export interface Match {
   /** 更新日時 */
   updatedAt: string;
 
+  // 新フォーマット対応フィールド
+  /** B戦フラグ（順位計算対象外） */
+  isBMatch?: boolean;
+  /** 試合日（予選の何日目か: 1 or 2） */
+  matchDay?: number;
+
   // Fallback for snake_case responses (backward compatibility)
   tournament_id?: number;
   group_id?: string;
@@ -501,6 +507,8 @@ export interface Match {
   match_duration_minutes?: number;
   created_at?: string;
   updated_at?: string;
+  is_b_match?: boolean;
+  match_day?: number;
 }
 
 /** 試合作成リクエスト */

@@ -288,6 +288,7 @@ export default function DraggableMatchList({
       homeTeamName: m.homeTeam?.shortName || m.homeTeam?.name || '',
       awayTeamName: m.awayTeam?.shortName || m.awayTeam?.name || '',
       groupId: m.groupId || m.group_id || undefined,
+      isBMatch: m.isBMatch || (m as any).is_b_match || false,
     }))
 
     // 設定を ConstraintCheckSettings 形式に変換
@@ -595,18 +596,23 @@ export default function DraggableMatchList({
           const hasError = matchViolations.some(v => v.level === 'error')
           const hasWarning = matchViolations.some(v => v.level === 'warning')
 
+          // B戦判定（順位計算対象外）
+          const isBMatch = match.isBMatch || (match as any).is_b_match || false
+
           return compact ? (
             /* コンパクトモード: 1行表示 */
             <div key={match.id} className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs ${
-              hasError
-                ? 'border-red-400 bg-red-50'
-                : hasWarning || homeHasConsecutiveError || awayHasConsecutiveError
-                  ? 'border-yellow-300 bg-yellow-50'
-                  : 'border-gray-200 bg-white'
+              isBMatch
+                ? 'border-gray-200 bg-gray-100 opacity-60'
+                : hasError
+                  ? 'border-red-400 bg-red-50'
+                  : hasWarning || homeHasConsecutiveError || awayHasConsecutiveError
+                    ? 'border-yellow-300 bg-yellow-50'
+                    : 'border-gray-200 bg-white'
             }`}>
-              {/* 試合番号 */}
-              <span className="text-gray-400 font-mono w-4 flex-shrink-0 text-center">
-                {groupMatchNumbers.get(match.id) || 1}
+              {/* 試合番号 + B戦ラベル */}
+              <span className={`font-mono w-5 flex-shrink-0 text-center ${isBMatch ? 'text-gray-500' : 'text-gray-400'}`}>
+                {groupMatchNumbers.get(match.id) || 1}{isBMatch && <span className="text-xs">B</span>}
               </span>
 
               {/* チーム名 */}
@@ -659,16 +665,18 @@ export default function DraggableMatchList({
               )}
             </div>
           ) : (
-            <div key={match.id} className={`bg-white rounded-lg border-2 p-4 ${
-              hasError
-                ? 'border-red-400 bg-red-50'
-                : hasWarning || homeHasConsecutiveError || awayHasConsecutiveError
-                  ? 'border-yellow-300 bg-yellow-50'
-                  : 'border-gray-200'
+            <div key={match.id} className={`rounded-lg border-2 p-4 ${
+              isBMatch
+                ? 'bg-gray-100 border-gray-300 opacity-70'
+                : hasError
+                  ? 'border-red-400 bg-red-50'
+                  : hasWarning || homeHasConsecutiveError || awayHasConsecutiveError
+                    ? 'border-yellow-300 bg-yellow-50'
+                    : 'bg-white border-gray-200'
             }`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-gray-500 flex items-center gap-2">
-                  <span className="w-6 text-right font-mono">#{groupMatchNumbers.get(match.id) || 1}</span>
+                  <span className="w-6 text-right font-mono">#{groupMatchNumbers.get(match.id) || 1}{isBMatch && <span className="text-xs ml-0.5">B</span>}</span>
                   <span className="font-mono">{(match.matchTime || match.match_time)?.substring(0, 5)}</span>
                 </div>
                 <div className="flex items-center gap-1 flex-wrap">
