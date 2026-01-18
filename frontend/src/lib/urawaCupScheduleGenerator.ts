@@ -2159,7 +2159,95 @@ const B_MATCH_PAIR_OPTIONS: Record<BMatchPattern, [number, number][]> = {
 }
 
 /**
- * 会場のチーム構成に基づいて最適なB戦パターンを選択
+ * 会場のチーム構成に基づいて地元同士を完全回避する試合パターンを生成
+ *
+ * 設計:
+ * - A戦は「地元 vs 招待」のみ（4試合 = 2地元 × 2招待）
+ * - B戦はA戦ペアから2つ選んで繰り返し
+ * - 地元同士・招待同士は試合しない
+ * - 同じペアがA戦とB戦の両方に出てもOK（別カテゴリなので）
+ *
+ * @param teams 会場の4チーム（teamType: 'local' | 'invited'）
+ * @returns 試合パターン（1-indexed）
+ */
+function generateMatchPatternForVenue(
+  teams: { teamType?: string }[]
+): { slot: number; home: number; away: number; isBMatch: boolean }[] {
+  if (teams.length !== 4) {
+    // 4チームでない場合はデフォルトパターン
+    return getMatchPattern('B')
+  }
+
+  // 地元チームと招待チームのインデックスを分類（1-indexed）
+  const localIndices: number[] = []
+  const invitedIndices: number[] = []
+
+  teams.forEach((team, idx) => {
+    if (team.teamType === 'local') {
+      localIndices.push(idx + 1) // 1-indexed
+    } else {
+      invitedIndices.push(idx + 1)
+    }
+  })
+
+  // 地元2 + 招待2 の場合のみ特別処理
+  if (localIndices.length === 2 && invitedIndices.length === 2) {
+    const [L1, L2] = localIndices
+    const [I1, I2] = invitedIndices
+
+    // A戦: 地元 vs 招待 の4ペア
+    // B戦: A戦ペアから2つ繰り返し（地元同士なし！）
+    // 連戦回避: B戦(slot3,6)の参加チームがslot2,4で連続しないよう配置
+    return [
+      { slot: 1, home: L1, away: I1, isBMatch: false }, // A戦: L1 vs I1
+      { slot: 2, home: L2, away: I2, isBMatch: false }, // A戦: L2 vs I2 (L1,I1休み)
+      { slot: 3, home: L1, away: I1, isBMatch: true },  // B戦: L1 vs I1 (繰り返し)
+      { slot: 4, home: L1, away: I2, isBMatch: false }, // A戦: L1 vs I2
+      { slot: 5, home: L2, away: I1, isBMatch: false }, // A戦: L2 vs I1 (L2,I2休み)
+      { slot: 6, home: L2, away: I2, isBMatch: true },  // B戦: L2 vs I2 (繰り返し)
+    ]
+  }
+
+  // 地元3 + 招待1 の場合
+  if (localIndices.length === 3 && invitedIndices.length === 1) {
+    const [L1, L2, L3] = localIndices
+    const [I1] = invitedIndices
+
+    // A戦: 各地元 vs 招待 (3試合) + 地元同士1試合（やむを得ない）
+    // B戦: 地元 vs 招待 を繰り返し
+    return [
+      { slot: 1, home: L1, away: I1, isBMatch: false }, // A戦: L1 vs I1
+      { slot: 2, home: L2, away: L3, isBMatch: false }, // A戦: L2 vs L3 (地元同士・やむを得ない)
+      { slot: 3, home: L2, away: I1, isBMatch: true },  // B戦: L2 vs I1
+      { slot: 4, home: L1, away: L2, isBMatch: false }, // A戦: L1 vs L2 (地元同士・やむを得ない)
+      { slot: 5, home: L3, away: I1, isBMatch: false }, // A戦: L3 vs I1
+      { slot: 6, home: L1, away: I1, isBMatch: true },  // B戦: L1 vs I1 (繰り返し)
+    ]
+  }
+
+  // 地元1 + 招待3 の場合
+  if (localIndices.length === 1 && invitedIndices.length === 3) {
+    const [L1] = localIndices
+    const [I1, I2, I3] = invitedIndices
+
+    // A戦: 地元 vs 各招待 (3試合) + 招待同士1試合
+    // B戦: 地元 vs 招待 を繰り返し
+    return [
+      { slot: 1, home: L1, away: I1, isBMatch: false }, // A戦: L1 vs I1
+      { slot: 2, home: I2, away: I3, isBMatch: false }, // A戦: I2 vs I3 (招待同士)
+      { slot: 3, home: L1, away: I2, isBMatch: true },  // B戦: L1 vs I2
+      { slot: 4, home: L1, away: I3, isBMatch: false }, // A戦: L1 vs I3
+      { slot: 5, home: I1, away: I2, isBMatch: false }, // A戦: I1 vs I2 (招待同士)
+      { slot: 6, home: L1, away: I1, isBMatch: true },  // B戦: L1 vs I1 (繰り返し)
+    ]
+  }
+
+  // その他の場合（地元0、地元4、など）はデフォルトパターン
+  return getMatchPattern('B')
+}
+
+/**
+ * 会場のチーム構成に基づいて最適なB戦パターンを選択（後方互換性用）
  */
 function chooseBestBMatchPattern(teams: { teamType?: string }[]): BMatchPattern {
   if (teams.length !== 4) return 'B' // デフォルト
@@ -2308,10 +2396,9 @@ export function generateVenueBasedSchedule(
         if (venueTeams.length < 2) continue
       }
 
-      // 会場ごとに最適なB戦パターンを選択（地元同士がB戦にならないよう）
+      // 会場ごとに地元同士を完全回避する試合パターンを生成
       const teamsForPattern = venueTeams.map(t => ({ teamType: t.teamType }))
-      const bestBMatchPattern = chooseBestBMatchPattern(teamsForPattern)
-      const matchPattern = getMatchPattern(bestBMatchPattern)
+      const matchPattern = generateMatchPatternForVenue(teamsForPattern)
 
       // 4チームの総当たりパターンで試合を生成
       for (const pattern of matchPattern) {
