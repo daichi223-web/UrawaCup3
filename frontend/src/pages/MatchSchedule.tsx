@@ -1563,8 +1563,8 @@ function MatchSchedule() {
 
                       if (day1VenueMatches.length === 0 && day2VenueMatches.length === 0) return null
 
-                      // 会場のグループID（snake_case対応）、なければインデックスから生成
-                      const venueGroupId = venue.groupId || venue.group_id || String.fromCharCode(65 + idx)
+                      // 会場のグループID: インデックスから A, B, C... を生成（色の一貫性のため）
+                      const venueGroupId = String.fromCharCode(65 + idx)
 
                       return (
                         <div key={venue.id} className={`rounded border ${colors.border} ${colors.bg} overflow-hidden`}>
@@ -1626,10 +1626,10 @@ function MatchSchedule() {
                 const venueMatches = filteredMatches.filter(m => (m.venueId || m.venue_id) === venue.id)
                 if (venueMatches.length === 0) return null
 
-                // 会場のグループID（snake_case対応）、なければインデックスから生成
-                const venueGroupId = venue.groupId || venue.group_id || String.fromCharCode(65 + venueIndex)
+                // 会場のグループID: インデックスから A, B, C... を生成（色の一貫性のため）
+                const venueGroupId = String.fromCharCode(65 + venueIndex)
 
-                // 会場ごとの配色
+                // 会場ごとの配色（venueGroupIdに対応）
                 const venueColors = {
                   A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100 text-red-800', dot: 'bg-red-500' },
                   B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100 text-blue-800', dot: 'bg-blue-500' },
@@ -1660,7 +1660,7 @@ function MatchSchedule() {
                         title=""
                         emptyMessage="試合がありません"
                         consecutiveMatchTeams={consecutiveMatchTeams}
-                        teams={venueGroupId ? allTeams.filter(t => t.groupId === venueGroupId) : allTeams}
+                        teams={useGroupSystem ? allTeams.filter(t => t.groupId === venueGroupId) : allTeams}
                         enableConstraintCheck
                         venueGroupId={venueGroupId}
                       />

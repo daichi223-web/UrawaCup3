@@ -249,14 +249,18 @@ function checkSameTimeConflict(matches: MatchForValidation[]): ConstraintViolati
 
 /**
  * エラー: 同一カード重複チェック
+ * B戦は対戦済みカウントから除外（B戦は順位計算対象外のため）
  */
 function checkDuplicateMatch(matches: MatchForValidation[]): ConstraintViolation[] {
   const violations: ConstraintViolation[] = []
 
-  // 対戦ペアごとに試合をカウント
+  // 対戦ペアごとに試合をカウント（B戦を除外）
   const pairMatches: Record<string, MatchForValidation[]> = {}
 
   for (const m of matches) {
+    // B戦は対戦済みカウントから除外
+    if (m.isBMatch) continue
+
     // チームIDを小さい順にソートしてペアキーを作成
     const pairKey = [m.homeTeamId, m.awayTeamId].sort((a, b) => a - b).join('-')
     if (!pairMatches[pairKey]) pairMatches[pairKey] = []

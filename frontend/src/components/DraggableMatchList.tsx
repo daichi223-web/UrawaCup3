@@ -49,8 +49,10 @@ function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick,
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
   const teamGroupId = team?.groupId || team?.group_id || null
-  // 確定後は会場色、未確定時はチーム色を使用
-  const effectiveGroupId = isConfirmed && venueGroupId ? venueGroupId : teamGroupId
+  // 色決定ロジック:
+  // 1. venueGroupIdがあれば会場色を使用（1リーグ制など）
+  // 2. なければチームのgroupIdを使用（グループ制）
+  const effectiveGroupId = venueGroupId || teamGroupId
   const groupColors = effectiveGroupId ? GROUP_COLORS[effectiveGroupId] : null
 
   return (
