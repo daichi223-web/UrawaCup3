@@ -2190,45 +2190,48 @@ function chooseBestBMatchPattern(teams: { teamType?: string }[]): BMatchPattern 
 /**
  * B戦パターンに基づいて試合パターンを生成
  *
- * 制約: B戦は必ずスロット3と6に配置
- * 各パターンで、選択されたB戦ペアがスロット3,6に入るよう配置を調整
+ * 制約:
+ * - B戦は必ずスロット3と6に配置
+ * - 連戦回避を最大限考慮（各チームは可能な限り連続スロットで試合しない）
+ *
+ * 各パターンで連戦を最小化する順序を事前に定義
  */
 function getMatchPattern(bMatchPattern: BMatchPattern): { slot: number; home: number; away: number; isBMatch: boolean }[] {
-  const bMatchPairs = B_MATCH_PAIR_OPTIONS[bMatchPattern]
-
-  // 全6ペア（0-indexed）
-  const allPairs: [number, number][] = [
-    [0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]
-  ]
-
-  // B戦ペアをセット化（順序無視で比較）
-  const bMatchSet = new Set(bMatchPairs.map(([i, j]) =>
-    `${Math.min(i, j)}-${Math.max(i, j)}`
-  ))
-
-  // A戦ペアとB戦ペアを分離
-  const aPairs: [number, number][] = []
-  const bPairs: [number, number][] = []
-
-  for (const pair of allPairs) {
-    const pairKey = `${Math.min(pair[0], pair[1])}-${Math.max(pair[0], pair[1])}`
-    if (bMatchSet.has(pairKey)) {
-      bPairs.push(pair)
-    } else {
-      aPairs.push(pair)
-    }
+  // 各パターンで連戦を最小化する試合順序（1-indexed）
+  // 設計原則: B戦(slot3,6)の参加チームがslot2,4,5,7で連続しないよう配置
+  const patterns: Record<BMatchPattern, { slot: number; home: number; away: number; isBMatch: boolean }[]> = {
+    // パターンA: B戦 = (1vs2)@slot3, (3vs4)@slot6
+    // チーム1,2はslot3でB戦 → slot2で1,2を使わない → slot2は3vs4
+    // チーム3,4はslot6でB戦 → slot5で3,4を使わない → slot5は1vs?
+    'A': [
+      { slot: 1, home: 1, away: 3, isBMatch: false }, // A戦: 1,3
+      { slot: 2, home: 2, away: 4, isBMatch: false }, // A戦: 2,4 (1,2休み→slot3準備)
+      { slot: 3, home: 1, away: 2, isBMatch: true },  // B戦: 1,2
+      { slot: 4, home: 1, away: 4, isBMatch: false }, // A戦: 1,4
+      { slot: 5, home: 2, away: 3, isBMatch: false }, // A戦: 2,3 (3,4の片方休み)
+      { slot: 6, home: 3, away: 4, isBMatch: true },  // B戦: 3,4
+    ],
+    // パターンB: B戦 = (1vs3)@slot3, (2vs4)@slot6 - 元の連戦最小化パターン
+    'B': [
+      { slot: 1, home: 1, away: 2, isBMatch: false }, // A戦: 1,2
+      { slot: 2, home: 3, away: 4, isBMatch: false }, // A戦: 3,4 (1,3休み→slot3準備)
+      { slot: 3, home: 1, away: 3, isBMatch: true },  // B戦: 1,3
+      { slot: 4, home: 2, away: 3, isBMatch: false }, // A戦: 2,3
+      { slot: 5, home: 1, away: 4, isBMatch: false }, // A戦: 1,4 (2,4休み→slot6準備)
+      { slot: 6, home: 2, away: 4, isBMatch: true },  // B戦: 2,4
+    ],
+    // パターンC: B戦 = (1vs4)@slot3, (2vs3)@slot6
+    'C': [
+      { slot: 1, home: 1, away: 2, isBMatch: false }, // A戦: 1,2
+      { slot: 2, home: 3, away: 4, isBMatch: false }, // A戦: 3,4 (1,4休み→slot3準備)
+      { slot: 3, home: 1, away: 4, isBMatch: true },  // B戦: 1,4
+      { slot: 4, home: 1, away: 3, isBMatch: false }, // A戦: 1,3
+      { slot: 5, home: 2, away: 4, isBMatch: false }, // A戦: 2,4 (2,3休み→slot6準備)
+      { slot: 6, home: 2, away: 3, isBMatch: true },  // B戦: 2,3
+    ],
   }
 
-  // スロット配置: 1,2,4,5 = A戦、3,6 = B戦
-  // 順序: slot1(A), slot2(A), slot3(B), slot4(A), slot5(A), slot6(B)
-  return [
-    { slot: 1, home: aPairs[0][0] + 1, away: aPairs[0][1] + 1, isBMatch: false },
-    { slot: 2, home: aPairs[1][0] + 1, away: aPairs[1][1] + 1, isBMatch: false },
-    { slot: 3, home: bPairs[0][0] + 1, away: bPairs[0][1] + 1, isBMatch: true },  // B戦
-    { slot: 4, home: aPairs[2][0] + 1, away: aPairs[2][1] + 1, isBMatch: false },
-    { slot: 5, home: aPairs[3][0] + 1, away: aPairs[3][1] + 1, isBMatch: false },
-    { slot: 6, home: bPairs[1][0] + 1, away: bPairs[1][1] + 1, isBMatch: true },  // B戦
-  ]
+  return patterns[bMatchPattern]
 }
 
 // デフォルトパターン（後方互換性）
