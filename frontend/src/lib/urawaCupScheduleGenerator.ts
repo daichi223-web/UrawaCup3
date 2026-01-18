@@ -912,6 +912,7 @@ function calculatePairConflict(
 
 /**
  * 会場配置のトータルスコアと詳細を計算
+ * A戦ペアのみを対戦済みチェック対象とする
  */
 function evaluateAssignment(
   assignments: Map<number, TeamForAssignment[]>,
@@ -926,22 +927,30 @@ function evaluateAssignment(
     day1RepeatPairs: 0,
   }
 
-  for (const [, teams] of assignments) {
-    for (let i = 0; i < teams.length; i++) {
-      for (let j = i + 1; j < teams.length; j++) {
-        const conflict = calculatePairConflict(teams[i], teams[j], scores)
-        totalScore += conflict.score
-        if (conflict.sameLeague) details.sameLeaguePairs++
-        if (conflict.sameRegion) details.sameRegionPairs++
-        if (conflict.localVsLocal) details.localVsLocalPairs++
+  // A戦ペアのインデックス（スロット順での位置）
+  // A戦: (0,1), (2,3), (1,2), (0,3)
+  // B戦: (0,2), (1,3) は除外
+  const aMatchPairIndices: [number, number][] = [
+    [0, 1], [2, 3], [1, 2], [0, 3]
+  ]
 
-        // Day2の場合、Day1での対戦ペアをチェック
-        if (day1Opponents) {
-          const team1Opponents = day1Opponents.get(teams[i].id)
-          if (team1Opponents?.has(teams[j].id)) {
-            totalScore += scores.alreadyPlayed
-            details.day1RepeatPairs++
-          }
+  for (const [, teams] of assignments) {
+    if (teams.length < 4) continue
+
+    // A戦ペアのみを評価
+    for (const [i, j] of aMatchPairIndices) {
+      const conflict = calculatePairConflict(teams[i], teams[j], scores)
+      totalScore += conflict.score
+      if (conflict.sameLeague) details.sameLeaguePairs++
+      if (conflict.sameRegion) details.sameRegionPairs++
+      if (conflict.localVsLocal) details.localVsLocalPairs++
+
+      // Day2の場合、Day1でのA戦対戦ペアをチェック
+      if (day1Opponents) {
+        const team1Opponents = day1Opponents.get(teams[i].id)
+        if (team1Opponents?.has(teams[j].id)) {
+          totalScore += scores.alreadyPlayed
+          details.day1RepeatPairs++
         }
       }
     }
@@ -951,24 +960,44 @@ function evaluateAssignment(
 }
 
 /**
- * Day1の対戦相手マップを構築
+ * Day1のA戦対戦相手マップを構築
+ * B戦は対戦済みとしてカウントしない
+ *
+ * 4チームラウンドロビンの対戦パターン（スロット順）:
+ * - A戦: (1vs2), (3vs4), (2vs3), (1vs4) → 対戦済みとしてカウント
+ * - B戦: (1vs3), (2vs4) → カウントしない
  */
 function buildDay1OpponentsMap(
   day1Assignments: Map<number, TeamForAssignment[]>
 ): Map<number, Set<number>> {
   const opponents = new Map<number, Set<number>>()
 
+  // A戦の対戦ペア（スロット順での位置: 1vs2, 3vs4, 2vs3, 1vs4）
+  // B戦は (1vs3), (2vs4) なので除外
+  const aMatchPairs: [number, number][] = [
+    [0, 1], // チーム1 vs チーム2
+    [2, 3], // チーム3 vs チーム4
+    [1, 2], // チーム2 vs チーム3
+    [0, 3], // チーム1 vs チーム4
+  ]
+
   for (const [, teams] of day1Assignments) {
-    for (const team of teams) {
-      if (!opponents.has(team.id)) {
-        opponents.set(team.id, new Set())
+    if (teams.length < 4) continue
+
+    // 各チームの対戦相手をA戦のみで記録
+    for (const [idx1, idx2] of aMatchPairs) {
+      const team1 = teams[idx1]
+      const team2 = teams[idx2]
+
+      if (!opponents.has(team1.id)) {
+        opponents.set(team1.id, new Set())
       }
-      // 同会場の他チームが対戦相手
-      for (const other of teams) {
-        if (other.id !== team.id) {
-          opponents.get(team.id)!.add(other.id)
-        }
+      if (!opponents.has(team2.id)) {
+        opponents.set(team2.id, new Set())
       }
+
+      opponents.get(team1.id)!.add(team2.id)
+      opponents.get(team2.id)!.add(team1.id)
     }
   }
 
