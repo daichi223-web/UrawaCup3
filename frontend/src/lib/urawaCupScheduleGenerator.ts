@@ -828,3 +828,211 @@ export function validateSingleLeagueSchedule(matches: GeneratedMatch[], teams: T
   // 検証は generateSingleLeagueSchedule 内で行われる
   return []
 }
+
+// ============================================================================
+// 会場配置ベースの日程生成（1リーグ制・新方式）
+// ============================================================================
+
+export interface VenueAssignmentInfo {
+  venueId: number
+  venueName: string
+  teamId: number
+  teamName: string
+  teamShortName?: string
+  matchDay: number
+  slotOrder: number
+}
+
+export interface GeneratedMatchWithBMatch extends GeneratedMatch {
+  isBMatch: boolean // B戦フラグ
+}
+
+export interface VenueBasedScheduleResult {
+  success: boolean
+  matches: GeneratedMatchWithBMatch[]
+  day1Matches: GeneratedMatchWithBMatch[]
+  day2Matches: GeneratedMatchWithBMatch[]
+  warnings: string[]
+  stats: {
+    totalMatches: number
+    aMatches: number
+    bMatches: number
+    matchesPerTeam: number
+  }
+}
+
+/**
+ * 4チームの総当たり対戦パターン（6試合）
+ * スロット1,2,5,6がA戦、スロット3,4がB戦
+ */
+const FOUR_TEAM_MATCH_PATTERN: { slot: number; home: number; away: number; isBMatch: boolean }[] = [
+  { slot: 1, home: 1, away: 2, isBMatch: false }, // A戦: チーム1 vs チーム2
+  { slot: 2, home: 3, away: 4, isBMatch: false }, // A戦: チーム3 vs チーム4
+  { slot: 3, home: 1, away: 3, isBMatch: true },  // B戦: チーム1 vs チーム3
+  { slot: 4, home: 2, away: 4, isBMatch: true },  // B戦: チーム2 vs チーム4
+  { slot: 5, home: 1, away: 4, isBMatch: false }, // A戦: チーム1 vs チーム4
+  { slot: 6, home: 2, away: 3, isBMatch: false }, // A戦: チーム2 vs チーム3
+]
+
+/**
+ * 会場配置ベースの日程生成（1リーグ制・新方式）
+ *
+ * 設計:
+ * - 各会場に4チームを配置
+ * - 会場内で総当たり（6試合 = 各チーム3試合）
+ * - 3,4試合目はB戦（順位計算対象外）
+ * - Day1とDay2で異なる会場配置
+ * - 同日の会場移動なし
+ *
+ * @param day1Assignments Day1の会場配置
+ * @param day2Assignments Day2の会場配置
+ * @param venues 会場一覧
+ * @param day1Date Day1の日付
+ * @param day2Date Day2の日付
+ * @param config 設定
+ */
+export function generateVenueBasedSchedule(
+  day1Assignments: VenueAssignmentInfo[],
+  day2Assignments: VenueAssignmentInfo[],
+  venues: Venue[],
+  day1Date: string,
+  day2Date: string,
+  config?: ScheduleConfig
+): VenueBasedScheduleResult {
+  const warnings: string[] = []
+  const matches: GeneratedMatchWithBMatch[] = []
+  let matchOrder = 1
+
+  // 設定値を取得
+  const startTime = config?.startTime || DEFAULT_START_TIME
+  const matchDuration = config?.matchDuration || DEFAULT_MATCH_DURATION
+  const interval = config?.intervalMinutes || DEFAULT_INTERVAL
+
+  // キックオフ時刻を生成（1会場6試合）
+  const kickoffTimes = generateKickoffTimes(startTime, matchDuration, interval, 6)
+
+  console.log('[VenueBased] 設定:', { startTime, matchDuration, interval })
+  console.log('[VenueBased] キックオフ時刻:', kickoffTimes)
+
+  // 1日分の試合を生成する関数
+  const generateDayMatches = (
+    assignments: VenueAssignmentInfo[],
+    day: 1 | 2,
+    matchDate: string
+  ): GeneratedMatchWithBMatch[] => {
+    const dayMatches: GeneratedMatchWithBMatch[] = []
+
+    // 会場ごとにグループ化
+    const venueGroups = new Map<number, VenueAssignmentInfo[]>()
+    for (const assignment of assignments) {
+      if (!venueGroups.has(assignment.venueId)) {
+        venueGroups.set(assignment.venueId, [])
+      }
+      venueGroups.get(assignment.venueId)!.push(assignment)
+    }
+
+    // 各会場で試合を生成
+    for (const [venueId, venueTeams] of venueGroups) {
+      // slotOrder順にソート
+      venueTeams.sort((a, b) => a.slotOrder - b.slotOrder)
+
+      const venue = venues.find(v => v.id === venueId)
+      const venueName = venue?.name || venueTeams[0]?.venueName || `会場${venueId}`
+
+      // チーム数チェック
+      if (venueTeams.length !== 4) {
+        warnings.push(`Day${day} 会場${venueName}: チーム数が${venueTeams.length}です（4チーム必要）`)
+        if (venueTeams.length < 2) continue
+      }
+
+      // 4チームの総当たりパターンで試合を生成
+      for (const pattern of FOUR_TEAM_MATCH_PATTERN) {
+        const homeTeam = venueTeams[pattern.home - 1]
+        const awayTeam = venueTeams[pattern.away - 1]
+
+        if (!homeTeam || !awayTeam) {
+          warnings.push(`Day${day} 会場${venueName} 枠${pattern.slot}: チームが不足`)
+          continue
+        }
+
+        dayMatches.push({
+          homeTeamId: homeTeam.teamId,
+          awayTeamId: awayTeam.teamId,
+          homeTeamName: homeTeam.teamShortName || homeTeam.teamName,
+          awayTeamName: awayTeam.teamShortName || awayTeam.teamName,
+          groupId: null as any, // 1リーグ制ではnull
+          venueId: venueId,
+          venueName: venueName,
+          matchDate,
+          matchTime: kickoffTimes[pattern.slot - 1] || kickoffTimes[kickoffTimes.length - 1],
+          matchOrder: matchOrder++,
+          day,
+          slot: pattern.slot,
+          isBMatch: pattern.isBMatch,
+        })
+      }
+    }
+
+    return dayMatches
+  }
+
+  // Day1の試合を生成
+  if (day1Assignments.length === 0) {
+    warnings.push('Day1の会場配置がありません')
+  } else {
+    const day1Matches = generateDayMatches(day1Assignments, 1, day1Date)
+    matches.push(...day1Matches)
+  }
+
+  // Day2の試合を生成
+  if (day2Assignments.length === 0) {
+    warnings.push('Day2の会場配置がありません')
+  } else {
+    const day2Matches = generateDayMatches(day2Assignments, 2, day2Date)
+    matches.push(...day2Matches)
+  }
+
+  // 統計計算
+  const aMatches = matches.filter(m => !m.isBMatch).length
+  const bMatches = matches.filter(m => m.isBMatch).length
+
+  // 各チームの試合数を確認
+  const matchCountByTeam: Record<number, { a: number; b: number }> = {}
+  matches.forEach(m => {
+    if (!matchCountByTeam[m.homeTeamId]) matchCountByTeam[m.homeTeamId] = { a: 0, b: 0 }
+    if (!matchCountByTeam[m.awayTeamId]) matchCountByTeam[m.awayTeamId] = { a: 0, b: 0 }
+    if (m.isBMatch) {
+      matchCountByTeam[m.homeTeamId].b++
+      matchCountByTeam[m.awayTeamId].b++
+    } else {
+      matchCountByTeam[m.homeTeamId].a++
+      matchCountByTeam[m.awayTeamId].a++
+    }
+  })
+
+  // 試合数が足りないチームを警告
+  for (const [teamId, counts] of Object.entries(matchCountByTeam)) {
+    if (counts.a < 4) {
+      const team = [...day1Assignments, ...day2Assignments].find(a => a.teamId === Number(teamId))
+      const teamName = team?.teamShortName || team?.teamName || `チーム${teamId}`
+      warnings.push(`${teamName}: A戦が${counts.a}試合（4試合必要）`)
+    }
+  }
+
+  const day1Matches = matches.filter(m => m.day === 1)
+  const day2Matches = matches.filter(m => m.day === 2)
+
+  return {
+    success: matches.length > 0,
+    matches,
+    day1Matches,
+    day2Matches,
+    warnings,
+    stats: {
+      totalMatches: matches.length,
+      aMatches,
+      bMatches,
+      matchesPerTeam: 6, // 3試合/日 × 2日
+    },
+  }
+}

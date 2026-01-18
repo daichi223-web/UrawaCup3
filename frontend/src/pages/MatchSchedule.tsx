@@ -23,11 +23,14 @@ import { useConstraintSettingsStore } from '@/stores/constraintSettingsStore'
 import {
   generateUrawaCupSchedule,
   generateSingleLeagueSchedule,
+  generateVenueBasedSchedule,
   validateSchedule,
   validateSingleLeagueSchedule,
   checkConsecutiveMatches,
   type TeamInfo,
+  type VenueAssignmentInfo,
 } from '@/lib/urawaCupScheduleGenerator'
+import { venueAssignmentApi } from '@/features/venue-assignments/api'
 import type {
   MatchWithDetails,
   Venue,
@@ -100,8 +103,6 @@ function MatchSchedule() {
   } | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)  // 組み合わせ編集モード
   const [crossVenueSelectedTeam, setCrossVenueSelectedTeam] = useState<SelectedTeam | null>(null)  // 会場を超えた選択状態（1リーグ制用）
-  const [originalTeamPositions, setOriginalTeamPositions] = useState<Map<number, { matchId: number; position: 'home' | 'away'; venueId: number }>>(new Map())  // 元のチーム配置
-  const [isChangeConfirmed, setIsChangeConfirmed] = useState(true)  // 変更が確定済みか
 
   // 大会情報を取得
   const { data: tournament, isLoading: isLoadingTournament } = useQuery({
@@ -403,9 +404,9 @@ function MatchSchedule() {
       let teamInfoList: TeamInfo[] = []
       let validationErrors: string[] = []
 
-      // === 1リーグ制（総当たり） ===
+      // === 1リーグ制（会場配置ベース） ===
       if (!useGroupSystem) {
-        console.log('[Schedule] 1リーグ制（総当たり）で生成')
+        console.log('[Schedule] 1リーグ制（会場配置ベース）で生成')
         console.log('[Schedule] Day1:', day1Date, 'Day2:', day2Date)
         console.log('[Schedule] チーム数:', teams.length)
 
@@ -413,29 +414,52 @@ function MatchSchedule() {
           throw new Error('チームが2チーム以上必要です')
         }
 
-        // チーム情報を変換（グループは'-'固定）
-        teamInfoList = teams.map((team: any, index: number) => ({
-          id: team.id,
-          name: team.name,
-          shortName: team.short_name,
-          groupId: null as any, // 1リーグ制はグループなし
-          seedNumber: index + 1,
-        }))
+        // 会場配置を取得
+        const day1Assignments = await venueAssignmentApi.getByTournament(tournamentId, 1)
+        const day2Assignments = await venueAssignmentApi.getByTournament(tournamentId, 2)
 
-        console.log('[Schedule] チーム情報:', teamInfoList)
+        console.log('[Schedule] Day1会場配置:', day1Assignments.length, '件')
+        console.log('[Schedule] Day2会場配置:', day2Assignments.length, '件')
 
-        // 1リーグ制の総当たり日程を生成
-        result = generateSingleLeagueSchedule(teamInfoList, venueList, day1Date, day2Date, scheduleConfig)
+        if (day1Assignments.length === 0 && day2Assignments.length === 0) {
+          throw new Error('会場配置が設定されていません。先に「会場配置」画面でチームを会場に配置してください。')
+        }
+
+        // VenueAssignmentInfo形式に変換
+        const toAssignmentInfo = (a: any): VenueAssignmentInfo => ({
+          venueId: a.venueId,
+          venueName: a.venue?.name || `会場${a.venueId}`,
+          teamId: a.teamId,
+          teamName: a.team?.name || `チーム${a.teamId}`,
+          teamShortName: a.team?.shortName || a.team?.short_name,
+          matchDay: a.matchDay,
+          slotOrder: a.slotOrder,
+        })
+
+        const day1AssignmentInfos = day1Assignments.map(toAssignmentInfo)
+        const day2AssignmentInfos = day2Assignments.map(toAssignmentInfo)
+
+        // 会場配置ベースで日程生成
+        result = generateVenueBasedSchedule(
+          day1AssignmentInfos,
+          day2AssignmentInfos,
+          venueList,
+          day1Date,
+          day2Date,
+          scheduleConfig
+        )
 
         if (!result.success || result.matches.length === 0) {
           throw new Error('日程生成に失敗しました: ' + result.warnings.join(', '))
         }
 
-        // 検証
-        validationErrors = validateSingleLeagueSchedule(result.matches, teamInfoList)
-        if (validationErrors.length > 0) {
-          console.warn('[Schedule] 検証エラー:', validationErrors)
+        // 警告を表示
+        if (result.warnings.length > 0) {
+          console.warn('[Schedule] 警告:', result.warnings)
+          result.warnings.forEach(w => toast.error(w, { duration: 5000 }))
         }
+
+        console.log('[Schedule] 生成結果: A戦', result.stats.aMatches, '試合, B戦', result.stats.bMatches, '試合')
       }
       // === グループ制（浦和カップ方式） ===
       else {
@@ -571,6 +595,7 @@ function MatchSchedule() {
         match_order: index + 1,
         stage: 'preliminary',
         status: 'scheduled',
+        is_b_match: (m as any).isBMatch || false, // B戦フラグ
       }))
 
       console.log('[Generate] 挿入データ件数:', matchesToInsert.length)
@@ -810,9 +835,6 @@ function MatchSchedule() {
     }
     swappingRef.current.add(matchId)
 
-    // 変更が行われたら未確定状態に
-    setIsChangeConfirmed(false)
-
     try {
       await swapTeamsMutation.mutateAsync({ matchId, homeTeamId, awayTeamId })
       // 成功したら即座にデータを再取得
@@ -826,57 +848,6 @@ function MatchSchedule() {
         swappingRef.current.delete(matchId)
       }, 500)
     }
-  }
-
-  // 元の試合構成を保存（編集開始時）- 試合単位で記録
-  const [originalMatchComposition, setOriginalMatchComposition] = useState<Map<number, { homeTeamId: number; awayTeamId: number }>>(new Map())
-
-  const captureOriginalPositions = (matchList: MatchWithDetails[]) => {
-    const composition = new Map<number, { homeTeamId: number; awayTeamId: number }>()
-    matchList.forEach(match => {
-      const homeId = match.homeTeamId || match.home_team_id
-      const awayId = match.awayTeamId || match.away_team_id
-      if (homeId && awayId) {
-        composition.set(match.id, { homeTeamId: homeId, awayTeamId: awayId })
-      }
-    })
-    setOriginalMatchComposition(composition)
-    setOriginalTeamPositions(new Map()) // 旧形式はクリア
-    setIsChangeConfirmed(true)
-  }
-
-  // 変更されたチームを検出（試合単位で比較）
-  const getChangedTeamIds = (currentMatches: MatchWithDetails[]): Set<number> => {
-    if (isChangeConfirmed || originalMatchComposition.size === 0) {
-      return new Set()
-    }
-    const changedTeams = new Set<number>()
-    currentMatches.forEach(match => {
-      const homeId = match.homeTeamId || match.home_team_id
-      const awayId = match.awayTeamId || match.away_team_id
-      const original = originalMatchComposition.get(match.id)
-
-      if (original) {
-        // この試合のホームチームが変わっていたら、現在と元のホームチームを変更扱い
-        if (original.homeTeamId !== homeId) {
-          if (homeId) changedTeams.add(homeId)
-          changedTeams.add(original.homeTeamId)
-        }
-        // この試合のアウェイチームが変わっていたら、現在と元のアウェイチームを変更扱い
-        if (original.awayTeamId !== awayId) {
-          if (awayId) changedTeams.add(awayId)
-          changedTeams.add(original.awayTeamId)
-        }
-      }
-    })
-    return changedTeams
-  }
-
-  // 変更を確定
-  const confirmChanges = () => {
-    const allMatches = [...day1Matches, ...day2Matches]
-    captureOriginalPositions(allMatches)
-    toast.success('変更を確定しました')
   }
 
   // 日程生成モーダルを開く
@@ -1075,8 +1046,8 @@ function MatchSchedule() {
           </span>
           {renderGenerateButtons()}
 
-          {/* 編集モードトグル（予選リーグタブのみ） */}
-          {(activeTab === 'day1' || activeTab === 'day2') && hasPreliminaryMatches && (
+          {/* 編集モードトグル（予選リーグタブ・グループ制のみ） */}
+          {(activeTab === 'day1' || activeTab === 'day2') && hasPreliminaryMatches && useGroupSystem && (
             <>
               <button
                 onClick={() => setIsEditMode(!isEditMode)}
@@ -1362,6 +1333,26 @@ function MatchSchedule() {
           ) : (activeTab === 'day1' || activeTab === 'day2') && hasPreliminaryMatches ? (
             // 閲覧モード: コンパクトな全体表示（一画面に収める）
             <div className="space-y-2">
+              {/* 時間スケジュール一覧 */}
+              {(() => {
+                // 試合時間を取得（重複排除・ソート済み）
+                const currentDayMatches = activeTab === 'day1' ? day1Matches : day2Matches
+                const uniqueTimes = [...new Set(currentDayMatches.map(m => (m.matchTime || m.match_time || '').substring(0, 5)))]
+                  .filter(t => t)
+                  .sort()
+                return uniqueTimes.length > 0 ? (
+                  <div className="bg-gray-100 rounded px-3 py-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <span className="font-medium text-gray-600">時間:</span>
+                    {uniqueTimes.map((time, idx) => (
+                      <span key={time} className="text-gray-700">
+                        <span className="font-mono text-gray-500">{idx + 1}</span>
+                        <span className="mx-0.5">=</span>
+                        <span className="font-mono">{time}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null
+              })()}
               {useGroupSystem ? (
                 /* グループ制：4グループ×2日を横に並べる */
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
@@ -1417,10 +1408,9 @@ function MatchSchedule() {
               ) : (
                 /* 1リーグ制：会場ごとにコンパクト表示（会場を超えたチーム変更対応） */
                 <>
-                  {/* ツールバー: 選択状態・変更状態・確定ボタン */}
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    {/* 選択中のチーム表示 */}
-                    {crossVenueSelectedTeam && (
+                  {/* 選択中のチーム表示 */}
+                  {crossVenueSelectedTeam && (
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
                       <div className="flex-1 p-2 bg-primary-50 border border-primary-200 rounded flex items-center justify-between">
                         <span className="text-sm text-primary-700">
                           「{crossVenueSelectedTeam.teamName}」を選択中
@@ -1432,31 +1422,8 @@ function MatchSchedule() {
                           解除
                         </button>
                       </div>
-                    )}
-                    {/* 変更状態表示・確定ボタン */}
-                    {!isChangeConfirmed && (
-                      <div className="flex items-center gap-2 p-2 bg-teal-50 border border-teal-300 rounded">
-                        <span className="text-sm text-teal-700">
-                          未確定の変更があります
-                        </span>
-                        <button
-                          onClick={confirmChanges}
-                          className="px-3 py-1 bg-teal-600 text-white text-sm rounded hover:bg-teal-700"
-                        >
-                          確定
-                        </button>
-                      </div>
-                    )}
-                    {/* 編集開始ボタン（初回のみ） */}
-                    {isChangeConfirmed && originalTeamPositions.size === 0 && day1Matches.length > 0 && (
-                      <button
-                        onClick={() => captureOriginalPositions([...day1Matches, ...day2Matches])}
-                        className="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
-                      >
-                        編集開始
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                     {venues.filter(v => v.forPreliminary || v.for_preliminary).map((venue, idx) => {
                       const day1VenueMatches = day1Matches.filter(m => (m.venueId || m.venue_id) === venue.id)
@@ -1499,9 +1466,7 @@ function MatchSchedule() {
                               externalSelectedTeam={crossVenueSelectedTeam}
                               onExternalSelect={setCrossVenueSelectedTeam}
                               allMatches={[...day1Matches, ...day2Matches]}
-                              changedTeamIds={getChangedTeamIds([...day1Matches, ...day2Matches])}
                               venueGroupId={venueGroupId}
-                              isConfirmed={isChangeConfirmed}
                             />
                           </div>
                           {/* Day2 */}
@@ -1519,9 +1484,7 @@ function MatchSchedule() {
                               externalSelectedTeam={crossVenueSelectedTeam}
                               onExternalSelect={setCrossVenueSelectedTeam}
                               allMatches={[...day1Matches, ...day2Matches]}
-                              changedTeamIds={getChangedTeamIds([...day1Matches, ...day2Matches])}
                               venueGroupId={venueGroupId}
-                              isConfirmed={isChangeConfirmed}
                             />
                           </div>
                         </div>
