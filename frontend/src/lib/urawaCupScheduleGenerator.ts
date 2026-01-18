@@ -2114,31 +2114,46 @@ function chooseBestBMatchPattern(teams: { teamType?: string }[]): BMatchPattern 
 
 /**
  * B戦パターンに基づいて試合パターンを生成
+ *
+ * 制約: B戦は必ずスロット3と6に配置
+ * 各パターンで、選択されたB戦ペアがスロット3,6に入るよう配置を調整
  */
 function getMatchPattern(bMatchPattern: BMatchPattern): { slot: number; home: number; away: number; isBMatch: boolean }[] {
   const bMatchPairs = B_MATCH_PAIR_OPTIONS[bMatchPattern]
-  const bMatchSet = new Set(bMatchPairs.map(([i, j]) => `${i}-${j}`))
 
-  // 6試合の全ペア（順序固定）
+  // 全6ペア（0-indexed）
   const allPairs: [number, number][] = [
-    [0, 1], // slot 1
-    [2, 3], // slot 2
-    [0, 2], // slot 3 (B戦候補)
-    [1, 2], // slot 4
-    [0, 3], // slot 5
-    [1, 3], // slot 6 (B戦候補)
+    [0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]
   ]
 
-  return allPairs.map(([home, away], index) => {
-    const pairKey = `${Math.min(home, away)}-${Math.max(home, away)}`
-    const isBMatch = bMatchSet.has(pairKey)
-    return {
-      slot: index + 1,
-      home: home + 1, // 1-indexed
-      away: away + 1, // 1-indexed
-      isBMatch,
+  // B戦ペアをセット化（順序無視で比較）
+  const bMatchSet = new Set(bMatchPairs.map(([i, j]) =>
+    `${Math.min(i, j)}-${Math.max(i, j)}`
+  ))
+
+  // A戦ペアとB戦ペアを分離
+  const aPairs: [number, number][] = []
+  const bPairs: [number, number][] = []
+
+  for (const pair of allPairs) {
+    const pairKey = `${Math.min(pair[0], pair[1])}-${Math.max(pair[0], pair[1])}`
+    if (bMatchSet.has(pairKey)) {
+      bPairs.push(pair)
+    } else {
+      aPairs.push(pair)
     }
-  })
+  }
+
+  // スロット配置: 1,2,4,5 = A戦、3,6 = B戦
+  // 順序: slot1(A), slot2(A), slot3(B), slot4(A), slot5(A), slot6(B)
+  return [
+    { slot: 1, home: aPairs[0][0] + 1, away: aPairs[0][1] + 1, isBMatch: false },
+    { slot: 2, home: aPairs[1][0] + 1, away: aPairs[1][1] + 1, isBMatch: false },
+    { slot: 3, home: bPairs[0][0] + 1, away: bPairs[0][1] + 1, isBMatch: true },  // B戦
+    { slot: 4, home: aPairs[2][0] + 1, away: aPairs[2][1] + 1, isBMatch: false },
+    { slot: 5, home: aPairs[3][0] + 1, away: aPairs[3][1] + 1, isBMatch: false },
+    { slot: 6, home: bPairs[1][0] + 1, away: bPairs[1][1] + 1, isBMatch: true },  // B戦
+  ]
 }
 
 // デフォルトパターン（後方互換性）
