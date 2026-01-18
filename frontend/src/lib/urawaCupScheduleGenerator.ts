@@ -830,6 +830,370 @@ export function validateSingleLeagueSchedule(matches: GeneratedMatch[], teams: T
 }
 
 // ============================================================================
+// 制約付き会場配置最適化アルゴリズム
+// ============================================================================
+
+/**
+ * チーム情報（制約チェック用）
+ */
+export interface TeamForAssignment {
+  id: number
+  name: string
+  shortName?: string
+  region?: string           // 地域（埼玉、東京など）
+  leagueId?: number         // 所属リーグID
+  teamType?: 'local' | 'invited'  // 地元校 or 招待校
+}
+
+/**
+ * 制約スコア設定（DB設定に合わせた重み）
+ */
+export interface ConstraintScores {
+  alreadyPlayed: number    // Day2再戦ペナルティ（デフォルト: 200）
+  sameLeague: number       // 同リーグペナルティ（デフォルト: 100）
+  sameRegion: number       // 同地域ペナルティ（デフォルト: 50）
+  localTeams: number       // 地元同士ペナルティ（デフォルト: 30）
+}
+
+const DEFAULT_CONSTRAINT_SCORES: ConstraintScores = {
+  alreadyPlayed: 200,
+  sameLeague: 100,
+  sameRegion: 50,
+  localTeams: 30,
+}
+
+/**
+ * 会場配置の最適化結果
+ */
+export interface VenueAssignmentResult {
+  assignments: Map<number, TeamForAssignment[]>  // venueId -> teams
+  score: number                                   // トータルコンフリクトスコア
+  details: {
+    sameLeaguePairs: number
+    sameRegionPairs: number
+    localVsLocalPairs: number
+    day1RepeatPairs: number
+  }
+}
+
+/**
+ * 2チーム間のコンフリクトスコアを計算
+ */
+function calculatePairConflict(
+  team1: TeamForAssignment,
+  team2: TeamForAssignment,
+  scores: ConstraintScores
+): { score: number; sameLeague: boolean; sameRegion: boolean; localVsLocal: boolean } {
+  let score = 0
+  let sameLeague = false
+  let sameRegion = false
+  let localVsLocal = false
+
+  // 同リーグチェック
+  if (team1.leagueId && team2.leagueId && team1.leagueId === team2.leagueId) {
+    score += scores.sameLeague
+    sameLeague = true
+  }
+
+  // 同地域チェック
+  if (team1.region && team2.region && team1.region === team2.region) {
+    score += scores.sameRegion
+    sameRegion = true
+  }
+
+  // 地元同士チェック
+  if (team1.teamType === 'local' && team2.teamType === 'local') {
+    score += scores.localTeams
+    localVsLocal = true
+  }
+
+  return { score, sameLeague, sameRegion, localVsLocal }
+}
+
+/**
+ * 会場配置のトータルスコアと詳細を計算
+ */
+function evaluateAssignment(
+  assignments: Map<number, TeamForAssignment[]>,
+  scores: ConstraintScores,
+  day1Opponents?: Map<number, Set<number>>
+): { score: number; details: VenueAssignmentResult['details'] } {
+  let totalScore = 0
+  const details = {
+    sameLeaguePairs: 0,
+    sameRegionPairs: 0,
+    localVsLocalPairs: 0,
+    day1RepeatPairs: 0,
+  }
+
+  for (const [, teams] of assignments) {
+    for (let i = 0; i < teams.length; i++) {
+      for (let j = i + 1; j < teams.length; j++) {
+        const conflict = calculatePairConflict(teams[i], teams[j], scores)
+        totalScore += conflict.score
+        if (conflict.sameLeague) details.sameLeaguePairs++
+        if (conflict.sameRegion) details.sameRegionPairs++
+        if (conflict.localVsLocal) details.localVsLocalPairs++
+
+        // Day2の場合、Day1での対戦ペアをチェック
+        if (day1Opponents) {
+          const team1Opponents = day1Opponents.get(teams[i].id)
+          if (team1Opponents?.has(teams[j].id)) {
+            totalScore += scores.alreadyPlayed
+            details.day1RepeatPairs++
+          }
+        }
+      }
+    }
+  }
+
+  return { score: totalScore, details }
+}
+
+/**
+ * Day1の対戦相手マップを構築
+ */
+function buildDay1OpponentsMap(
+  day1Assignments: Map<number, TeamForAssignment[]>
+): Map<number, Set<number>> {
+  const opponents = new Map<number, Set<number>>()
+
+  for (const [, teams] of day1Assignments) {
+    for (const team of teams) {
+      if (!opponents.has(team.id)) {
+        opponents.set(team.id, new Set())
+      }
+      // 同会場の他チームが対戦相手
+      for (const other of teams) {
+        if (other.id !== team.id) {
+          opponents.get(team.id)!.add(other.id)
+        }
+      }
+    }
+  }
+
+  return opponents
+}
+
+/**
+ * ランダムな初期配置を生成
+ */
+function randomInitialAssignment(
+  teams: TeamForAssignment[],
+  venueIds: number[],
+  teamsPerVenue: number
+): Map<number, TeamForAssignment[]> {
+  const shuffled = [...teams].sort(() => Math.random() - 0.5)
+  const assignments = new Map<number, TeamForAssignment[]>()
+
+  let teamIndex = 0
+  for (const venueId of venueIds) {
+    const venueTeams: TeamForAssignment[] = []
+    for (let i = 0; i < teamsPerVenue && teamIndex < shuffled.length; i++) {
+      venueTeams.push(shuffled[teamIndex++])
+    }
+    assignments.set(venueId, venueTeams)
+  }
+
+  return assignments
+}
+
+/**
+ * 貪欲法による初期配置生成
+ */
+function greedyAssignment(
+  teams: TeamForAssignment[],
+  venueIds: number[],
+  teamsPerVenue: number,
+  scores: ConstraintScores,
+  day1Opponents?: Map<number, Set<number>>
+): Map<number, TeamForAssignment[]> {
+  const assignments = new Map<number, TeamForAssignment[]>()
+  venueIds.forEach(id => assignments.set(id, []))
+
+  const remainingTeams = [...teams]
+
+  for (const venueId of venueIds) {
+    const venueTeams = assignments.get(venueId)!
+
+    while (venueTeams.length < teamsPerVenue && remainingTeams.length > 0) {
+      let bestTeamIndex = 0
+      let bestScore = Infinity
+
+      for (let i = 0; i < remainingTeams.length; i++) {
+        const candidate = remainingTeams[i]
+        let score = 0
+
+        // 既配置チームとのコンフリクト
+        for (const existingTeam of venueTeams) {
+          score += calculatePairConflict(candidate, existingTeam, scores).score
+
+          // Day2: Day1対戦相手との重複
+          if (day1Opponents) {
+            const candidateOpponents = day1Opponents.get(candidate.id)
+            if (candidateOpponents?.has(existingTeam.id)) {
+              score += scores.alreadyPlayed
+            }
+          }
+        }
+
+        if (score < bestScore) {
+          bestScore = score
+          bestTeamIndex = i
+        }
+      }
+
+      venueTeams.push(remainingTeams[bestTeamIndex])
+      remainingTeams.splice(bestTeamIndex, 1)
+    }
+  }
+
+  return assignments
+}
+
+/**
+ * 局所最適化（スワップによる改善）
+ */
+function optimizeBySwap(
+  assignments: Map<number, TeamForAssignment[]>,
+  scores: ConstraintScores,
+  day1Opponents?: Map<number, Set<number>>,
+  maxIterations: number = 50
+): Map<number, TeamForAssignment[]> {
+  const venueIds = Array.from(assignments.keys())
+  let improved = true
+  let iterations = 0
+
+  while (improved && iterations < maxIterations) {
+    improved = false
+    iterations++
+
+    for (let v1 = 0; v1 < venueIds.length; v1++) {
+      for (let v2 = v1 + 1; v2 < venueIds.length; v2++) {
+        const venue1Teams = assignments.get(venueIds[v1])!
+        const venue2Teams = assignments.get(venueIds[v2])!
+
+        for (let t1 = 0; t1 < venue1Teams.length; t1++) {
+          for (let t2 = 0; t2 < venue2Teams.length; t2++) {
+            const currentScore = evaluateAssignment(assignments, scores, day1Opponents).score
+
+            // スワップ
+            const temp = venue1Teams[t1]
+            venue1Teams[t1] = venue2Teams[t2]
+            venue2Teams[t2] = temp
+
+            const newScore = evaluateAssignment(assignments, scores, day1Opponents).score
+
+            if (newScore < currentScore) {
+              improved = true
+            } else {
+              // 元に戻す
+              venue2Teams[t2] = venue1Teams[t1]
+              venue1Teams[t1] = temp
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return assignments
+}
+
+/**
+ * Deep copy of assignments
+ */
+function cloneAssignments(
+  assignments: Map<number, TeamForAssignment[]>
+): Map<number, TeamForAssignment[]> {
+  const clone = new Map<number, TeamForAssignment[]>()
+  for (const [venueId, teams] of assignments) {
+    clone.set(venueId, [...teams])
+  }
+  return clone
+}
+
+/**
+ * 制約を考慮した最適な会場配置を生成（Multi-start）
+ */
+export function generateOptimalVenueAssignment(
+  teams: TeamForAssignment[],
+  venueIds: number[],
+  teamsPerVenue: number = 4,
+  scores: ConstraintScores = DEFAULT_CONSTRAINT_SCORES,
+  day1Assignments?: Map<number, TeamForAssignment[]>,
+  numRestarts: number = 5
+): VenueAssignmentResult {
+  console.log('[VenueOptimization] Starting with', teams.length, 'teams,', venueIds.length, 'venues')
+
+  const day1Opponents = day1Assignments ? buildDay1OpponentsMap(day1Assignments) : undefined
+
+  let bestAssignment: Map<number, TeamForAssignment[]> | null = null
+  let bestScore = Infinity
+  let bestDetails: VenueAssignmentResult['details'] | null = null
+
+  for (let restart = 0; restart < numRestarts; restart++) {
+    // 初期配置（最初は貪欲法、以降はランダム）
+    let assignment: Map<number, TeamForAssignment[]>
+    if (restart === 0) {
+      assignment = greedyAssignment(teams, venueIds, teamsPerVenue, scores, day1Opponents)
+    } else {
+      assignment = randomInitialAssignment(teams, venueIds, teamsPerVenue)
+    }
+
+    // 局所最適化
+    assignment = optimizeBySwap(assignment, scores, day1Opponents)
+
+    // 評価
+    const { score, details } = evaluateAssignment(assignment, scores, day1Opponents)
+
+    if (score < bestScore) {
+      bestScore = score
+      bestAssignment = cloneAssignments(assignment)
+      bestDetails = details
+    }
+
+    // スコア0なら最適解
+    if (score === 0) break
+  }
+
+  console.log('[VenueOptimization] Best score:', bestScore, bestDetails)
+
+  return {
+    assignments: bestAssignment!,
+    score: bestScore,
+    details: bestDetails!,
+  }
+}
+
+/**
+ * Map形式の配置をVenueAssignmentInfo配列に変換
+ */
+export function convertToVenueAssignmentInfos(
+  assignments: Map<number, TeamForAssignment[]>,
+  venueNames: Map<number, string>,
+  matchDay: number
+): VenueAssignmentInfo[] {
+  const result: VenueAssignmentInfo[] = []
+
+  for (const [venueId, teams] of assignments) {
+    teams.forEach((team, index) => {
+      result.push({
+        venueId,
+        venueName: venueNames.get(venueId) || `会場${venueId}`,
+        teamId: team.id,
+        teamName: team.name,
+        teamShortName: team.shortName,
+        matchDay,
+        slotOrder: index + 1,
+      })
+    })
+  }
+
+  return result
+}
+
+// ============================================================================
 // 会場配置ベースの日程生成（1リーグ制・新方式）
 // ============================================================================
 

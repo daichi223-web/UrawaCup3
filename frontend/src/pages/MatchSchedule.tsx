@@ -27,8 +27,12 @@ import {
   validateSchedule,
   validateSingleLeagueSchedule,
   checkConsecutiveMatches,
+  generateOptimalVenueAssignment,
+  convertToVenueAssignmentInfos,
   type TeamInfo,
   type VenueAssignmentInfo,
+  type TeamForAssignment,
+  type ConstraintScores,
 } from '@/lib/urawaCupScheduleGenerator'
 import { venueAssignmentApi } from '@/features/venue-assignments/api'
 import type {
@@ -404,9 +408,9 @@ function MatchSchedule() {
       let teamInfoList: TeamInfo[] = []
       let validationErrors: string[] = []
 
-      // === 1リーグ制（会場配置ベース） ===
+      // === 1リーグ制（会場配置ベース・制約最適化） ===
       if (!useGroupSystem) {
-        console.log('[Schedule] 1リーグ制（会場配置ベース）で生成')
+        console.log('[Schedule] 1リーグ制（制約ベース最適化）で生成')
         console.log('[Schedule] Day1:', day1Date, 'Day2:', day2Date)
         console.log('[Schedule] チーム数:', teams.length)
 
@@ -414,50 +418,140 @@ function MatchSchedule() {
           throw new Error('チームが2チーム以上必要です')
         }
 
-        // 会場配置を取得（なければ自動生成）
-        let day1Assignments = await venueAssignmentApi.getByTournament(tournamentId, 1)
-        let day2Assignments = await venueAssignmentApi.getByTournament(tournamentId, 2)
-
-        console.log('[Schedule] Day1会場配置:', day1Assignments.length, '件')
-        console.log('[Schedule] Day2会場配置:', day2Assignments.length, '件')
-
-        // 会場配置がなければ自動生成
-        if (day1Assignments.length === 0) {
-          console.log('[Schedule] Day1会場配置を自動生成...')
-          const result1 = await venueAssignmentApi.autoGenerate({
-            tournamentId,
-            matchDay: 1,
-            strategy: 'balanced',
-          })
-          day1Assignments = result1.assignments
-          console.log('[Schedule] Day1会場配置を自動生成:', day1Assignments.length, '件')
+        // 制約スコアを取得（DB設定またはデフォルト）
+        const constraintScores: ConstraintScores = {
+          alreadyPlayed: 200,  // Day2再戦ペナルティ
+          sameLeague: 100,     // 同リーグペナルティ
+          sameRegion: 50,      // 同地域ペナルティ
+          localTeams: 30,      // 地元同士ペナルティ
         }
 
-        if (day2Assignments.length === 0) {
-          console.log('[Schedule] Day2会場配置を自動生成...')
-          // Day2はDay1と異なる配置にするためランダム
-          const result2 = await venueAssignmentApi.autoGenerate({
-            tournamentId,
-            matchDay: 2,
-            strategy: 'random',
-          })
-          day2Assignments = result2.assignments
-          console.log('[Schedule] Day2会場配置を自動生成:', day2Assignments.length, '件')
-        }
+        // チーム情報を制約用フォーマットに変換
+        const teamsForAssignment: TeamForAssignment[] = teams.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          shortName: t.short_name,
+          region: t.region,
+          leagueId: t.league_id,
+          teamType: t.team_type as 'local' | 'invited' | undefined,
+        }))
 
-        // VenueAssignmentInfo形式に変換
-        const toAssignmentInfo = (a: any): VenueAssignmentInfo => ({
-          venueId: a.venueId,
-          venueName: a.venue?.name || `会場${a.venueId}`,
-          teamId: a.teamId,
-          teamName: a.team?.name || `チーム${a.teamId}`,
-          teamShortName: a.team?.shortName || a.team?.short_name,
-          matchDay: a.matchDay,
-          slotOrder: a.slotOrder,
+        // 会場IDリストを取得
+        const venueIds = targetVenues.map((v: any) => v.id)
+        const teamsPerVenue = 4  // 1会場4チーム固定
+
+        console.log('[Schedule] 制約スコア:', constraintScores)
+        console.log('[Schedule] 会場数:', venueIds.length, '1会場あたりチーム:', teamsPerVenue)
+
+        // Day1: 制約ベースの最適会場配置を生成
+        console.log('[Schedule] Day1会場配置を最適化生成中...')
+        const day1OptResult = generateOptimalVenueAssignment(
+          teamsForAssignment,
+          venueIds,
+          teamsPerVenue,
+          constraintScores,
+          undefined,  // Day1なのでDay1配置はなし
+          5           // マルチスタート回数
+        )
+
+        console.log('[Schedule] Day1最適化結果:', {
+          score: day1OptResult.score,
+          ...day1OptResult.details
         })
 
-        const day1AssignmentInfos = day1Assignments.map(toAssignmentInfo)
-        const day2AssignmentInfos = day2Assignments.map(toAssignmentInfo)
+        // Day2: Day1を考慮した最適会場配置を生成（再戦回避）
+        console.log('[Schedule] Day2会場配置を最適化生成中...')
+        const day2OptResult = generateOptimalVenueAssignment(
+          teamsForAssignment,
+          venueIds,
+          teamsPerVenue,
+          constraintScores,
+          day1OptResult.assignments,  // Day1の配置を渡して再戦回避
+          5
+        )
+
+        console.log('[Schedule] Day2最適化結果:', {
+          score: day2OptResult.score,
+          ...day2OptResult.details
+        })
+
+        // 最適化結果の警告を収集
+        const optimizationWarnings: string[] = []
+        if (day1OptResult.details.sameLeaguePairs > 0) {
+          optimizationWarnings.push(`Day1: 同リーグペア ${day1OptResult.details.sameLeaguePairs}組`)
+        }
+        if (day1OptResult.details.sameRegionPairs > 0) {
+          optimizationWarnings.push(`Day1: 同地域ペア ${day1OptResult.details.sameRegionPairs}組`)
+        }
+        if (day1OptResult.details.localVsLocalPairs > 0) {
+          optimizationWarnings.push(`Day1: 地元同士 ${day1OptResult.details.localVsLocalPairs}組`)
+        }
+        if (day2OptResult.details.sameLeaguePairs > 0) {
+          optimizationWarnings.push(`Day2: 同リーグペア ${day2OptResult.details.sameLeaguePairs}組`)
+        }
+        if (day2OptResult.details.sameRegionPairs > 0) {
+          optimizationWarnings.push(`Day2: 同地域ペア ${day2OptResult.details.sameRegionPairs}組`)
+        }
+        if (day2OptResult.details.localVsLocalPairs > 0) {
+          optimizationWarnings.push(`Day2: 地元同士 ${day2OptResult.details.localVsLocalPairs}組`)
+        }
+        if (day2OptResult.details.day1RepeatPairs > 0) {
+          optimizationWarnings.push(`Day2: Day1再戦ペア ${day2OptResult.details.day1RepeatPairs}組（避けられず）`)
+        }
+
+        // 会場名マップを作成
+        const venueNames = new Map<number, string>()
+        targetVenues.forEach((v: any) => venueNames.set(v.id, v.name))
+
+        // VenueAssignmentInfo形式に変換
+        const day1AssignmentInfos = convertToVenueAssignmentInfos(
+          day1OptResult.assignments,
+          venueNames,
+          1
+        )
+        const day2AssignmentInfos = convertToVenueAssignmentInfos(
+          day2OptResult.assignments,
+          venueNames,
+          2
+        )
+
+        // 既存の割り当てを削除してDB保存
+        await supabase
+          .from('venue_assignments')
+          .delete()
+          .eq('tournament_id', tournamentId)
+
+        // Day1割り当てをDBに保存
+        const day1DbAssignments = day1AssignmentInfos.map((a) => ({
+          tournament_id: tournamentId,
+          venue_id: a.venueId,
+          team_id: a.teamId,
+          match_day: 1,
+          slot_order: a.slotOrder,
+        }))
+        if (day1DbAssignments.length > 0) {
+          const { error: day1Error } = await supabase
+            .from('venue_assignments')
+            .insert(day1DbAssignments)
+          if (day1Error) console.error('[Schedule] Day1配置保存エラー:', day1Error)
+        }
+
+        // Day2割り当てをDBに保存
+        const day2DbAssignments = day2AssignmentInfos.map((a) => ({
+          tournament_id: tournamentId,
+          venue_id: a.venueId,
+          team_id: a.teamId,
+          match_day: 2,
+          slot_order: a.slotOrder,
+        }))
+        if (day2DbAssignments.length > 0) {
+          const { error: day2Error } = await supabase
+            .from('venue_assignments')
+            .insert(day2DbAssignments)
+          if (day2Error) console.error('[Schedule] Day2配置保存エラー:', day2Error)
+        }
+
+        console.log('[Schedule] 会場配置をDBに保存:', day1DbAssignments.length, '+', day2DbAssignments.length, '件')
 
         // 会場配置ベースで日程生成
         result = generateVenueBasedSchedule(
@@ -473,10 +567,16 @@ function MatchSchedule() {
           throw new Error('日程生成に失敗しました: ' + result.warnings.join(', '))
         }
 
+        // 最適化警告をマージ
+        result.warnings = [...result.warnings, ...optimizationWarnings]
+
         // 警告を表示
         if (result.warnings.length > 0) {
           console.warn('[Schedule] 警告:', result.warnings)
-          result.warnings.forEach(w => toast.error(w, { duration: 5000 }))
+        }
+        // 最適化警告がある場合はトーストで表示
+        if (optimizationWarnings.length > 0) {
+          optimizationWarnings.forEach(w => toast(w, { icon: '⚠️', duration: 4000 }))
         }
 
         console.log('[Schedule] 生成結果: A戦', result.stats.aMatches, '試合, B戦', result.stats.bMatches, '試合')
@@ -1563,7 +1663,6 @@ function MatchSchedule() {
                         teams={venueGroupId ? allTeams.filter(t => t.groupId === venueGroupId) : allTeams}
                         enableConstraintCheck
                         venueGroupId={venueGroupId}
-                        isConfirmed={isChangeConfirmed}
                       />
                     </div>
                   </div>
