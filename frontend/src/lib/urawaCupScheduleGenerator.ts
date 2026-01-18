@@ -1121,6 +1121,7 @@ function optimizeIntraVenueSlots(
 
 /**
  * 会場内のスコアを計算（特定の順序で）
+ * A戦の制約を優先、B戦の制約も副次的に考慮
  */
 function evaluateVenueScore(
   teams: TeamForAssignment[],
@@ -1132,8 +1133,14 @@ function evaluateVenueScore(
   const aMatchPairIndices: [number, number][] = [
     [0, 1], [2, 3], [1, 2], [0, 3]
   ]
+  // B戦ペアのインデックス
+  const bMatchPairIndices: [number, number][] = [
+    [0, 2], [1, 3]
+  ]
 
   let score = 0
+
+  // A戦の制約スコア（フルウェイト）
   for (const [i, j] of aMatchPairIndices) {
     const team1 = teams[order[i]]
     const team2 = teams[order[j]]
@@ -1144,6 +1151,23 @@ function evaluateVenueScore(
       const team1Opponents = day1Opponents.get(team1.id)
       if (team1Opponents?.has(team2.id)) {
         score += scores.alreadyPlayed
+      }
+    }
+  }
+
+  // B戦の制約スコア（0.1倍の重み = A戦優先のタイブレーカー）
+  // B戦同士の入れ替えで制約が外せる場合に対応
+  const bMatchWeight = 0.1
+  for (const [i, j] of bMatchPairIndices) {
+    const team1 = teams[order[i]]
+    const team2 = teams[order[j]]
+
+    score += calculatePairConflict(team1, team2, scores).score * bMatchWeight
+
+    if (day1Opponents) {
+      const team1Opponents = day1Opponents.get(team1.id)
+      if (team1Opponents?.has(team2.id)) {
+        score += scores.alreadyPlayed * bMatchWeight
       }
     }
   }
