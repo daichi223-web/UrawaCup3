@@ -1081,7 +1081,95 @@ function greedyAssignment(
 }
 
 /**
- * 局所最適化（スワップによる改善）
+ * 同一会場内でのスロット入れ替えによる最適化
+ * 制約違反ペアをB戦スロットに移動することで解消を試みる
+ *
+ * スロット順でのA戦/B戦ペア:
+ * - A戦: (0,1), (2,3), (1,2), (0,3) → 制約チェック対象
+ * - B戦: (0,2), (1,3) → 制約チェック対象外
+ */
+function optimizeIntraVenueSlots(
+  assignments: Map<number, TeamForAssignment[]>,
+  scores: ConstraintScores,
+  day1Opponents?: Map<number, Set<number>>
+): Map<number, TeamForAssignment[]> {
+  for (const [venueId, teams] of assignments) {
+    if (teams.length !== 4) continue
+
+    // 4チームの全順列を試す（4! = 24通り）
+    const permutations = generatePermutations([0, 1, 2, 3])
+    let bestOrder = [0, 1, 2, 3]
+    let bestScore = evaluateVenueScore(teams, bestOrder, scores, day1Opponents)
+
+    for (const perm of permutations) {
+      const score = evaluateVenueScore(teams, perm, scores, day1Opponents)
+      if (score < bestScore) {
+        bestScore = score
+        bestOrder = perm
+      }
+    }
+
+    // 最良の順序に並び替え
+    if (bestOrder.join(',') !== '0,1,2,3') {
+      const reordered = bestOrder.map(i => teams[i])
+      assignments.set(venueId, reordered)
+    }
+  }
+
+  return assignments
+}
+
+/**
+ * 会場内のスコアを計算（特定の順序で）
+ */
+function evaluateVenueScore(
+  teams: TeamForAssignment[],
+  order: number[],
+  scores: ConstraintScores,
+  day1Opponents?: Map<number, Set<number>>
+): number {
+  // A戦ペアのインデックス（順序適用後）
+  const aMatchPairIndices: [number, number][] = [
+    [0, 1], [2, 3], [1, 2], [0, 3]
+  ]
+
+  let score = 0
+  for (const [i, j] of aMatchPairIndices) {
+    const team1 = teams[order[i]]
+    const team2 = teams[order[j]]
+
+    score += calculatePairConflict(team1, team2, scores).score
+
+    if (day1Opponents) {
+      const team1Opponents = day1Opponents.get(team1.id)
+      if (team1Opponents?.has(team2.id)) {
+        score += scores.alreadyPlayed
+      }
+    }
+  }
+
+  return score
+}
+
+/**
+ * 配列の全順列を生成
+ */
+function generatePermutations(arr: number[]): number[][] {
+  if (arr.length <= 1) return [arr]
+
+  const result: number[][] = []
+  for (let i = 0; i < arr.length; i++) {
+    const rest = [...arr.slice(0, i), ...arr.slice(i + 1)]
+    const perms = generatePermutations(rest)
+    for (const perm of perms) {
+      result.push([arr[i], ...perm])
+    }
+  }
+  return result
+}
+
+/**
+ * 局所最適化（会場間スワップによる改善）
  */
 function optimizeBySwap(
   assignments: Map<number, TeamForAssignment[]>,
@@ -1097,6 +1185,10 @@ function optimizeBySwap(
     improved = false
     iterations++
 
+    // 1. まず会場内スロット最適化を実行
+    optimizeIntraVenueSlots(assignments, scores, day1Opponents)
+
+    // 2. 会場間スワップを試行
     for (let v1 = 0; v1 < venueIds.length; v1++) {
       for (let v2 = v1 + 1; v2 < venueIds.length; v2++) {
         const venue1Teams = assignments.get(venueIds[v1])!
@@ -1111,6 +1203,9 @@ function optimizeBySwap(
             venue1Teams[t1] = venue2Teams[t2]
             venue2Teams[t2] = temp
 
+            // スワップ後、両会場の内部スロットも最適化
+            optimizeIntraVenueSlots(assignments, scores, day1Opponents)
+
             const newScore = evaluateAssignment(assignments, scores, day1Opponents).score
 
             if (newScore < currentScore) {
@@ -1119,6 +1214,8 @@ function optimizeBySwap(
               // 元に戻す
               venue2Teams[t2] = venue1Teams[t1]
               venue1Teams[t1] = temp
+              // 元に戻した後も内部スロット最適化
+              optimizeIntraVenueSlots(assignments, scores, day1Opponents)
             }
           }
         }
