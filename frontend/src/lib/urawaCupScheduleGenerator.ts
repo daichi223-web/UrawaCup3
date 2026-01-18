@@ -1862,8 +1862,9 @@ function optimizeBySwapLex(
     // 2. 会場間スワップを試行（ホストは除外）
     for (let v1 = 0; v1 < venueIds.length; v1++) {
       for (let v2 = v1 + 1; v2 < venueIds.length; v2++) {
-        const venue1Teams = assignments.get(venueIds[v1])!
-        const venue2Teams = assignments.get(venueIds[v2])!
+        // 毎回最新の配列を取得
+        let venue1Teams = assignments.get(venueIds[v1])!
+        let venue2Teams = assignments.get(venueIds[v2])!
 
         for (let t1 = 0; t1 < venue1Teams.length; t1++) {
           // ホストはスワップしない
@@ -1873,10 +1874,14 @@ function optimizeBySwapLex(
             // ホストはスワップしない
             if (venue2Teams[t2].isHost && venue2Teams[t2].hostVenueId === venueIds[v2]) continue
 
-            const currentLex = evaluateAssignmentLex(assignments, bannedPairs)
-            const currentScore = encodeLexToScore(currentLex)
+            // 現在のスコアを計算
+            const currentScore = encodeLexToScore(evaluateAssignmentLex(assignments, bannedPairs))
 
-            // スワップ
+            // スワップ前の状態を保存（配列全体をコピー）
+            const venue1Before = [...venue1Teams]
+            const venue2Before = [...venue2Teams]
+
+            // スワップ実行
             const temp = venue1Teams[t1]
             venue1Teams[t1] = venue2Teams[t2]
             venue2Teams[t2] = temp
@@ -1884,17 +1889,22 @@ function optimizeBySwapLex(
             // スワップ後、両会場の内部スロットも最適化
             optimizeIntraVenueSlotsLex(assignments, bannedPairs)
 
-            const newLex = evaluateAssignmentLex(assignments, bannedPairs)
-            const newScore = encodeLexToScore(newLex)
+            // 最適化後の配列を再取得（optimizeIntraVenueSlotsLexが新しい配列を設定する可能性があるため）
+            venue1Teams = assignments.get(venueIds[v1])!
+            venue2Teams = assignments.get(venueIds[v2])!
+
+            const newScore = encodeLexToScore(evaluateAssignmentLex(assignments, bannedPairs))
 
             if (newScore < currentScore) {
               improved = true
+              // 改善された - この状態を維持
             } else {
-              // 元に戻す
-              venue2Teams[t2] = venue1Teams[t1]
-              venue1Teams[t1] = temp
-              // 元に戻した後も内部スロット最適化
-              optimizeIntraVenueSlotsLex(assignments, bannedPairs)
+              // 改善なし - 元に戻す
+              assignments.set(venueIds[v1], venue1Before)
+              assignments.set(venueIds[v2], venue2Before)
+              // 参照を更新
+              venue1Teams = venue1Before
+              venue2Teams = venue2Before
             }
           }
         }
