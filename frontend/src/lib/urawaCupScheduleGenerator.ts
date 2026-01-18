@@ -945,6 +945,26 @@ export function extractDay1AMatchPairs(
 }
 
 /**
+ * GeneratedMatchWithBMatchからDay1のB戦ペアを抽出
+ * @param matches 生成された試合一覧
+ * @returns Day1 B戦の対戦ペアSet
+ */
+export function extractDay1BMatchPairs(
+  matches: GeneratedMatchWithBMatch[]
+): Set<string> {
+  const pairs = new Set<string>()
+
+  for (const m of matches) {
+    // Day1 かつ B戦のみ
+    if (m.day === 1 && m.isBMatch) {
+      pairs.add(makePairKey(m.homeTeamId, m.awayTeamId))
+    }
+  }
+
+  return pairs
+}
+
+/**
  * 会場配置MapからA戦ペアを抽出
  * @param assignments 会場配置Map
  * @returns A戦の対戦ペアSet
@@ -966,6 +986,35 @@ export function extractAMatchPairsFromAssignments(
     if (teams.length < 4) continue
 
     for (const [idx1, idx2] of aMatchPairIndices) {
+      if (idx1 < teams.length && idx2 < teams.length) {
+        pairs.add(makePairKey(teams[idx1].id, teams[idx2].id))
+      }
+    }
+  }
+
+  return pairs
+}
+
+/**
+ * 会場配置MapからB戦ペアを抽出
+ * @param assignments 会場配置Map
+ * @returns B戦の対戦ペアSet
+ */
+export function extractBMatchPairsFromAssignments(
+  assignments: Map<number, TeamForAssignment[]>
+): Set<string> {
+  const pairs = new Set<string>()
+
+  // B戦の対戦ペア（パターンB: 1vs3, 2vs4）
+  const bMatchPairIndices: [number, number][] = [
+    [0, 2], // チーム1 vs チーム3
+    [1, 3], // チーム2 vs チーム4
+  ]
+
+  for (const [, teams] of assignments) {
+    if (teams.length < 4) continue
+
+    for (const [idx1, idx2] of bMatchPairIndices) {
       if (idx1 < teams.length && idx2 < teams.length) {
         pairs.add(makePairKey(teams[idx1].id, teams[idx2].id))
       }
@@ -1077,9 +1126,22 @@ interface LexPairScoreWithBMatch extends LexPairScore {
   bMatchLocalVsLocal: number
 }
 
+/**
+ * 会場配置を評価
+ *
+ * 設計思想:
+ * - A戦とB戦を別々に評価
+ * - day1Repeat は A戦同士、B戦同士でのみカウント
+ * - sameLeague, sameRegion, localVsLocal は両方で同じ基準
+ *
+ * @param assignments 会場配置
+ * @param bannedAMatchPairs Day1 A戦ペア（Day2 A戦のday1Repeat用）
+ * @param bannedBMatchPairs Day1 B戦ペア（Day2 B戦のday1Repeat用）
+ */
 function evaluateAssignmentLex(
   assignments: Map<number, TeamForAssignment[]>,
-  bannedPairs?: Set<string>
+  bannedAMatchPairs?: Set<string>,
+  bannedBMatchPairs?: Set<string>
 ): LexPairScoreWithBMatch {
   const total: LexPairScoreWithBMatch = {
     sameLeague: 0,
@@ -1091,11 +1153,11 @@ function evaluateAssignmentLex(
     bMatchLocalVsLocal: 0,
   }
 
-  // A戦ペアのインデックス
+  // A戦ペアのインデックス（パターンB）
   const aMatchPairIndices: [number, number][] = [
     [0, 1], [2, 3], [1, 2], [0, 3]
   ]
-  // B戦ペアのインデックス
+  // B戦ペアのインデックス（パターンB）
   const bMatchPairIndices: [number, number][] = [
     [0, 2], [1, 3]
   ]
@@ -1103,10 +1165,10 @@ function evaluateAssignmentLex(
   for (const [, teams] of assignments) {
     if (teams.length < 4) continue
 
-    // A戦評価
+    // A戦評価（bannedAMatchPairs を使用）
     for (const [i, j] of aMatchPairIndices) {
       if (i < teams.length && j < teams.length) {
-        const pairLex = evaluatePairLex(teams[i], teams[j], bannedPairs)
+        const pairLex = evaluatePairLex(teams[i], teams[j], bannedAMatchPairs)
         total.sameLeague += pairLex.sameLeague
         total.sameRegion += pairLex.sameRegion
         total.localVsLocal += pairLex.localVsLocal
@@ -1114,13 +1176,15 @@ function evaluateAssignmentLex(
       }
     }
 
-    // B戦評価（統計用）
+    // B戦評価（bannedBMatchPairs を使用）
     for (const [i, j] of bMatchPairIndices) {
       if (i < teams.length && j < teams.length) {
-        const pairLex = evaluatePairLex(teams[i], teams[j], bannedPairs)
+        const pairLex = evaluatePairLex(teams[i], teams[j], bannedBMatchPairs)
         total.bMatchSameLeague += pairLex.sameLeague
         total.bMatchSameRegion += pairLex.sameRegion
         total.bMatchLocalVsLocal += pairLex.localVsLocal
+        // B戦のday1Repeat も total.day1Repeat に加算（B戦同士の重複）
+        total.day1Repeat += pairLex.day1Repeat
       }
     }
   }
@@ -1665,7 +1729,8 @@ function cloneAssignments(
  * @param scores 重み付きスコア（後方互換性のため残す）
  * @param day1Assignments Day1の配置（Day2生成時に使用）
  * @param numRestarts Multi-startの試行回数
- * @param bannedPairs Day1 A戦ペア（Day2のハード制約）
+ * @param bannedAMatchPairs Day1 A戦ペア（Day2 A戦のハード制約）
+ * @param bannedBMatchPairs Day1 B戦ペア（Day2 B戦のハード制約）
  */
 export function generateOptimalVenueAssignment(
   teams: TeamForAssignment[],
@@ -1674,15 +1739,21 @@ export function generateOptimalVenueAssignment(
   scores: ConstraintScores = DEFAULT_CONSTRAINT_SCORES,
   day1Assignments?: Map<number, TeamForAssignment[]>,
   numRestarts: number = 5,
-  bannedPairs?: Set<string>
+  bannedAMatchPairs?: Set<string>,
+  bannedBMatchPairs?: Set<string>
 ): VenueAssignmentResult {
   console.log('[VenueOptimization] Starting Anchor-Pod CP with', teams.length, 'teams,', venueIds.length, 'venues')
 
   // Day1 Assignments がある場合は、そこから bannedPairs を生成
-  let effectiveBannedPairs = bannedPairs
-  if (!effectiveBannedPairs && day1Assignments) {
-    effectiveBannedPairs = extractAMatchPairsFromAssignments(day1Assignments)
-    console.log('[VenueOptimization] Extracted', effectiveBannedPairs.size, 'banned pairs from Day1 assignments')
+  let effectiveBannedAMatchPairs = bannedAMatchPairs
+  let effectiveBannedBMatchPairs = bannedBMatchPairs
+  if (!effectiveBannedAMatchPairs && day1Assignments) {
+    effectiveBannedAMatchPairs = extractAMatchPairsFromAssignments(day1Assignments)
+    console.log('[VenueOptimization] Extracted', effectiveBannedAMatchPairs.size, 'banned A-match pairs from Day1')
+  }
+  if (!effectiveBannedBMatchPairs && day1Assignments) {
+    effectiveBannedBMatchPairs = extractBMatchPairsFromAssignments(day1Assignments)
+    console.log('[VenueOptimization] Extracted', effectiveBannedBMatchPairs.size, 'banned B-match pairs from Day1')
   }
 
   // PodPlan計算を試みる（失敗時は均等配置）
@@ -1698,7 +1769,7 @@ export function generateOptimalVenueAssignment(
   }
 
   let bestAssignment: Map<number, TeamForAssignment[]> | null = null
-  let bestLexScore: LexPairScore | null = null
+  let bestLexScore: LexPairScoreWithBMatch | null = null
   let bestEncodedScore = Infinity
 
   for (let restart = 0; restart < numRestarts; restart++) {
@@ -1706,21 +1777,21 @@ export function generateOptimalVenueAssignment(
     let assignment: Map<number, TeamForAssignment[]>
 
     if (restart === 0) {
-      // 最初はホストアンカー付き貪欲法
-      assignment = buildAssignmentsGreedyWithHosts(teams, venueIds, podSizes, effectiveBannedPairs)
+      // 最初はホストアンカー付き貪欲法（A戦制約を優先）
+      assignment = buildAssignmentsGreedyWithHosts(teams, venueIds, podSizes, effectiveBannedAMatchPairs)
     } else {
       // 以降はランダム（ホストは維持）
       assignment = randomInitialAssignmentWithHosts(teams, venueIds, podSizes)
     }
 
     // 会場内スロット最適化（辞書式）
-    optimizeIntraVenueSlotsLex(assignment, effectiveBannedPairs)
+    optimizeIntraVenueSlotsLex(assignment, effectiveBannedAMatchPairs, effectiveBannedBMatchPairs)
 
     // 会場間スワップ最適化（辞書式）
-    assignment = optimizeBySwapLex(assignment, effectiveBannedPairs)
+    assignment = optimizeBySwapLex(assignment, effectiveBannedAMatchPairs, effectiveBannedBMatchPairs)
 
     // 評価
-    const lexScore = evaluateAssignmentLex(assignment, effectiveBannedPairs)
+    const lexScore = evaluateAssignmentLex(assignment, effectiveBannedAMatchPairs, effectiveBannedBMatchPairs)
     const encodedScore = encodeLexToScore(lexScore)
 
     if (encodedScore < bestEncodedScore) {
@@ -1830,7 +1901,8 @@ function randomInitialAssignmentWithHosts(
  */
 function optimizeIntraVenueSlotsLex(
   assignments: Map<number, TeamForAssignment[]>,
-  bannedPairs?: Set<string>,
+  bannedAMatchPairs?: Set<string>,
+  bannedBMatchPairs?: Set<string>,
   debug: boolean = false
 ): void {
   for (const [venueId, teams] of assignments) {
@@ -1839,13 +1911,13 @@ function optimizeIntraVenueSlotsLex(
     // 4チームの全順列を試す（4! = 24通り）
     const permutations = generatePermutations([0, 1, 2, 3])
     let bestOrder = [0, 1, 2, 3]
-    let bestScore = evaluateVenueLexScore(teams, bestOrder, bannedPairs)
+    let bestScore = evaluateVenueLexScore(teams, bestOrder, bannedAMatchPairs, bannedBMatchPairs)
 
     // デバッグ: 地元チームがあるか確認
     const localTeamIndices = teams.map((t, i) => t.teamType === 'local' ? i : -1).filter(i => i >= 0)
 
     for (const perm of permutations) {
-      const score = evaluateVenueLexScore(teams, perm, bannedPairs)
+      const score = evaluateVenueLexScore(teams, perm, bannedAMatchPairs, bannedBMatchPairs)
       if (score < bestScore) {
         bestScore = score
         bestOrder = perm
@@ -1880,7 +1952,8 @@ function optimizeIntraVenueSlotsLex(
 function evaluateVenueLexScore(
   teams: TeamForAssignment[],
   order: number[],
-  bannedPairs?: Set<string>
+  bannedAMatchPairs?: Set<string>,
+  bannedBMatchPairs?: Set<string>
 ): number {
   const total: LexPairScore = {
     sameLeague: 0,
@@ -1898,26 +1971,27 @@ function evaluateVenueLexScore(
     [0, 2], [1, 3]
   ]
 
-  // A戦の制約（フルウェイト）
+  // A戦の制約（フルウェイト、A戦禁止ペアでday1Repeatチェック）
   for (const [i, j] of aMatchPairIndices) {
     const team1 = teams[order[i]]
     const team2 = teams[order[j]]
-    const pairLex = evaluatePairLex(team1, team2, bannedPairs)
+    const pairLex = evaluatePairLex(team1, team2, bannedAMatchPairs)
     total.sameLeague += pairLex.sameLeague
     total.sameRegion += pairLex.sameRegion
     total.localVsLocal += pairLex.localVsLocal
     total.day1Repeat += pairLex.day1Repeat
   }
 
-  // B戦の制約（0.001倍 = タイブレーカーとして使用）
+  // B戦の制約（0.001倍 = タイブレーカーとして使用、B戦禁止ペアでday1Repeatチェック）
   for (const [i, j] of bMatchPairIndices) {
     const team1 = teams[order[i]]
     const team2 = teams[order[j]]
-    const pairLex = evaluatePairLex(team1, team2, bannedPairs)
+    const pairLex = evaluatePairLex(team1, team2, bannedBMatchPairs)
     // B戦は極めて低い重みで加算（A戦の優先度を崩さない）
     total.localVsLocal += pairLex.localVsLocal * 0.001
     total.sameRegion += pairLex.sameRegion * 0.001
     total.sameLeague += pairLex.sameLeague * 0.001
+    total.day1Repeat += pairLex.day1Repeat * 0.001  // B戦のday1Repeatも加算
   }
 
   return encodeLexToScore(total)
@@ -1928,7 +2002,8 @@ function evaluateVenueLexScore(
  */
 function optimizeBySwapLex(
   assignments: Map<number, TeamForAssignment[]>,
-  bannedPairs?: Set<string>,
+  bannedAMatchPairs?: Set<string>,
+  bannedBMatchPairs?: Set<string>,
   maxIterations: number = 50
 ): Map<number, TeamForAssignment[]> {
   const venueIds = Array.from(assignments.keys())
@@ -1940,7 +2015,7 @@ function optimizeBySwapLex(
     iterations++
 
     // 1. 会場内スロット最適化
-    optimizeIntraVenueSlotsLex(assignments, bannedPairs)
+    optimizeIntraVenueSlotsLex(assignments, bannedAMatchPairs, bannedBMatchPairs)
 
     // 2. 会場間スワップを試行（ホストは除外）
     for (let v1 = 0; v1 < venueIds.length; v1++) {
@@ -1958,7 +2033,7 @@ function optimizeBySwapLex(
             if (venue2Teams[t2].isHost && venue2Teams[t2].hostVenueId === venueIds[v2]) continue
 
             // 現在のスコアを計算（B戦も含めたタイブレーカー付き）
-            const currentScore = encodeLexToScoreWithBMatch(evaluateAssignmentLex(assignments, bannedPairs))
+            const currentScore = encodeLexToScoreWithBMatch(evaluateAssignmentLex(assignments, bannedAMatchPairs, bannedBMatchPairs))
 
             // スワップ前の状態を保存（配列全体をコピー）
             const venue1Before = [...venue1Teams]
@@ -1970,13 +2045,13 @@ function optimizeBySwapLex(
             venue2Teams[t2] = temp
 
             // スワップ後、両会場の内部スロットも最適化
-            optimizeIntraVenueSlotsLex(assignments, bannedPairs)
+            optimizeIntraVenueSlotsLex(assignments, bannedAMatchPairs, bannedBMatchPairs)
 
             // 最適化後の配列を再取得（optimizeIntraVenueSlotsLexが新しい配列を設定する可能性があるため）
             venue1Teams = assignments.get(venueIds[v1])!
             venue2Teams = assignments.get(venueIds[v2])!
 
-            const newScore = encodeLexToScoreWithBMatch(evaluateAssignmentLex(assignments, bannedPairs))
+            const newScore = encodeLexToScoreWithBMatch(evaluateAssignmentLex(assignments, bannedAMatchPairs, bannedBMatchPairs))
 
             if (newScore < currentScore) {
               improved = true
