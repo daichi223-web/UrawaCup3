@@ -37,7 +37,7 @@ export const venueAssignmentApi = {
       .from('venue_assignments')
       .select(`
         *,
-        venue:venues(id, name, short_name),
+        venue:venues(id, name),
         team:teams(id, name, short_name)
       `)
       .eq('tournament_id', tournamentId)
@@ -64,7 +64,7 @@ export const venueAssignmentApi = {
       .from('venue_assignments')
       .select(`
         *,
-        venue:venues(id, name, short_name),
+        venue:venues(id, name),
         team:teams(id, name, short_name)
       `)
       .eq('id', id)
@@ -90,7 +90,7 @@ export const venueAssignmentApi = {
       })
       .select(`
         *,
-        venue:venues(id, name, short_name),
+        venue:venues(id, name),
         team:teams(id, name, short_name)
       `)
       .single();
@@ -118,7 +118,7 @@ export const venueAssignmentApi = {
       .eq('id', id)
       .select(`
         *,
-        venue:venues(id, name, short_name),
+        venue:venues(id, name),
         team:teams(id, name, short_name)
       `)
       .single();
@@ -261,7 +261,7 @@ export const venueAssignmentApi = {
         .insert(assignments)
         .select(`
           *,
-          venue:venues(id, name, short_name),
+          venue:venues(id, name),
           team:teams(id, name, short_name)
         `);
 
