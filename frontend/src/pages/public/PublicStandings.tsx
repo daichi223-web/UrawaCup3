@@ -88,15 +88,135 @@ export default function PublicStandings() {
         retry: 2,
     });
 
-    // 総合順位マップを作成（グループ別表示で総合順位を表示するため）
-    const overallRankingsMap = useMemo(() => {
-        if (!overallStandings?.entries) return new Map<number, number>();
-        const map = new Map<number, number>();
-        overallStandings.entries.forEach(entry => {
-            map.set(entry.teamId, entry.overallRank);
+    // 試合データから総合順位を計算（DBにデータがない場合のフォールバック）
+    const calculatedOverallData = useMemo(() => {
+        if (teams.length === 0 || matches.length === 0) return { map: new Map<number, number>(), entries: [] };
+
+        const completedMatches = matches.filter((m: any) => m.status === 'completed' && m.stage === 'preliminary');
+        if (completedMatches.length === 0) return { map: new Map<number, number>(), entries: [] };
+
+        // チームごとの成績を集計
+        const statsMap = new Map<number, {
+            teamId: number;
+            teamName: string;
+            shortName: string;
+            groupId: string;
+            points: number;
+            goalDiff: number;
+            goalsFor: number;
+            goalsAgainst: number;
+            played: number;
+            won: number;
+            drawn: number;
+            lost: number;
+        }>();
+
+        teams.forEach((t: any) => {
+            statsMap.set(t.id, {
+                teamId: t.id,
+                teamName: t.name,
+                shortName: t.short_name || t.shortName || t.name,
+                groupId: t.group_id || t.groupId || '',
+                points: 0,
+                goalDiff: 0,
+                goalsFor: 0,
+                goalsAgainst: 0,
+                played: 0,
+                won: 0,
+                drawn: 0,
+                lost: 0,
+            });
         });
-        return map;
-    }, [overallStandings]);
+
+        completedMatches.forEach((m: any) => {
+            const homeId = m.homeTeamId ?? m.home_team_id;
+            const awayId = m.awayTeamId ?? m.away_team_id;
+            const homeScore = m.homeScoreTotal ?? m.home_score_total ?? 0;
+            const awayScore = m.awayScoreTotal ?? m.away_score_total ?? 0;
+
+            if (!homeId || !awayId) return;
+
+            const homeStats = statsMap.get(homeId);
+            const awayStats = statsMap.get(awayId);
+            if (!homeStats || !awayStats) return;
+
+            homeStats.played++;
+            awayStats.played++;
+            homeStats.goalsFor += homeScore;
+            homeStats.goalsAgainst += awayScore;
+            awayStats.goalsFor += awayScore;
+            awayStats.goalsAgainst += homeScore;
+            homeStats.goalDiff += (homeScore - awayScore);
+            awayStats.goalDiff += (awayScore - homeScore);
+
+            if (homeScore > awayScore) {
+                homeStats.points += 3;
+                homeStats.won++;
+                awayStats.lost++;
+            } else if (homeScore < awayScore) {
+                awayStats.points += 3;
+                awayStats.won++;
+                homeStats.lost++;
+            } else {
+                homeStats.points += 1;
+                awayStats.points += 1;
+                homeStats.drawn++;
+                awayStats.drawn++;
+            }
+        });
+
+        // ソートして順位付け
+        const sorted = Array.from(statsMap.values())
+            .filter(s => s.played > 0)
+            .sort((a, b) => {
+                if (b.points !== a.points) return b.points - a.points;
+                if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+                return b.goalsFor - a.goalsFor;
+            });
+
+        const rankMap = new Map<number, number>();
+        const entries = sorted.map((stats, index) => {
+            rankMap.set(stats.teamId, index + 1);
+            return {
+                overallRank: index + 1,
+                groupId: stats.groupId,
+                groupRank: 0,
+                teamId: stats.teamId,
+                teamName: stats.teamName,
+                shortName: stats.shortName,
+                points: stats.points,
+                goalDifference: stats.goalDiff,
+                goalsFor: stats.goalsFor,
+                goalsAgainst: stats.goalsAgainst,
+                played: stats.played,
+                won: stats.won,
+                drawn: stats.drawn,
+                lost: stats.lost,
+            };
+        });
+
+        return { map: rankMap, entries };
+    }, [teams, matches]);
+
+    // 総合順位マップを作成（DB優先、なければローカル計算）
+    const overallRankingsMap = useMemo(() => {
+        if (overallStandings?.entries && overallStandings.entries.length > 0) {
+            const map = new Map<number, number>();
+            overallStandings.entries.forEach(entry => {
+                map.set(entry.teamId, entry.overallRank);
+            });
+            return map;
+        }
+        return calculatedOverallData.map;
+    }, [overallStandings, calculatedOverallData]);
+
+    // 総合順位表用のエントリ（DB優先、なければローカル計算）
+    const displayOverallEntries = useMemo(() => {
+        if (overallStandings?.entries && overallStandings.entries.length > 0) {
+            return overallStandings.entries;
+        }
+        return calculatedOverallData.entries;
+    }, [overallStandings, calculatedOverallData]);
 
     // データ更新関数
     const refreshData = useCallback(async () => {
@@ -194,7 +314,8 @@ export default function PublicStandings() {
                                 teams={teams}
                                 matches={matches}
                                 groupId="all"
-                                showOverallRank={false}
+                                overallRankings={overallRankingsMap}
+                                showOverallRank={true}
                             />
                         </div>
                     ) : (
@@ -232,7 +353,7 @@ export default function PublicStandings() {
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                         {(groupTab === 'overall' || !useGroupSystem) ? (
                             // 総合順位表
-                            overallStandings && overallStandings.entries.length > 0 ? (
+                            displayOverallEntries.length > 0 ? (
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm">
                                         <thead>
@@ -249,8 +370,9 @@ export default function PublicStandings() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {overallStandings.entries.map((entry) => {
-                                                const isQualifying = entry.overallRank <= overallStandings.qualifyingCount;
+                                            {displayOverallEntries.map((entry) => {
+                                                const qualifyingCount = overallStandings?.qualifyingCount || 4;
+                                                const isQualifying = entry.overallRank <= qualifyingCount;
                                                 return (
                                                     <tr
                                                         key={entry.teamId}
@@ -288,7 +410,7 @@ export default function PublicStandings() {
                                         </tbody>
                                     </table>
                                     <p className="text-xs text-amber-600 mt-3 px-4 pb-3">
-                                        ※ 上位{overallStandings.qualifyingCount}チームが決勝トーナメント進出
+                                        ※ 上位{overallStandings?.qualifyingCount || 4}チームが決勝トーナメント進出
                                     </p>
                                 </div>
                             ) : (
