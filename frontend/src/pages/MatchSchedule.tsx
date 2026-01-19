@@ -329,6 +329,89 @@ function MatchSchedule() {
     return teamsWithConsecutive
   }, [day1Matches, day2Matches])
 
+  // 制約違反チェック: 地元同士の対戦
+  const localVsLocalMatches = useMemo(() => {
+    const matches: MatchWithDetails[] = []
+    const checkMatches = (dayMatches: MatchWithDetails[]) => {
+      for (const match of dayMatches) {
+        const homeId = match.homeTeamId || match.home_team_id
+        const awayId = match.awayTeamId || match.away_team_id
+        const homeTeam = allTeams.find(t => t.id === homeId)
+        const awayTeam = allTeams.find(t => t.id === awayId)
+        if (homeTeam?.teamType === 'local' && awayTeam?.teamType === 'local') {
+          matches.push(match)
+        }
+      }
+    }
+    checkMatches(day1Matches)
+    checkMatches(day2Matches)
+    return matches
+  }, [day1Matches, day2Matches, allTeams])
+
+  // 制約違反チェック: 同地区対戦
+  const sameRegionMatches = useMemo(() => {
+    const matches: MatchWithDetails[] = []
+    const checkMatches = (dayMatches: MatchWithDetails[]) => {
+      for (const match of dayMatches) {
+        const homeId = match.homeTeamId || match.home_team_id
+        const awayId = match.awayTeamId || match.away_team_id
+        const homeTeam = allTeams.find(t => t.id === homeId)
+        const awayTeam = allTeams.find(t => t.id === awayId)
+        if (homeTeam?.region && awayTeam?.region && homeTeam.region === awayTeam.region) {
+          matches.push(match)
+        }
+      }
+    }
+    checkMatches(day1Matches)
+    checkMatches(day2Matches)
+    return matches
+  }, [day1Matches, day2Matches, allTeams])
+
+  // 制約違反チェック: 同リーグ対戦
+  const sameLeagueMatches = useMemo(() => {
+    const matches: MatchWithDetails[] = []
+    const checkMatches = (dayMatches: MatchWithDetails[]) => {
+      for (const match of dayMatches) {
+        const homeId = match.homeTeamId || match.home_team_id
+        const awayId = match.awayTeamId || match.away_team_id
+        const homeTeam = allTeams.find(t => t.id === homeId)
+        const awayTeam = allTeams.find(t => t.id === awayId)
+        if (homeTeam?.leagueId && awayTeam?.leagueId && homeTeam.leagueId === awayTeam.leagueId) {
+          matches.push(match)
+        }
+      }
+    }
+    checkMatches(day1Matches)
+    checkMatches(day2Matches)
+    return matches
+  }, [day1Matches, day2Matches, allTeams])
+
+  // 制約違反チェック: Day1再戦ペア（Day1とDay2で同じ対戦カード）
+  const day1RepeatPairs = useMemo(() => {
+    const day1Pairs = new Set<string>()
+    for (const match of day1Matches) {
+      const homeId = match.homeTeamId || match.home_team_id
+      const awayId = match.awayTeamId || match.away_team_id
+      if (homeId && awayId) {
+        const pairKey = [homeId, awayId].sort((a, b) => a - b).join('-')
+        day1Pairs.add(pairKey)
+      }
+    }
+
+    const repeatMatches: MatchWithDetails[] = []
+    for (const match of day2Matches) {
+      const homeId = match.homeTeamId || match.home_team_id
+      const awayId = match.awayTeamId || match.away_team_id
+      if (homeId && awayId) {
+        const pairKey = [homeId, awayId].sort((a, b) => a - b).join('-')
+        if (day1Pairs.has(pairKey)) {
+          repeatMatches.push(match)
+        }
+      }
+    }
+    return repeatMatches
+  }, [day1Matches, day2Matches])
+
   // 予選リーグの存在確認（Day1またはDay2に試合があるか）
   const hasPreliminaryMatches = useMemo(() => {
     return allMatches.some(m => m.stage === 'preliminary')
@@ -1205,6 +1288,30 @@ function MatchSchedule() {
               {consecutiveMatchTeams.size > 0 && (
                 <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full font-medium">
                   ⚠ 連戦: {consecutiveMatchTeams.size}チーム
+                </span>
+              )}
+              {/* 地元同士バッジ */}
+              {localVsLocalMatches.length > 0 && (
+                <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full font-medium">
+                  ⚠ 地元同士: {localVsLocalMatches.length}試合
+                </span>
+              )}
+              {/* 同地区バッジ */}
+              {sameRegionMatches.length > 0 && (
+                <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">
+                  ⚠ 同地区: {sameRegionMatches.length}試合
+                </span>
+              )}
+              {/* 同リーグバッジ */}
+              {sameLeagueMatches.length > 0 && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                  ⚠ 同リーグ: {sameLeagueMatches.length}試合
+                </span>
+              )}
+              {/* Day1再戦バッジ */}
+              {day1RepeatPairs.length > 0 && (
+                <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
+                  ⚠ Day1再戦: {day1RepeatPairs.length}試合
                 </span>
               )}
             </>

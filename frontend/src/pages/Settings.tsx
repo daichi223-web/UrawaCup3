@@ -224,8 +224,28 @@ function Settings() {
         trainingIntervalMinutes: (tournament as any).trainingIntervalMinutes ?? (tournament as any).training_interval_minutes ?? 5,
         trainingMatchesPerTeam: (tournament as any).trainingMatchesPerTeam ?? (tournament as any).training_matches_per_team ?? 2,
       })
+
+      // 制約設定をDBから読み込んでZustandストアに反映
+      const t = tournament as any
+      setConstraintSettings({
+        avoidLocalVsLocal: t.avoid_local_vs_local ?? false,
+        avoidSameRegion: t.avoid_same_region ?? false,
+        avoidSameLeague: t.avoid_same_league ?? false,
+        avoidConsecutive: t.avoid_consecutive ?? true,
+        warnDailyGameLimit: t.warn_daily_game_limit ?? true,
+        warnTotalGameLimit: t.warn_total_game_limit ?? true,
+      })
+      // マスタデータも読み込み
+      const dbRegions = t.region_master as string[] | null
+      const dbLeagues = t.league_master as string[] | null
+      if (Array.isArray(dbRegions)) {
+        dbRegions.forEach(r => addRegion(r))
+      }
+      if (Array.isArray(dbLeagues)) {
+        dbLeagues.forEach(l => addLeague(l))
+      }
     }
-  }, [tournament])
+  }, [tournament, setConstraintSettings, addRegion, addLeague])
 
   // 大会設定更新
   const updateTournamentMutation = useMutation({
@@ -309,6 +329,32 @@ function Settings() {
   const handleSaveTournament = () => {
     updateTournamentMutation.mutate(tournamentForm)
   }
+
+  // 制約設定をDBに保存
+  const saveConstraintSettingsMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('tournaments')
+        .update({
+          avoid_local_vs_local: constraintSettings.avoidLocalVsLocal,
+          avoid_same_region: constraintSettings.avoidSameRegion,
+          avoid_same_league: constraintSettings.avoidSameLeague,
+          avoid_consecutive: constraintSettings.avoidConsecutive,
+          warn_daily_game_limit: constraintSettings.warnDailyGameLimit,
+          warn_total_game_limit: constraintSettings.warnTotalGameLimit,
+          region_master: masterData.regions,
+          league_master: masterData.leagues,
+        })
+        .eq('id', tournamentId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success('対戦回避設定を保存しました')
+    },
+    onError: (error: Error) => {
+      toast.error(`保存に失敗しました: ${error.message}`)
+    },
+  })
 
   // 会場一覧を取得（常に最新データを取得）
   const { data: venueData, isLoading: isLoadingVenues } = useQuery({
@@ -1493,9 +1539,16 @@ function Settings() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-500 mt-4">
-            ※ 設定は自動保存されます（ブラウザに保存）
-          </p>
+          <div className="mt-6 pt-4 border-t flex justify-end">
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => saveConstraintSettingsMutation.mutate()}
+              disabled={saveConstraintSettingsMutation.isPending}
+            >
+              {saveConstraintSettingsMutation.isPending ? '保存中...' : '対戦回避設定を保存'}
+            </button>
+          </div>
         </div>
       </div>
 
