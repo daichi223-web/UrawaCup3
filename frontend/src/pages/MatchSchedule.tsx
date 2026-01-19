@@ -157,6 +157,30 @@ function MatchSchedule() {
   console.log('[MatchSchedule] venues:', venues.length, venues)
   console.log('[MatchSchedule] useGroupSystem:', useGroupSystem)
 
+  // DBから制約設定を読み込んでZustandストアに反映
+  const setConstraintSettings = useConstraintSettingsStore(state => state.setSettings)
+  useEffect(() => {
+    if (tournament) {
+      const t = tournament as any
+      // DBに保存された設定があればZustandストアに反映
+      if (t.avoid_local_vs_local !== undefined || t.avoid_same_region !== undefined || t.avoid_same_league !== undefined) {
+        setConstraintSettings({
+          avoidLocalVsLocal: t.avoid_local_vs_local ?? false,
+          avoidSameRegion: t.avoid_same_region ?? false,
+          avoidSameLeague: t.avoid_same_league ?? false,
+          avoidConsecutive: t.avoid_consecutive ?? true,
+          warnDailyGameLimit: t.warn_daily_game_limit ?? true,
+          warnTotalGameLimit: t.warn_total_game_limit ?? true,
+        })
+        console.log('[MatchSchedule] Constraint settings loaded from DB:', {
+          avoidLocalVsLocal: t.avoid_local_vs_local,
+          avoidSameRegion: t.avoid_same_region,
+          avoidSameLeague: t.avoid_same_league,
+        })
+      }
+    }
+  }, [tournament, setConstraintSettings])
+
   // チーム一覧を取得（組み合わせ編集用）
   // refにバックアップを保持し、空配列になることを防ぐ
   const teamsBackupRef = useRef<any[]>([])
