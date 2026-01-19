@@ -154,15 +154,194 @@ function Standings() {
     enabled: !!tournamentId,
   });
 
-  // 総合順位マップを作成
-  const overallRankingsMap = useMemo(() => {
-    if (!overallStandings?.entries) return undefined;
+  // 試合データから総合順位を計算（DBにデータがない場合のフォールバック）
+  const calculatedOverallRankings = useMemo(() => {
+    const teams = teamsData?.teams || [];
+    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed') || [];
+
+    if (teams.length === 0 || matches.length === 0) return undefined;
+
+    // チームごとの成績を集計
+    const statsMap = new Map<number, {
+      teamId: number;
+      points: number;
+      goalDiff: number;
+      goalsFor: number;
+      played: number;
+    }>();
+
+    teams.forEach(t => {
+      statsMap.set(t.id, { teamId: t.id, points: 0, goalDiff: 0, goalsFor: 0, played: 0 });
+    });
+
+    matches.forEach(m => {
+      const homeId = m.homeTeamId ?? m.home_team_id;
+      const awayId = m.awayTeamId ?? m.away_team_id;
+      const homeScore = m.homeScoreTotal ?? m.home_score_total ?? 0;
+      const awayScore = m.awayScoreTotal ?? m.away_score_total ?? 0;
+
+      if (!homeId || !awayId) return;
+
+      const homeStats = statsMap.get(homeId);
+      const awayStats = statsMap.get(awayId);
+      if (!homeStats || !awayStats) return;
+
+      homeStats.played++;
+      awayStats.played++;
+      homeStats.goalsFor += homeScore;
+      awayStats.goalsFor += awayScore;
+      homeStats.goalDiff += (homeScore - awayScore);
+      awayStats.goalDiff += (awayScore - homeScore);
+
+      if (homeScore > awayScore) {
+        homeStats.points += 3;
+      } else if (homeScore < awayScore) {
+        awayStats.points += 3;
+      } else {
+        homeStats.points += 1;
+        awayStats.points += 1;
+      }
+    });
+
+    // ソートして順位付け
+    const sorted = Array.from(statsMap.values())
+      .filter(s => s.played > 0)
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+        return b.goalsFor - a.goalsFor;
+      });
+
     const map = new Map<number, number>();
-    overallStandings.entries.forEach(entry => {
-      map.set(entry.teamId, entry.overallRank);
+    sorted.forEach((stats, index) => {
+      map.set(stats.teamId, index + 1);
     });
     return map;
-  }, [overallStandings]);
+  }, [teamsData, matchesData]);
+
+  // 総合順位マップを作成（DB優先、なければローカル計算）
+  const overallRankingsMap = useMemo(() => {
+    // DBから取得したデータがあればそれを使用
+    if (overallStandings?.entries && overallStandings.entries.length > 0) {
+      const map = new Map<number, number>();
+      overallStandings.entries.forEach(entry => {
+        map.set(entry.teamId, entry.overallRank);
+      });
+      return map;
+    }
+    // なければローカル計算結果を使用
+    return calculatedOverallRankings;
+  }, [overallStandings, calculatedOverallRankings]);
+
+  // 総合順位表用のエントリ（DB優先、なければローカル計算）
+  const displayOverallEntries = useMemo(() => {
+    // DBから取得したデータがあればそれを使用
+    if (overallStandings?.entries && overallStandings.entries.length > 0) {
+      return overallStandings.entries;
+    }
+
+    // なければローカル計算で生成
+    const teams = teamsData?.teams || [];
+    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed') || [];
+
+    if (teams.length === 0 || matches.length === 0) return [];
+
+    // チームごとの成績を集計
+    const statsMap = new Map<number, {
+      teamId: number;
+      teamName: string;
+      shortName: string;
+      groupId: string;
+      points: number;
+      goalDiff: number;
+      goalsFor: number;
+      goalsAgainst: number;
+      played: number;
+      won: number;
+      drawn: number;
+      lost: number;
+    }>();
+
+    teams.forEach(t => {
+      statsMap.set(t.id, {
+        teamId: t.id,
+        teamName: t.name,
+        shortName: t.short_name || t.shortName || t.name,
+        groupId: t.group_id || t.groupId || '',
+        points: 0,
+        goalDiff: 0,
+        goalsFor: 0,
+        goalsAgainst: 0,
+        played: 0,
+        won: 0,
+        drawn: 0,
+        lost: 0,
+      });
+    });
+
+    matches.forEach(m => {
+      const homeId = m.homeTeamId ?? m.home_team_id;
+      const awayId = m.awayTeamId ?? m.away_team_id;
+      const homeScore = m.homeScoreTotal ?? m.home_score_total ?? 0;
+      const awayScore = m.awayScoreTotal ?? m.away_score_total ?? 0;
+
+      if (!homeId || !awayId) return;
+
+      const homeStats = statsMap.get(homeId);
+      const awayStats = statsMap.get(awayId);
+      if (!homeStats || !awayStats) return;
+
+      homeStats.played++;
+      awayStats.played++;
+      homeStats.goalsFor += homeScore;
+      homeStats.goalsAgainst += awayScore;
+      awayStats.goalsFor += awayScore;
+      awayStats.goalsAgainst += homeScore;
+      homeStats.goalDiff += (homeScore - awayScore);
+      awayStats.goalDiff += (awayScore - homeScore);
+
+      if (homeScore > awayScore) {
+        homeStats.points += 3;
+        homeStats.won++;
+        awayStats.lost++;
+      } else if (homeScore < awayScore) {
+        awayStats.points += 3;
+        awayStats.won++;
+        homeStats.lost++;
+      } else {
+        homeStats.points += 1;
+        awayStats.points += 1;
+        homeStats.drawn++;
+        awayStats.drawn++;
+      }
+    });
+
+    // ソートして順位付け
+    const sorted = Array.from(statsMap.values())
+      .filter(s => s.played > 0)
+      .sort((a, b) => {
+        if (b.points !== a.points) return b.points - a.points;
+        if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+        return b.goalsFor - a.goalsFor;
+      });
+
+    return sorted.map((stats, index) => ({
+      overallRank: index + 1,
+      groupId: stats.groupId,
+      groupRank: 0,
+      teamId: stats.teamId,
+      teamName: stats.teamName,
+      shortName: stats.shortName,
+      points: stats.points,
+      goalDifference: stats.goalDiff,
+      goalsFor: stats.goalsFor,
+      goalsAgainst: stats.goalsAgainst,
+      played: stats.played,
+      won: stats.won,
+      drawn: stats.drawn,
+      lost: stats.lost,
+    }));
+  }, [overallStandings, teamsData, matchesData]);
 
   // データ更新時のアニメーション
   useEffect(() => {
@@ -419,7 +598,7 @@ function Standings() {
             </h3>
           </div>
           <div className="card-body p-0">
-            {overallStandings && overallStandings.entries.length > 0 ? (
+            {displayOverallEntries.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -438,8 +617,9 @@ function Standings() {
                     </tr>
                   </thead>
                   <tbody>
-                    {overallStandings.entries.map((entry) => {
-                      const isQualifying = entry.overallRank <= overallStandings.qualifyingCount;
+                    {displayOverallEntries.map((entry) => {
+                      const qualifyingCount = overallStandings?.qualifyingCount || 4;
+                      const isQualifying = entry.overallRank <= qualifyingCount;
                       const groupColors: Record<string, string> = {
                         A: 'bg-red-100',
                         B: 'bg-blue-100',
@@ -489,7 +669,7 @@ function Standings() {
                 </table>
                 <div className="p-4 bg-gray-50 border-t">
                   <p className="text-sm text-amber-600 font-medium">
-                    ※ 上位{overallStandings.qualifyingCount}チームが決勝トーナメント進出
+                    ※ 上位{overallStandings?.qualifyingCount || 4}チームが決勝トーナメント進出
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     順位決定: 勝点 → 得失点差 → 総得点
