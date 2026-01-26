@@ -3,11 +3,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Staff, CreateStaffInput, UpdateStaffInput } from './types';
 
-interface StaffListResponse {
-  staff: Staff[];
-  total: number;
-}
-
 export const staffApi = {
   // チームのスタッフ一覧
   getByTeam: async (teamId: number): Promise<Staff[]> => {
@@ -62,7 +57,7 @@ export const staffApi = {
         role: data.role,
         phone: data.phone,
         email: data.email,
-      })
+      } as never)
       .select()
       .single();
     if (error) throw error;
@@ -79,7 +74,7 @@ export const staffApi = {
 
     const { data: staff, error } = await supabase
       .from('staff')
-      .update(updateData)
+      .update(updateData as never)
       .eq('id', id)
       .select()
       .single();

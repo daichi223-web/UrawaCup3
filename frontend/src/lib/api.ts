@@ -5,8 +5,8 @@
 
 import { supabase } from './supabase'
 import type {
-  Tournament, Team, Match, Goal, Standing,
-  Venue, Player, Profile, Group
+  Tournament, Team, Match, Goal,
+  Venue, Player,
 } from './database.types'
 import {
   normalizeTeamName,
@@ -17,19 +17,78 @@ import {
 import { getErrorMessage } from '@/utils/errorHandler'
 import {
   validateId,
-  validateRequired,
   validateTeamInput,
-  validatePlayerInput,
-  validateMatchUpdate,
-  validateGoalInput,
-  validateVenueInput,
-  ValidationError,
 } from '@/utils/validation'
 import {
   ensureValidSession,
   withRateLimitProtection,
-  checkExists,
 } from '@/utils/apiGuard'
+import type { RealtimeChannel, RealtimePostgresChangesPayload, Session, AuthChangeEvent } from '@supabase/supabase-js'
+
+// Type for tournament query results
+interface TournamentRow {
+  id: number
+  name: string
+  short_name?: string | null
+  start_date: string
+  end_date: string
+  year: number
+  edition: number
+  match_duration: number
+  half_duration: number
+  interval_minutes: number
+  preliminary_start_time?: string | null
+  finals_start_time?: string | null
+  finals_match_duration?: number | null
+  finals_interval_minutes?: number | null
+  group_count?: number | null
+  teams_per_group?: number | null
+  advancing_teams?: number | null
+  sender_organization?: string | null
+  sender_name?: string | null
+  sender_contact?: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Type for group query results
+interface GroupRow {
+  id: string
+  name: string
+  tournament_id: number
+}
+
+// Type for team query results
+interface TeamRow {
+  id: number
+  name: string
+  tournament_id: number
+  [key: string]: unknown
+}
+
+// Type for match query results (used in standingsApi and matchesApi)
+type MatchRow = {
+  id: number
+  tournament_id: number
+  home_team_id?: number | null
+  away_team_id?: number | null
+  home_score_total?: number | null
+  away_score_total?: number | null
+  result?: string | null
+  status?: string
+  approval_status?: string | null
+  [key: string]: unknown
+}
+
+// 更新用の部分的なフィールド型
+type TournamentUpdateFields = Pick<Tournament, 'name' | 'short_name' | 'start_date' | 'end_date' | 'year' | 'edition'>
+
+// 得点クエリ結果の型（チーム結合含む）
+interface GoalWithTeam {
+  player_name: string
+  team_id: number
+  team: { name: string } | null
+}
 
 /**
  * Supabaseエラーを日本語メッセージ付きエラーに変換
@@ -39,27 +98,19 @@ function handleSupabaseError(error: unknown): never {
   throw new Error(message)
 }
 
-/**
- * ValidationErrorを適切なメッセージでスロー
- */
-function handleValidationError(error: unknown): never {
-  if (error instanceof ValidationError) {
-    throw error
-  }
-  throw error
-}
-
 // ============================================
 // Tournaments API
 // ============================================
 
 export const tournamentsApi = {
   async getAll() {
-    const { data, error } = await supabase
+    const { data: rawData, error } = await supabase
       .from('tournaments')
       .select('*')
       .order('year', { ascending: false })
     if (error) handleSupabaseError(error)
+
+    const data = rawData as TournamentRow[] | null
     // snake_case → camelCase 正規化
     return data?.map(t => ({
       ...t,
@@ -79,16 +130,20 @@ export const tournamentsApi = {
       senderOrganization: t.sender_organization,
       senderName: t.sender_name,
       senderContact: t.sender_contact,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
     })) ?? []
   },
 
   async getById(id: number) {
-    const { data, error } = await supabase
+    const { data: rawData, error } = await supabase
       .from('tournaments')
       .select('*')
       .eq('id', id)
       .single()
     if (error) handleSupabaseError(error)
+
+    const data = rawData as TournamentRow | null
     // snake_case → camelCase 正規化
     return data ? {
       ...data,
@@ -108,6 +163,8 @@ export const tournamentsApi = {
       senderOrganization: data.sender_organization,
       senderName: data.sender_name,
       senderContact: data.sender_contact,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
     } : null
   },
 
@@ -120,10 +177,10 @@ export const tournamentsApi = {
 
     // 許可されたフィールドのみを抽出
     const allowedFields = ['name', 'short_name', 'start_date', 'end_date', 'year', 'edition'] as const
-    const sanitizedUpdates: Record<string, any> = {}
+    const sanitizedUpdates: Partial<TournamentUpdateFields> = {}
     for (const key of allowedFields) {
       if (key in updates && updates[key as keyof Tournament] !== undefined) {
-        sanitizedUpdates[key] = updates[key as keyof Tournament]
+        (sanitizedUpdates as Record<string, unknown>)[key] = updates[key as keyof Tournament]
       }
     }
 
@@ -133,7 +190,7 @@ export const tournamentsApi = {
 
     const { data, error } = await supabase
       .from('tournaments')
-      .update(sanitizedUpdates)
+      .update(sanitizedUpdates as never)
       .eq('id', id)
       .select()
       .single()
@@ -196,7 +253,7 @@ export const teamsApi = {
     return withRateLimitProtection(async () => {
       const { data, error } = await supabase
         .from('teams')
-        .insert(normalizedTeam)
+        .insert(normalizedTeam as never)
         .select()
         .single()
       if (error) handleSupabaseError(error)
@@ -224,7 +281,7 @@ export const teamsApi = {
     return withRateLimitProtection(async () => {
       const { data, error } = await supabase
         .from('teams')
-        .update(normalizedUpdates)
+        .update(normalizedUpdates as never)
         .eq('id', id)
         .select()
         .single()
@@ -252,11 +309,12 @@ export const teamsApi = {
     await ensureValidSession()
 
     // 大会のチームIDを取得
-    const { data: teams } = await supabase
+    const { data: teamsData } = await supabase
       .from('teams')
       .select('id')
       .eq('tournament_id', tournamentId)
 
+    const teams = teamsData as TeamRow[] | null
     if (!teams || teams.length === 0) {
       return { canDelete: true, matchCount: 0, goalCount: 0 }
     }
@@ -353,7 +411,7 @@ export const matchesApi = {
   async update(id: number, updates: Partial<Match>) {
     const { data, error } = await supabase
       .from('matches')
-      .update(updates)
+      .update(updates as never)
       .eq('id', id)
       .select()
       .single()
@@ -384,7 +442,7 @@ export const matchesApi = {
         home_score_total: home_total,
         away_score_total: away_total,
         result,
-      })
+      } as never)
       .eq('id', id)
       .select()
       .single()
@@ -412,7 +470,7 @@ export const goalsApi = {
   async create(goal: Omit<Goal, 'id' | 'created_at' | 'updated_at'>) {
     const { data, error } = await supabase
       .from('goals')
-      .insert(goal)
+      .insert(goal as never)
       .select()
       .single()
     if (error) handleSupabaseError(error)
@@ -434,7 +492,7 @@ export const goalsApi = {
 
 export const standingsApi = {
   async getByGroup(tournamentId: number) {
-    const { data: groups, error: groupsError } = await supabase
+    const { data: groupsData, error: groupsError } = await supabase
       .from('groups')
       .select('*')
       .eq('tournament_id', tournamentId)
@@ -442,8 +500,10 @@ export const standingsApi = {
 
     if (groupsError) throw groupsError
 
+    const groups = groupsData as GroupRow[] | null
+
     const result = []
-    for (const group of groups) {
+    for (const group of groups || []) {
       const { data: standings, error } = await supabase
         .from('standings')
         .select('*, team:teams(*)')
@@ -472,7 +532,7 @@ export const standingsApi = {
     return result
   },
 
-  async getTopScorers(tournamentId: number, limit = 20) {
+  async getTopScorers(_tournamentId: number, limit = 20) {
     const { data, error } = await supabase
       .from('goals')
       .select(`
@@ -487,7 +547,7 @@ export const standingsApi = {
     // 得点者ごとに集計
     const scorerMap = new Map<string, { name: string; teamId: number; teamName: string; goals: number }>()
 
-    for (const goal of data) {
+    for (const goal of data as GoalWithTeam[]) {
       const key = `${goal.team_id}-${goal.player_name}`
       if (scorerMap.has(key)) {
         scorerMap.get(key)!.goals++
@@ -495,7 +555,7 @@ export const standingsApi = {
         scorerMap.set(key, {
           name: goal.player_name,
           teamId: goal.team_id,
-          teamName: (goal.team as any)?.name || '',
+          teamName: goal.team?.name || '',
           goals: 1
         })
       }
@@ -519,7 +579,7 @@ export const standingsApi = {
   async recalculate(tournamentId: number, groupId: string) {
     // 該当グループの完了済み＆承認済み試合を取得（stageは問わない）
     // approval_status が null（承認フロー未使用）または 'approved'（承認済み）のみ対象
-    const { data: matches, error: matchError } = await supabase
+    const { data: matchesData, error: matchError } = await supabase
       .from('matches')
       .select('*')
       .eq('tournament_id', tournamentId)
@@ -529,16 +589,20 @@ export const standingsApi = {
 
     if (matchError) throw matchError
 
+    const matches = (matchesData || []) as MatchRow[]
+
     console.log(`[Standings] Found ${matches?.length || 0} completed+approved matches for group ${groupId}`)
 
     // 該当グループのチームを取得
-    const { data: teams, error: teamError } = await supabase
+    const { data: teamsData, error: teamError } = await supabase
       .from('teams')
       .select('*')
       .eq('tournament_id', tournamentId)
       .eq('group_id', groupId)
 
     if (teamError) throw teamError
+
+    const teams = (teamsData || []) as TeamRow[]
 
     // チームごとの成績を計算
     const stats = new Map<number, {
@@ -619,7 +683,7 @@ export const standingsApi = {
 
     const { error } = await supabase
       .from('standings')
-      .insert(standings)
+      .insert(standings as never)
 
     if (error) handleSupabaseError(error)
     return standings
@@ -650,7 +714,7 @@ export const venuesApi = {
     }
     const { data, error } = await supabase
       .from('venues')
-      .insert(normalizedVenue)
+      .insert(normalizedVenue as never)
       .select()
       .single()
     if (error) handleSupabaseError(error)
@@ -668,7 +732,7 @@ export const venuesApi = {
     }
     const { data, error } = await supabase
       .from('venues')
-      .update(normalizedUpdates)
+      .update(normalizedUpdates as never)
       .eq('id', id)
       .select()
       .single()
@@ -719,7 +783,7 @@ export const playersApi = {
     }
     const { data, error } = await supabase
       .from('players')
-      .insert(normalizedPlayer)
+      .insert(normalizedPlayer as never)
       .select()
       .single()
     if (error) handleSupabaseError(error)
@@ -737,7 +801,7 @@ export const playersApi = {
     }
     const { data, error } = await supabase
       .from('players')
-      .update(normalizedUpdates)
+      .update(normalizedUpdates as never)
       .eq('id', id)
       .select()
       .single()
@@ -781,7 +845,7 @@ export const authApi = {
     return data
   },
 
-  onAuthStateChange(callback: (event: string, session: any) => void) {
+  onAuthStateChange(callback: (event: AuthChangeEvent, session: Session | null) => void) {
     return supabase.auth.onAuthStateChange(callback)
   },
 }
@@ -790,8 +854,11 @@ export const authApi = {
 // Realtime Subscriptions
 // ============================================
 
+// Realtime payload型エイリアス
+type RealtimePayload<T extends Record<string, unknown> = Record<string, unknown>> = RealtimePostgresChangesPayload<T>
+
 export const realtimeApi = {
-  subscribeToMatches(tournamentId: number, callback: (payload: any) => void) {
+  subscribeToMatches(tournamentId: number, callback: (payload: RealtimePayload) => void) {
     return supabase
       .channel('matches-changes')
       .on(
@@ -807,7 +874,7 @@ export const realtimeApi = {
       .subscribe()
   },
 
-  subscribeToGoals(callback: (payload: any) => void) {
+  subscribeToGoals(callback: (payload: RealtimePayload) => void) {
     return supabase
       .channel('goals-changes')
       .on(
@@ -822,7 +889,7 @@ export const realtimeApi = {
       .subscribe()
   },
 
-  subscribeToStandings(tournamentId: number, callback: (payload: any) => void) {
+  subscribeToStandings(tournamentId: number, callback: (payload: RealtimePayload) => void) {
     return supabase
       .channel('standings-changes')
       .on(
@@ -838,7 +905,81 @@ export const realtimeApi = {
       .subscribe()
   },
 
-  unsubscribe(channel: any) {
+  unsubscribe(channel: RealtimeChannel) {
     supabase.removeChannel(channel)
+  },
+}
+
+// ============================================================================
+// Leagues API
+// ============================================================================
+export const leaguesApi = {
+  async getAll(): Promise<{ id: number; name: string }[]> {
+    const { data, error } = await supabase
+      .from('leagues')
+      .select('*')
+      .order('name')
+    if (error) throw new Error(getErrorMessage(error))
+    return (data || []) as { id: number; name: string }[]
+  },
+
+  async getByTournament(tournamentId: number): Promise<{ id: number; name: string }[]> {
+    const { data, error } = await supabase
+      .from('leagues')
+      .select('id, name')
+      .eq('tournament_id', tournamentId)
+      .order('name')
+    if (error) throw new Error(getErrorMessage(error))
+    return (data || []) as { id: number; name: string }[]
+  },
+
+  async create(name: string): Promise<{ id: number; name: string }> {
+    const { data, error } = await supabase
+      .from('leagues')
+      .insert({ name } as never)
+      .select()
+      .single()
+    if (error) throw new Error(getErrorMessage(error))
+    return data as { id: number; name: string }
+  },
+
+  async delete(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('leagues')
+      .delete()
+      .eq('id', id)
+    if (error) throw new Error(getErrorMessage(error))
+  },
+}
+
+// ============================================================================
+// Regions API
+// ============================================================================
+export const regionsApi = {
+  async getAll(): Promise<{ id: number; name: string }[]> {
+    const { data, error } = await supabase
+      .from('regions')
+      .select('*')
+      .order('name')
+    if (error) throw new Error(getErrorMessage(error))
+    return (data || []) as { id: number; name: string }[]
+  },
+
+  async create(name: string): Promise<{ id: number; name: string }> {
+    const { data, error } = await supabase
+      .from('regions')
+      .insert({ name } as never)
+      .select()
+      .single()
+    if (error) throw new Error(getErrorMessage(error))
+    return data as { id: number; name: string }
+  },
+
+  async delete(id: number): Promise<void> {
+    const { error } = await supabase
+      .from('regions')
+      .delete()
+      .eq('id', id)
+    if (error) throw new Error(getErrorMessage(error))
   },
 }

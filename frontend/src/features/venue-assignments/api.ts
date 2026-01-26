@@ -87,7 +87,7 @@ export const venueAssignmentApi = {
         team_id: input.teamId,
         match_day: input.matchDay,
         slot_order: input.slotOrder,
-      })
+      } as never)
       .select(`
         *,
         venue:venues(id, name),
@@ -114,7 +114,7 @@ export const venueAssignmentApi = {
 
     const { data, error } = await supabase
       .from('venue_assignments')
-      .update(updateData)
+      .update(updateData as never)
       .eq('id', id)
       .select(`
         *,
@@ -156,6 +156,40 @@ export const venueAssignmentApi = {
   },
 
   /**
+   * 会場割り当て一括削除（大会全体）
+   * @param tournamentId 大会ID
+   */
+  deleteByTournament: async (tournamentId: number): Promise<void> => {
+    const { error } = await supabase
+      .from('venue_assignments')
+      .delete()
+      .eq('tournament_id', tournamentId);
+
+    if (error) throw error;
+  },
+
+  /**
+   * 会場割り当て一括作成
+   * @param assignments 作成データ配列
+   */
+  bulkInsert: async (
+    assignments: Array<{
+      tournament_id: number;
+      venue_id: number;
+      team_id: number;
+      match_day: number;
+      slot_order: number;
+    }>
+  ): Promise<void> => {
+    if (assignments.length === 0) return;
+    const { error } = await supabase
+      .from('venue_assignments')
+      .insert(assignments as never);
+
+    if (error) throw error;
+  },
+
+  /**
    * 会場割り当て自動生成
    * チームと会場を基にバランスよく割り当てを生成
    * @param input 自動生成パラメータ
@@ -173,22 +207,27 @@ export const venueAssignmentApi = {
       .eq('match_day', matchDay);
 
     // 会場一覧を取得
-    const { data: venues, error: venueError } = await supabase
+    interface VenueRow { id: number; name: string }
+    interface TeamRow { id: number; name: string }
+
+    const { data: venuesData, error: venueError } = await supabase
       .from('venues')
       .select('id, name')
       .eq('tournament_id', tournamentId)
       .eq('for_preliminary', true);
 
     if (venueError) throw venueError;
+    const venues = (venuesData || []) as VenueRow[];
 
     // チーム一覧を取得
-    const { data: teams, error: teamError } = await supabase
+    const { data: teamsData, error: teamError } = await supabase
       .from('teams')
       .select('id, name')
       .eq('tournament_id', tournamentId)
       .order('id');
 
     if (teamError) throw teamError;
+    const teams = (teamsData || []) as TeamRow[];
 
     // 既存割り当てを削除
     if (existingAssignments && existingAssignments.length > 0) {
@@ -258,7 +297,7 @@ export const venueAssignmentApi = {
     if (assignments.length > 0) {
       const { data: insertedData, error: insertError } = await supabase
         .from('venue_assignments')
-        .insert(assignments)
+        .insert(assignments as never)
         .select(`
           *,
           venue:venues(id, name),

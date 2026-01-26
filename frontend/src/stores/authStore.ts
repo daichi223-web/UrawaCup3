@@ -59,12 +59,15 @@ export const useAuthStore = create<AuthState>()(
             // 開発環境のみ: admin/admin123 でログイン可能
             if (import.meta.env.DEV && credentials.username === 'admin' && credentials.password === 'admin123') {
               const devUser: User = {
-                id: 1 as any,
+                id: 1,
                 username: 'admin',
                 email: 'admin@urawa-cup.local',
                 role: 'admin',
-                name: '管理者',
+                displayName: '管理者',
                 venueId: undefined,
+                isActive: true,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
               }
               set({
                 user: devUser,
@@ -94,19 +97,29 @@ export const useAuthStore = create<AuthState>()(
             }
 
             // プロフィール情報を取得
-            const { data: profile } = await supabase
+            const { data: profileData } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', authData.user.id)
               .single()
 
+            const profile = profileData as {
+              username?: string;
+              role?: string;
+              display_name?: string;
+              venue_id?: number;
+            } | null
+
             const user: User = {
-              id: authData.user.id as any,
+              id: Number(authData.user.id) || 0,
               username: profile?.username || authData.user.email?.split('@')[0] || 'user',
               email: authData.user.email || '',
               role: (profile?.role as UserRole) || 'viewer',
-              name: profile?.display_name || authData.user.email?.split('@')[0] || 'User',
+              displayName: profile?.display_name || authData.user.email?.split('@')[0] || 'User',
               venueId: profile?.venue_id,
+              isActive: true,
+              createdAt: authData.user.created_at || new Date().toISOString(),
+              updatedAt: authData.user.updated_at || new Date().toISOString(),
             }
 
             set({
@@ -201,20 +214,30 @@ export const useAuthStore = create<AuthState>()(
             if (session?.user) {
               console.log('[Auth] Fetching profile...')
               // プロフィール情報を取得
-              const { data: profile } = await supabase
+              const { data: profileData2 } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', session.user.id)
                 .single()
+
+              const profile = profileData2 as {
+                username?: string;
+                role?: string;
+                display_name?: string;
+                venue_id?: number;
+              } | null
               console.log('[Auth] Profile fetched:', profile?.username)
 
               const user: User = {
-                id: session.user.id as any,
+                id: Number(session.user.id) || 0,
                 username: profile?.username || session.user.email?.split('@')[0] || 'user',
                 email: session.user.email || '',
                 role: (profile?.role as UserRole) || 'viewer',
-                name: profile?.display_name || session.user.email?.split('@')[0] || 'User',
+                displayName: profile?.display_name || session.user.email?.split('@')[0] || 'User',
                 venueId: profile?.venue_id,
+                isActive: true,
+                createdAt: session.user.created_at || new Date().toISOString(),
+                updatedAt: session.user.updated_at || new Date().toISOString(),
               }
 
               set({
@@ -350,28 +373,40 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     )
 
     try {
-      const profilePromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
-        .then(({ data }) => data)
-        .catch((err) => {
-          console.warn('[Auth] Profile fetch failed:', err.message)
+      const profilePromise = (async () => {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single()
+          return data
+        } catch (err) {
+          console.warn('[Auth] Profile fetch failed:', err instanceof Error ? err.message : err)
           return null
-        })
+        }
+      })()
 
       const profile = await Promise.race([profilePromise, timeoutPromise])
 
       // プロフィール取得成功、またはキャッシュがない場合は新規作成
-      if (profile || !currentState.user) {
+      const profileTyped = profile as {
+        username?: string;
+        role?: string;
+        display_name?: string;
+        venue_id?: number;
+      } | null
+      if (profileTyped || !currentState.user) {
         const user: User = {
-          id: session.user.id as any,
-          username: profile?.username || session.user.email?.split('@')[0] || 'user',
+          id: Number(session.user.id) || 0,
+          username: profileTyped?.username || session.user.email?.split('@')[0] || 'user',
           email: session.user.email || '',
-          role: (profile?.role as UserRole) || 'viewer',
-          name: profile?.display_name || session.user.email?.split('@')[0] || 'User',
-          venueId: profile?.venue_id,
+          role: (profileTyped?.role as UserRole) || 'viewer',
+          displayName: profileTyped?.display_name || session.user.email?.split('@')[0] || 'User',
+          venueId: profileTyped?.venue_id,
+          isActive: true,
+          createdAt: session.user.created_at || new Date().toISOString(),
+          updatedAt: session.user.updated_at || new Date().toISOString(),
         }
 
         useAuthStore.setState({
@@ -401,12 +436,15 @@ supabase.auth.onAuthStateChange(async (event, session) => {
       } else {
         useAuthStore.setState({
           user: {
-            id: session.user.id as any,
+            id: Number(session.user.id) || 0,
             username: session.user.email?.split('@')[0] || 'user',
             email: session.user.email || '',
             role: 'viewer',
-            name: session.user.email?.split('@')[0] || 'User',
+            displayName: session.user.email?.split('@')[0] || 'User',
             venueId: undefined,
+            isActive: true,
+            createdAt: session.user.created_at || new Date().toISOString(),
+            updatedAt: session.user.updated_at || new Date().toISOString(),
           },
           accessToken: session.access_token,
           isAuthenticated: true,

@@ -83,7 +83,7 @@ export const outstandingPlayersApi = {
         player_number: player.playerNumber || null,
         award_type: player.awardType,
         display_order: player.displayOrder || 0,
-      })
+      } as never)
       .select()
       .single()
 
@@ -108,7 +108,7 @@ export const outstandingPlayersApi = {
 
     const { data, error } = await supabase
       .from('outstanding_players')
-      .update(updateData)
+      .update(updateData as never)
       .eq('id', id)
       .select()
       .single()
@@ -158,7 +158,7 @@ export const outstandingPlayersApi = {
 
     const { data, error } = await supabase
       .from('outstanding_players')
-      .insert(insertData)
+      .insert(insertData as never)
       .select()
 
     if (error) throw error

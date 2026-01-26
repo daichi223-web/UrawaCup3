@@ -5,14 +5,64 @@ import type { MatchWithDetails } from '@shared/types';
 import type { SwapTeamsRequest } from './types';
 import {
   calculateMixedVenueSchedule,
-  isMixedUseVenue,
-  getFinalsMatchCount,
   type MixedVenueConfig,
 } from '@/lib/mixedVenueScheduler';
 import { standingApi } from '@/features/standings/api';
 
-// バックエンドAPI URL
-const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
+// Supabase API response types
+interface StandingWithTeam {
+  team_id: number;
+  group_id: string;
+  rank: number;
+  team?: {
+    id: number;
+    name: string;
+    short_name?: string;
+  } | null;
+}
+
+interface TournamentSettings {
+  qualification_rule?: string;
+  bracket_method?: string;
+  end_date?: string;
+  finals_start_time?: string;
+  finals_match_duration?: number;
+  finals_interval_minutes?: number;
+  preliminary_start_time?: string;
+  preliminary_match_duration?: number;
+  preliminary_interval_minutes?: number;
+  training_match_duration?: number;
+  training_interval_minutes?: number;
+  training_matches_per_team?: number;
+}
+
+// Supabase query result types
+interface VenueQueryResult {
+  id: number;
+  name?: string;
+  short_name?: string;
+  for_finals?: boolean;
+  is_finals_venue?: boolean;
+}
+
+interface MatchQueryResult {
+  id: number;
+  tournament_id?: number;
+  venue_id?: number;
+  home_team_id?: number | null;
+  away_team_id?: number | null;
+  match_date?: string;
+  match_time?: string;
+  match_order?: number;
+  stage?: string;
+  status?: string;
+  result?: string | null;
+  home_score_total?: number | null;
+  away_score_total?: number | null;
+  notes?: string;
+}
+
+type QualificationRule = 'overall_ranking' | 'group_based';
 
 // 決勝進出チーム選出用のヘルパー関数
 interface QualifyingTeam {
@@ -39,7 +89,7 @@ async function getGroupWinners(tournamentId: number): Promise<QualifyingTeam[]> 
 
   if (error) throw error;
 
-  return (standings || []).map(s => ({
+  return ((standings || []) as StandingWithTeam[]).map(s => ({
     teamId: s.team?.id || s.team_id,
     teamName: s.team?.short_name || s.team?.name || '',
     groupId: s.group_id,
@@ -74,11 +124,6 @@ async function getQualifyingTeams(
   } else {
     return getGroupWinners(tournamentId);
   }
-}
-
-interface MatchListResponse {
-  matches: MatchWithDetails[];
-  total: number;
 }
 
 export const finalDayApi = {
@@ -164,12 +209,16 @@ export const finalDayApi = {
       throw new Error('大会設定が見つかりません');
     }
 
-    const qualificationRule = tournament.qualification_rule || 'group_based';
-    const bracketMethod = tournament.bracket_method || 'seed_order'; // 'diagonal' or 'seed_order'
-    const finalDate = tournament.end_date;
-    const finalsStartTime = tournament.finals_start_time || '09:00';
-    const finalsMatchDuration = tournament.finals_match_duration || 60;
-    const finalsIntervalMinutes = tournament.finals_interval_minutes || 20;
+    const t = tournament as TournamentSettings;
+    const qualificationRule = (t.qualification_rule || 'group_based') as QualificationRule;
+    const bracketMethod = t.bracket_method || 'seed_order'; // 'diagonal' or 'seed_order'
+    const finalDate = t.end_date;
+    if (!finalDate) {
+      throw new Error('大会終了日が設定されていません');
+    }
+    const finalsStartTime = t.finals_start_time || '09:00';
+    const finalsMatchDuration = t.finals_match_duration || 60;
+    const finalsIntervalMinutes = t.finals_interval_minutes || 20;
 
     console.log(`[Finals] 組み合わせ方式: ${bracketMethod}, 進出ルール: ${qualificationRule}`);
 
@@ -181,16 +230,18 @@ export const finalDayApi = {
     }
 
     // 3. 決勝会場を取得
-    const { data: finalsVenue, error: venueError } = await supabase
+    const { data: finalsVenueData, error: venueError } = await supabase
       .from('venues')
       .select('*')
       .eq('tournament_id', tournamentId)
       .eq('is_finals_venue', true)
       .single();
 
-    if (venueError || !finalsVenue) {
+    if (venueError || !finalsVenueData) {
       throw new Error('決勝会場が設定されていません');
     }
+
+    const finalsVenue = finalsVenueData as VenueQueryResult;
 
     // 4. 既存の最終日試合を削除
     await supabase
@@ -335,7 +386,7 @@ export const finalDayApi = {
     // 8. 試合をDBに挿入
     const { error: insertError } = await supabase
       .from('matches')
-      .insert(matchesToInsert);
+      .insert(matchesToInsert as never);
 
     if (insertError) {
       console.error('Failed to insert matches:', insertError);
@@ -364,9 +415,9 @@ export const finalDayApi = {
    */
   generateFinals: async (
     tournamentId: number,
-    matchDate: string,
-    startTime: string = '09:00',
-    venueId?: number
+    _matchDate: string,
+    _startTime: string = '09:00',
+    _venueId?: number
   ): Promise<MatchWithDetails[]> => {
     // generateFinalDayScheduleを呼び出す
     return finalDayApi.generateFinalDaySchedule(tournamentId);
@@ -377,7 +428,7 @@ export const finalDayApi = {
    */
   updateFinalsBracket: async (tournamentId: number): Promise<void> => {
     // 準決勝の結果を取得
-    const { data: semiFinals, error } = await supabase
+    const { data: semiFinalsData, error } = await supabase
       .from('matches')
       .select('*')
       .eq('tournament_id', tournamentId)
@@ -385,6 +436,8 @@ export const finalDayApi = {
       .eq('status', 'completed');
 
     if (error) throw error;
+
+    const semiFinals = semiFinalsData as MatchQueryResult[] | null;
     if (!semiFinals || semiFinals.length < 2) {
       console.warn('準決勝が完了していません');
       return;
@@ -395,10 +448,10 @@ export const finalDayApi = {
     const losers: number[] = [];
 
     for (const match of semiFinals) {
-      if (match.result === 'home_win') {
+      if (match.result === 'home_win' && match.home_team_id && match.away_team_id) {
         winners.push(match.home_team_id);
         losers.push(match.away_team_id);
-      } else if (match.result === 'away_win') {
+      } else if (match.result === 'away_win' && match.home_team_id && match.away_team_id) {
         winners.push(match.away_team_id);
         losers.push(match.home_team_id);
       }
@@ -411,7 +464,7 @@ export const finalDayApi = {
         .update({
           home_team_id: winners[0],
           away_team_id: winners[1],
-        })
+        } as never)
         .eq('tournament_id', tournamentId)
         .eq('stage', 'final');
     }
@@ -423,7 +476,7 @@ export const finalDayApi = {
         .update({
           home_team_id: losers[0],
           away_team_id: losers[1],
-        })
+        } as never)
         .eq('tournament_id', tournamentId)
         .eq('stage', 'third_place');
     }
@@ -442,7 +495,7 @@ export const finalDayApi = {
       .update({
         home_team_id: homeTeamId,
         away_team_id: awayTeamId,
-      })
+      } as never)
       .eq('id', matchId)
       .select(`
         *,
@@ -464,10 +517,12 @@ export const finalDayApi = {
     match2: MatchWithDetails;
   }> => {
     // match1とmatch2の情報を取得
-    const { data: matches, error: fetchError } = await supabase
+    const { data: matchesData, error: fetchError } = await supabase
       .from('matches')
       .select('*')
       .in('id', [request.match1Id, request.match2Id]);
+
+    const matches = matchesData as MatchQueryResult[] | null;
 
     if (fetchError || !matches || matches.length !== 2) {
       throw new Error('試合が見つかりません');
@@ -476,13 +531,13 @@ export const finalDayApi = {
     const match1 = matches.find(m => m.id === request.match1Id)!;
     const match2 = matches.find(m => m.id === request.match2Id)!;
 
-    // チームを入れ替え
-    const team1ToSwap = request.match1Side === 'home' ? match1.home_team_id : match1.away_team_id;
-    const team2ToSwap = request.match2Side === 'home' ? match2.home_team_id : match2.away_team_id;
+    // チームを入れ替え (side1, side2 are the property names in SwapTeamsRequest)
+    const team1ToSwap = request.side1 === 'home' ? match1.home_team_id : match1.away_team_id;
+    const team2ToSwap = request.side2 === 'home' ? match2.home_team_id : match2.away_team_id;
 
     // match1を更新
-    const update1: Record<string, number> = {};
-    if (request.match1Side === 'home') {
+    const update1: Record<string, number | null | undefined> = {};
+    if (request.side1 === 'home') {
       update1.home_team_id = team2ToSwap;
     } else {
       update1.away_team_id = team2ToSwap;
@@ -490,14 +545,14 @@ export const finalDayApi = {
 
     const { error: update1Error } = await supabase
       .from('matches')
-      .update(update1)
+      .update(update1 as never)
       .eq('id', request.match1Id);
 
     if (update1Error) throw update1Error;
 
     // match2を更新
-    const update2: Record<string, number> = {};
-    if (request.match2Side === 'home') {
+    const update2: Record<string, number | null | undefined> = {};
+    if (request.side2 === 'home') {
       update2.home_team_id = team1ToSwap;
     } else {
       update2.away_team_id = team1ToSwap;
@@ -505,7 +560,7 @@ export const finalDayApi = {
 
     const { error: update2Error } = await supabase
       .from('matches')
-      .update(update2)
+      .update(update2 as never)
       .eq('id', request.match2Id);
 
     if (update2Error) throw update2Error;
@@ -525,9 +580,10 @@ export const finalDayApi = {
       throw new Error('更新後のデータ取得に失敗しました');
     }
 
+    const typedMatches = updatedMatches as MatchWithDetails[];
     return {
-      match1: updatedMatches.find(m => m.id === request.match1Id) as MatchWithDetails,
-      match2: updatedMatches.find(m => m.id === request.match2Id) as MatchWithDetails,
+      match1: typedMatches.find(m => m.id === request.match1Id) as MatchWithDetails,
+      match2: typedMatches.find(m => m.id === request.match2Id) as MatchWithDetails,
     };
   },
 
@@ -558,7 +614,7 @@ export const finalDayApi = {
     message: string;
   }> => {
     // team1がホーム、team2がアウェイの試合を検索
-    const { data: match1 } = await supabase
+    const { data: match1Data } = await supabase
       .from('matches')
       .select('id, match_date, home_score_total, away_score_total')
       .eq('tournament_id', tournamentId)
@@ -566,6 +622,14 @@ export const finalDayApi = {
       .eq('away_team_id', team2Id)
       .eq('stage', 'preliminary')
       .single();
+
+    interface MatchCheckResult {
+      id: number;
+      match_date: string | null;
+      home_score_total: number | null;
+      away_score_total: number | null;
+    }
+    const match1 = match1Data as MatchCheckResult | null;
 
     if (match1) {
       return {
@@ -579,7 +643,7 @@ export const finalDayApi = {
     }
 
     // team2がホーム、team1がアウェイの試合を検索
-    const { data: match2 } = await supabase
+    const { data: match2Data } = await supabase
       .from('matches')
       .select('id, match_date, home_score_total, away_score_total')
       .eq('tournament_id', tournamentId)
@@ -587,6 +651,8 @@ export const finalDayApi = {
       .eq('away_team_id', team1Id)
       .eq('stage', 'preliminary')
       .single();
+
+    const match2 = match2Data as MatchCheckResult | null;
 
     if (match2) {
       return {
@@ -634,13 +700,19 @@ export const finalDayApi = {
       return { updated: 0, matches: [] };
     }
 
+    interface MixedVenueMatch {
+      id: number;
+      stage: string;
+    }
+    const typedMatches = matches as MixedVenueMatch[];
+
     // 混合会場の試合時間を計算
-    const timeSlots = calculateMixedVenueSchedule(config, matches.length);
+    const timeSlots = calculateMixedVenueSchedule(config, typedMatches.length);
 
     // 各試合の時間と試合時間を更新
     let updated = 0;
-    for (let i = 0; i < matches.length; i++) {
-      const match = matches[i];
+    for (let i = 0; i < typedMatches.length; i++) {
+      const match = typedMatches[i];
       const slot = timeSlots[i];
 
       // ステージを確認して適切に設定
@@ -655,7 +727,7 @@ export const finalDayApi = {
           match_time: slot.kickoffTime,
           match_duration_minutes: slot.matchDuration,
           stage: newStage,
-        })
+        } as never)
         .eq('id', match.id);
 
       if (!updateError) {
@@ -700,13 +772,17 @@ export const finalDayApi = {
       throw new Error('大会設定が見つかりません');
     }
 
-    const qualificationRule = tournament.qualification_rule || 'group_based';
-    const finalDate = tournament.end_date;
-    const startTime = tournament.preliminary_start_time || '09:00';
+    const t2 = tournament as TournamentSettings;
+    const qualificationRule = t2.qualification_rule || 'group_based';
+    const finalDate = t2.end_date;
+    if (!finalDate) {
+      throw new Error('大会終了日が設定されていません');
+    }
+    const startTime = t2.preliminary_start_time || '09:00';
     // 研修試合専用の設定を使用（なければ予選設定にフォールバック）
-    const matchDuration = tournament.training_match_duration || tournament.preliminary_match_duration || 40;
-    const intervalMinutes = tournament.training_interval_minutes || tournament.preliminary_interval_minutes || 5;
-    const matchesPerTeam = tournament.training_matches_per_team || 2; // チームあたり試合数
+    const matchDuration = t2.training_match_duration || t2.preliminary_match_duration || 40;
+    const intervalMinutes = t2.training_interval_minutes || t2.preliminary_interval_minutes || 5;
+    const matchesPerTeam = t2.training_matches_per_team || 2; // チームあたり試合数
 
     console.log(`[Training] 設定 - 試合時間: ${matchDuration}分, 間隔: ${intervalMinutes}分, 試合数/チーム: ${matchesPerTeam}`);
 
@@ -730,7 +806,8 @@ export const finalDayApi = {
         .select('team_id')
         .eq('tournament_id', tournamentId)
         .eq('rank', 1);
-      qualifyingTeamIds = (groupWinners || []).map(s => s.team_id);
+      const winners = (groupWinners || []) as Array<{ team_id: number }>;
+      qualifyingTeamIds = winners.map(s => s.team_id);
     }
 
     // 3. 会場を取得（forFinalDay = true の会場のみ）
@@ -760,15 +837,16 @@ export const finalDayApi = {
     if (teamsError) throw teamsError;
 
     // 5. 過去の対戦履歴を取得
-    const { data: pastMatches } = await supabase
+    const { data: pastMatchesData } = await supabase
       .from('matches')
       .select('home_team_id, away_team_id')
       .eq('tournament_id', tournamentId)
       .neq('stage', 'training');
 
+    const pastMatches = (pastMatchesData || []) as Array<{ home_team_id: number; away_team_id: number }>;
     const playedPairs = new Set<string>();
-    (pastMatches || []).forEach(m => {
-      const key = [m.home_team_id, m.away_team_id].sort().join('-');
+    pastMatches.forEach(m => {
+      const key = [m.home_team_id, m.away_team_id].sort((a, b) => a - b).join('-');
       playedPairs.add(key);
     });
 
@@ -789,8 +867,26 @@ export const finalDayApi = {
       leagueId?: number;
       teamType?: string;
     }
+
+    // Type assertion for standings with team info
+    interface StandingWithTeamInfo {
+      rank: number;
+      team_id: number;
+      group_id: string;
+      team?: {
+        id: number;
+        name: string;
+        short_name?: string;
+        group_id?: string;
+        region?: string;
+        league_id?: number;
+        team_type?: string;
+      } | null;
+    }
+    const typedAllTeams = (allTeams || []) as StandingWithTeamInfo[];
+
     const teamsByRank: Record<number, TeamInfo[]> = {};
-    for (const s of (allTeams || [])) {
+    for (const s of typedAllTeams) {
       if (!teamsByRank[s.rank]) teamsByRank[s.rank] = [];
       teamsByRank[s.rank].push({
         teamId: s.team_id,
@@ -812,7 +908,7 @@ export const finalDayApi = {
       if (teamA.groupId === teamB.groupId) score += 200;
 
       // 過去に対戦済み → +100
-      const pairKey = [teamA.teamId, teamB.teamId].sort().join('-');
+      const pairKey = [teamA.teamId, teamB.teamId].sort((a, b) => a - b).join('-');
       if (playedPairs.has(pairKey)) score += 100;
 
       // 地元同士 → +50
@@ -828,14 +924,16 @@ export const finalDayApi = {
     };
 
     // 9. 会場ごとのチーム数を計算: (参加校数 - 4) / 会場数
-    const totalTrainingTeams = (allTeams || []).length;
-    const teamsPerVenue = Math.ceil(totalTrainingTeams / venues.length);
-    console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${venues.length}, 会場あたり: ${teamsPerVenue}チーム`);
+    const totalTrainingTeams = typedAllTeams.length;
+    interface VenueInfo { id: number; name?: string; }
+    const typedVenues = (venues || []) as VenueInfo[];
+    const teamsPerVenue = Math.ceil(totalTrainingTeams / typedVenues.length);
+    console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${typedVenues.length}, 会場あたり: ${teamsPerVenue}チーム`);
 
     // 10. チームを順位順に並べて会場に均等分配
     // 各会場に teamsPerVenue チームずつ、同じ順位のチームを異なる会場に分散
     const venueAssignments: Map<number, TeamInfo[]> = new Map();
-    venues.forEach(v => venueAssignments.set(v.id, []));
+    typedVenues.forEach(v => venueAssignments.set(v.id, []));
 
     // 全チームを順位順にフラットに並べる
     const allTeamsSorted: TeamInfo[] = [];
@@ -848,9 +946,9 @@ export const finalDayApi = {
     // 各チームを順番に会場に振り分け（会場の上限を超えないように）
     allTeamsSorted.forEach((team, index) => {
       // 空きがある会場を探す（循環して均等に）
-      for (let attempt = 0; attempt < venues.length; attempt++) {
-        const venueIndex = (index + attempt) % venues.length;
-        const venue = venues[venueIndex];
+      for (let attempt = 0; attempt < typedVenues.length; attempt++) {
+        const venueIndex = (index + attempt) % typedVenues.length;
+        const venue = typedVenues[venueIndex];
         const currentTeams = venueAssignments.get(venue.id)!;
 
         // この会場にチームを追加できるか（上限チェック）
@@ -870,9 +968,9 @@ export const finalDayApi = {
       );
       if (!assigned) {
         // 最も少ない会場に追加
-        let minVenue = venues[0];
+        let minVenue = typedVenues[0];
         let minCount = Infinity;
-        venues.forEach(v => {
+        typedVenues.forEach(v => {
           const count = venueAssignments.get(v.id)!.length;
           if (count < minCount) {
             minCount = count;
@@ -885,7 +983,7 @@ export const finalDayApi = {
     });
 
     // 各会場のチーム数をログ出力
-    venues.forEach(v => {
+    typedVenues.forEach(v => {
       const teams = venueAssignments.get(v.id)!;
       console.log(`[Training] 会場${v.id}: ${teams.length}チーム (${teams.map(t => `${t.rank}位:${t.teamName}`).join(', ')})`);
     });
@@ -898,9 +996,21 @@ export const finalDayApi = {
     );
 
     // 11. 各会場でリーグ戦を生成（各チームがmatchesPerTeam試合になるよう調整）
-    const matchesToInsert: any[] = [];
+    interface MatchInsertPayload {
+      tournament_id: number;
+      venue_id: number;
+      home_team_id: number;
+      away_team_id: number;
+      match_date: string;
+      match_time: string;
+      match_order: number;
+      stage: string;
+      status: string;
+      notes: string;
+    }
+    const matchesToInsert: MatchInsertPayload[] = [];
 
-    for (const venue of venues) {
+    for (const venue of typedVenues) {
       const teamsInVenue = venueAssignments.get(venue.id) || [];
       if (teamsInVenue.length < 2) {
         console.warn(`[Training] 会場${venue.id}: チーム数不足（${teamsInVenue.length}チーム）`);
@@ -998,7 +1108,7 @@ export const finalDayApi = {
     if (matchesToInsert.length > 0) {
       const { error: insertError } = await supabase
         .from('matches')
-        .insert(matchesToInsert);
+        .insert(matchesToInsert as never);
 
       if (insertError) {
         console.error('Failed to insert training matches:', insertError);

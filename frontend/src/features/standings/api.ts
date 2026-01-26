@@ -4,6 +4,40 @@ import { standingsApi } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import type { GroupStandings, TopScorer, ResolveTiebreakerInput, OverallStandings, OverallStandingEntry } from './types';
 
+// Type for group query result
+interface GroupQueryResult {
+  id: string;
+}
+
+// Type for standings with team query result
+interface StandingsWithTeamResult {
+  id: number;
+  tournament_id: number;
+  group_id: string;
+  team_id: number;
+  rank: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goals_for: number;
+  goals_against: number;
+  goal_difference: number;
+  points: number;
+  overall_rank?: number | null;
+  team?: {
+    id: number;
+    name: string;
+    short_name?: string | null;
+  } | null;
+}
+
+// Type for tournament qualification settings
+interface TournamentQualificationResult {
+  advancing_teams?: number | null;
+  qualification_rule?: string | null;
+}
+
 export const standingApi = {
   // グループ別順位表取得
   getByGroup: async (tournamentId: number, groupId: string): Promise<GroupStandings> => {
@@ -12,9 +46,10 @@ export const standingApi = {
     if (!found) {
       return { groupId, standings: [], needsTiebreaker: false };
     }
+    const standingsData = (found.standings || []) as StandingsWithTeamResult[];
     return {
       groupId: found.groupId,
-      standings: found.standings.map(s => ({
+      standings: standingsData.map(s => ({
         teamId: s.team?.id || 0,
         teamName: s.team?.name || '',
         played: s.played,
@@ -34,23 +69,26 @@ export const standingApi = {
   // 後方互換: グループ別順位表取得
   getStandingsByGroup: async (tournamentId: number): Promise<GroupStandings[]> => {
     const allGroups = await standingsApi.getByGroup(tournamentId);
-    return allGroups.map(g => ({
-      groupId: g.groupId,
-      standings: g.standings.map(s => ({
-        teamId: s.team?.id || 0,
-        teamName: s.team?.name || '',
-        played: s.played,
-        won: s.won,
-        drawn: s.drawn,
-        lost: s.lost,
-        goalsFor: s.goals_for,
-        goalsAgainst: s.goals_against,
-        goalDifference: s.goal_difference,
-        points: s.points,
-        rank: s.rank,
-      })),
-      needsTiebreaker: false,
-    }));
+    return allGroups.map(g => {
+      const standingsData = (g.standings || []) as StandingsWithTeamResult[];
+      return {
+        groupId: g.groupId,
+        standings: standingsData.map(s => ({
+          teamId: s.team?.id || 0,
+          teamName: s.team?.name || '',
+          played: s.played,
+          won: s.won,
+          drawn: s.drawn,
+          lost: s.lost,
+          goalsFor: s.goals_for,
+          goalsAgainst: s.goals_against,
+          goalDifference: s.goal_difference,
+          points: s.points,
+          rank: s.rank,
+        })),
+        needsTiebreaker: false,
+      };
+    });
   },
 
   // 全グループ順位表取得
@@ -64,11 +102,12 @@ export const standingApi = {
       await standingsApi.recalculate(tournamentId, groupId);
     } else {
       // 全グループを再計算
-      const { data: groups } = await supabase
+      const { data } = await supabase
         .from('groups')
         .select('id')
         .eq('tournament_id', tournamentId);
 
+      const groups = data as GroupQueryResult[] | null;
       if (groups) {
         for (const group of groups) {
           await standingsApi.recalculate(tournamentId, group.id);
@@ -83,7 +122,7 @@ export const standingApi = {
     for (const ranking of data.rankings) {
       const { error } = await supabase
         .from('standings')
-        .update({ rank: ranking.rank })
+        .update({ rank: ranking.rank } as never)
         .eq('tournament_id', data.tournamentId)
         .eq('group_id', data.groupId)
         .eq('team_id', ranking.teamId);
@@ -98,7 +137,7 @@ export const standingApi = {
     return scorers.map(s => ({
       rank: s.rank,
       playerId: 0, // SupabaseではplayerIdがない場合がある
-      playerName: s.scorerName,
+      scorerName: s.scorerName,
       teamId: s.teamId,
       teamName: s.teamName,
       goals: s.goals,
@@ -112,7 +151,7 @@ export const standingApi = {
    */
   getOverallStandings: async (tournamentId: number): Promise<OverallStandings> => {
     // 全順位データをチーム情報付きで取得
-    const { data: standings, error } = await supabase
+    const { data: standingsData, error } = await supabase
       .from('standings')
       .select(`
         *,
@@ -123,13 +162,16 @@ export const standingApi = {
 
     if (error) throw error;
 
+    const standings = standingsData as StandingsWithTeamResult[] | null;
+
     // 大会設定を取得（決勝進出チーム数）
-    const { data: tournament } = await supabase
+    const { data: tournamentData } = await supabase
       .from('tournaments')
       .select('advancing_teams, qualification_rule')
       .eq('id', tournamentId)
       .single();
 
+    const tournament = tournamentData as TournamentQualificationResult | null;
     const qualifyingCount = tournament?.qualification_rule === 'overall_ranking'
       ? 4 // 総合順位ルールでは上位4チーム
       : (tournament?.advancing_teams || 1) * 4; // グループルールではグループ数 × 進出数
@@ -189,7 +231,7 @@ export const standingApi = {
     for (const entry of overall.entries) {
       const { error } = await supabase
         .from('standings')
-        .update({ overall_rank: entry.overallRank })
+        .update({ overall_rank: entry.overallRank } as never)
         .eq('tournament_id', tournamentId)
         .eq('team_id', entry.teamId);
 
@@ -217,7 +259,7 @@ export const standingApi = {
         points: 0,
         rank: 0,
         overall_rank: null,
-      })
+      } as never)
       .eq('tournament_id', tournamentId);
 
     if (error) {
@@ -233,12 +275,14 @@ export const standingApi = {
   recalculateAll: async (tournamentId: number): Promise<{ groups: number; success: boolean }> => {
     try {
       // 全グループを取得
-      const { data: groups, error: groupsError } = await supabase
+      const { data: groupsData, error: groupsError } = await supabase
         .from('groups')
         .select('id')
         .eq('tournament_id', tournamentId);
 
       if (groupsError) throw groupsError;
+
+      const groups = groupsData as GroupQueryResult[] | null;
 
       // 各グループの順位を再計算
       let calculatedGroups = 0;

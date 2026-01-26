@@ -28,7 +28,7 @@ export function toHalfWidthAlphabet(str: string): string {
  * 全角スペースを半角に変換
  */
 export function toHalfWidthSpace(str: string): string {
-  return str.replace(/　/g, ' ');
+  return str.replace(/\u3000/g, ' ');
 }
 
 /**

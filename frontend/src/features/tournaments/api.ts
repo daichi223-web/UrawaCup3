@@ -16,13 +16,13 @@ export const tournamentApi = {
   // 大会一覧取得
   getAll: async (): Promise<Tournament[]> => {
     const data = await tournamentsApi.getAll();
-    return data as Tournament[];
+    return data as unknown as Tournament[];
   },
 
   // 大会詳細取得
   getById: async (id: number): Promise<Tournament> => {
     const data = await tournamentsApi.getById(id);
-    return data as Tournament;
+    return data as unknown as Tournament;
   },
 
   // 大会作成
@@ -36,7 +36,7 @@ export const tournamentApi = {
         start_date: data.startDate,
         end_date: data.endDate,
         status: 'draft',
-      })
+      } as never)
       .select()
       .single();
     if (error) throw error;
@@ -48,11 +48,12 @@ export const tournamentApi = {
     const { id, ...rest } = data;
     const updateData: Record<string, unknown> = {};
     if (rest.name !== undefined) updateData.name = rest.name;
-    if (rest.shortName !== undefined) updateData.short_name = rest.shortName;
-    if (rest.year !== undefined) updateData.year = rest.year;
     if (rest.startDate !== undefined) updateData.start_date = rest.startDate;
     if (rest.endDate !== undefined) updateData.end_date = rest.endDate;
     if (rest.status !== undefined) updateData.status = rest.status;
+    if (rest.matchDuration !== undefined) updateData.match_duration = rest.matchDuration;
+    if (rest.intervalMinutes !== undefined) updateData.interval_minutes = rest.intervalMinutes;
+    if (rest.description !== undefined) updateData.description = rest.description;
 
     const tournament = await tournamentsApi.update(id, updateData);
     return tournament as Tournament;
@@ -70,11 +71,21 @@ export const tournamentApi = {
   // グループ一覧取得
   getGroups: async (tournamentId: number): Promise<TournamentGroup[]> => {
     const data = await groupsApi.getAll(tournamentId);
-    return data.map(g => ({
+    interface GroupData {
+      id: string;
+      name: string;
+      tournament_id: number;
+      venue_id?: number | null;
+      team_count?: number;
+    }
+    const groups = data as GroupData[];
+    return groups.map(g => ({
       id: g.id,
       name: g.name,
       tournamentId: g.tournament_id,
-    })) as TournamentGroup[];
+      venueId: g.venue_id ?? null,
+      teamCount: g.team_count ?? 0,
+    }));
   },
 
   // 設定取得
@@ -90,10 +101,10 @@ export const tournamentApi = {
       return {
         tournamentId,
         matchDuration: 20,
-        breakDuration: 5,
-        pointsForWin: 3,
-        pointsForDraw: 1,
-        pointsForLoss: 0,
+        intervalMinutes: 5,
+        halfTimeMinutes: 10,
+        preliminaryRounds: 2,
+        tiebreaker: ['points', 'goal_difference', 'goals_scored'],
       };
     }
     return data as TournamentSettings;
@@ -109,7 +120,7 @@ export const tournamentApi = {
       .upsert({
         tournament_id: tournamentId,
         ...settings,
-      })
+      } as never)
       .select()
       .single();
 
@@ -118,13 +129,13 @@ export const tournamentApi = {
   },
 
   // 予選日程生成（Supabase Edge Functionが必要）
-  generateSchedule: async (data: GenerateScheduleInput): Promise<{ matchCount: number }> => {
+  generateSchedule: async (_data: GenerateScheduleInput): Promise<{ matchCount: number }> => {
     console.warn('generateSchedule: Supabase Edge Function not implemented yet');
     return { matchCount: 0 };
   },
 
   // 決勝日程生成（Supabase Edge Functionが必要）
-  generateFinalSchedule: async (data: GenerateFinalScheduleInput): Promise<{ matchCount: number }> => {
+  generateFinalSchedule: async (_data: GenerateFinalScheduleInput): Promise<{ matchCount: number }> => {
     console.warn('generateFinalSchedule: Supabase Edge Function not implemented yet');
     return { matchCount: 0 };
   },
@@ -133,7 +144,7 @@ export const tournamentApi = {
   changeStatus: async (id: number, status: Tournament['status']): Promise<Tournament> => {
     const { data, error } = await supabase
       .from('tournaments')
-      .update({ status })
+      .update({ status } as never)
       .eq('id', id)
       .select()
       .single();

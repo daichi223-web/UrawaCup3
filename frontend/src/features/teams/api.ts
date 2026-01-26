@@ -4,9 +4,10 @@ import { teamsApi, playersApi, standingsApi } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import type { Team, CreateTeamInput, UpdateTeamInput, TeamWithPlayers } from './types';
 
-interface TeamListResponse {
-  teams: Team[];
-  total: number;
+// Type for team queries
+interface TeamQueryResult {
+  tournament_id: number;
+  group_id: string | null;
 }
 
 export const teamApi = {
@@ -32,18 +33,22 @@ export const teamApi = {
   getById: async (id: number): Promise<TeamWithPlayers> => {
     const team = await teamsApi.getById(id);
     const players = await playersApi.getByTeam(id);
-    return { ...team, players } as TeamWithPlayers;
+    return { ...(team as unknown as TeamWithPlayers), players };
   },
 
   // チーム作成
   create: async (data: CreateTeamInput): Promise<Team> => {
     const team = await teamsApi.create({
       tournament_id: data.tournamentId,
-      group_id: data.groupId,
+      group_id: data.groupId ?? null,
       name: data.name,
       short_name: data.shortName || data.name.slice(0, 4),
-      region: data.region,
-      group_order: data.groupOrder,
+      region: data.region ?? null,
+      group_order: data.groupOrder ?? null,
+      notes: null,
+      team_type: 'local',
+      is_venue_host: false,
+      prefecture: null,
     });
     return team as Team;
   },
@@ -51,14 +56,14 @@ export const teamApi = {
   // チーム更新
   update: async (id: number, data: UpdateTeamInput): Promise<Team> => {
     // グループ変更がある場合は旧グループ情報を取得
-    let oldTeam: { tournament_id: number; group_id: string | null } | null = null;
+    let oldTeam: TeamQueryResult | null = null;
     if (data.groupId !== undefined) {
       const { data: teamData } = await supabase
         .from('teams')
         .select('tournament_id, group_id')
         .eq('id', id)
         .single();
-      oldTeam = teamData;
+      oldTeam = teamData as TeamQueryResult | null;
     }
 
     const updateData: Record<string, unknown> = {};
@@ -109,11 +114,13 @@ export const teamApi = {
     }
 
     // チーム削除前に順位表から削除（CASCADE で自動削除されるが念のため）
-    const { data: team } = await supabase
+    const { data: teamData } = await supabase
       .from('teams')
       .select('tournament_id, group_id')
       .eq('id', id)
       .single();
+
+    const team = teamData as TeamQueryResult | null;
 
     await teamsApi.delete(id);
 
@@ -148,7 +155,7 @@ export const teamApi = {
           name: name,
           short_name: shortName || name.slice(0, 4),
           region: region || null,
-        });
+        } as never);
 
         if (!error) imported++;
       }
@@ -158,7 +165,7 @@ export const teamApi = {
   },
 
   // Excelインポート（選手用 - Supabaseでは直接実装）
-  importExcel: async (teamId: number, file: File): Promise<{ imported: number }> => {
+  importExcel: async (_teamId: number, _file: File): Promise<{ imported: number }> => {
     // Excel処理にはxlsxライブラリが必要
     console.warn('Excel import requires xlsx library');
     return { imported: 0 };
@@ -166,7 +173,7 @@ export const teamApi = {
 
   // CSVエクスポート
   exportCsv: async (tournamentId: number): Promise<Blob> => {
-    const { data: teams, error } = await supabase
+    const { data: teamsData, error } = await supabase
       .from('teams')
       .select('*')
       .eq('tournament_id', tournamentId)
@@ -174,6 +181,14 @@ export const teamApi = {
       .order('group_order');
 
     if (error) throw error;
+
+    interface TeamRow {
+      group_id: string | null;
+      name: string;
+      short_name: string | null;
+      region: string | null;
+    }
+    const teams = (teamsData || []) as TeamRow[];
 
     const csvRows = ['グループ,チーム名,略称,地域'];
     for (const team of teams) {

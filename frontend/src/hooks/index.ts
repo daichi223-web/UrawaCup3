@@ -2,9 +2,6 @@
  * カスタムフックのエクスポート
  */
 
-// API関連
-export * from './useApi';
-
 // PWA関連
 export * from './usePWA';
 

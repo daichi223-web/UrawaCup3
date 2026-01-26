@@ -144,11 +144,11 @@ export interface Team {
   /** グループ内番号（1-6）*/
   groupOrder?: number;
   /** 都道府県 */
-  prefecture?: string;
+  prefecture?: string | null;
   /** 地域（同地域対戦回避用、例: '埼玉', '東京'） */
-  region?: string;
+  region?: string | null;
   /** 所属リーグID（同リーグ対戦回避用、別途DBカラム追加が必要） */
-  leagueId?: string | number;
+  leagueId?: string | number | null;
   /** 備考 */
   notes?: string;
   /** 作成日時 */
@@ -163,7 +163,7 @@ export interface Team {
   group_id?: string;
   group_order?: number;
   region_snake?: string;      // region (snake_case alias)
-  league_id?: string | number; // leagueId (snake_case)
+  league_id?: string | number | null; // leagueId (snake_case)
   created_at?: string;
   updated_at?: string;
 }
@@ -683,6 +683,13 @@ export interface Goal {
   createdAt: string;
   /** 更新日時 */
   updatedAt: string;
+
+  // snake_case aliases (from API response)
+  team_id?: number;
+  player_id?: number;
+  player_name?: string;
+  is_own_goal?: boolean;
+  is_penalty?: boolean;
 }
 
 /** 得点入力フォーム */

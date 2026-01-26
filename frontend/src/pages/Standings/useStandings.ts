@@ -1,0 +1,249 @@
+// src/pages/Standings/useStandings.ts
+import { useState, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { standingApi, type GroupStandings } from '@/features/standings'
+import type { OverallStandings } from '@/features/standings/types'
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates'
+import { useAppStore } from '@/stores/appStore'
+import { matchesApi, teamsApi, venuesApi } from '@/lib/api'
+import type { ViewMode, StandingsEntry, TeamStats, TeamsResponse, MatchesResponse } from './types'
+
+export function useStandings() {
+  const { currentTournament } = useAppStore()
+  const tournamentId = currentTournament?.id
+
+  const [viewMode, setViewMode] = useState<ViewMode>('star')
+  const [recentlyUpdated, setRecentlyUpdated] = useState(false)
+
+  // リアルタイム更新
+  const { connectionState } = useRealtimeUpdates({
+    tournamentId,
+    showNotifications: true,
+  })
+  const isConnected = connectionState === 'connected'
+
+  // グループ別順位
+  const {
+    data: groupStandings = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+    dataUpdatedAt,
+  } = useQuery<GroupStandings[]>({
+    queryKey: ['standings', tournamentId],
+    queryFn: () => standingApi.getStandingsByGroup(tournamentId!),
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
+    gcTime: 5 * 60 * 1000,
+    enabled: !!tournamentId,
+  })
+
+  // 試合データ
+  const { data: matchesData, isLoading: isLoadingMatches } = useQuery<MatchesResponse>({
+    queryKey: ['matches', tournamentId],
+    queryFn: async () => {
+      const result = await matchesApi.getAll(tournamentId!)
+      return result as unknown as MatchesResponse
+    },
+    staleTime: 30000,
+    enabled: !!tournamentId,
+  })
+
+  // チームデータ
+  const { data: teamsData, isLoading: isLoadingTeams } = useQuery<TeamsResponse>({
+    queryKey: ['teams', tournamentId],
+    queryFn: async () => {
+      const result = await teamsApi.getAll(tournamentId!)
+      return result as unknown as TeamsResponse
+    },
+    staleTime: 30000,
+    enabled: !!tournamentId,
+  })
+
+  // 大会形式
+  const tournamentData = currentTournament as { use_group_system?: boolean; useGroupSystem?: boolean } | undefined
+  const useGroupSystem = tournamentData?.use_group_system ?? tournamentData?.useGroupSystem ?? true
+
+  // 会場データ
+  const { data: venuesData } = useQuery({
+    queryKey: ['venues', tournamentId],
+    queryFn: () => venuesApi.getAll(tournamentId!),
+    staleTime: 30000,
+    enabled: !!tournamentId && !useGroupSystem,
+  })
+
+  // 総合順位
+  const isOverallRanking = (currentTournament as unknown as { qualification_rule?: string } | undefined)?.qualification_rule === 'overall_ranking' || !useGroupSystem
+  const { data: overallStandings, isLoading: isLoadingOverall, refetch: refetchOverall } = useQuery<OverallStandings>({
+    queryKey: ['overall-standings', tournamentId],
+    queryFn: () => standingApi.getOverallStandings(tournamentId!),
+    staleTime: 30000,
+    enabled: !!tournamentId,
+  })
+
+  // ローカル計算による総合順位（フォールバック用）
+  const calculatedOverallRankings = useMemo(() => {
+    const teams = teamsData?.teams || []
+    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed') || []
+    if (teams.length === 0 || matches.length === 0) return undefined
+
+    const statsMap = new Map<number, { teamId: number; points: number; goalDiff: number; goalsFor: number; played: number }>()
+    teams.forEach(t => statsMap.set(t.id, { teamId: t.id, points: 0, goalDiff: 0, goalsFor: 0, played: 0 }))
+
+    matches.forEach(m => {
+      const homeId = m.homeTeamId ?? m.home_team_id
+      const awayId = m.awayTeamId ?? m.away_team_id
+      const homeScore = m.homeScoreTotal ?? m.home_score_total ?? 0
+      const awayScore = m.awayScoreTotal ?? m.away_score_total ?? 0
+      if (!homeId || !awayId) return
+
+      const homeStats = statsMap.get(homeId)
+      const awayStats = statsMap.get(awayId)
+      if (!homeStats || !awayStats) return
+
+      homeStats.played++; awayStats.played++
+      homeStats.goalsFor += homeScore; awayStats.goalsFor += awayScore
+      homeStats.goalDiff += (homeScore - awayScore); awayStats.goalDiff += (awayScore - homeScore)
+
+      if (homeScore > awayScore) homeStats.points += 3
+      else if (homeScore < awayScore) awayStats.points += 3
+      else { homeStats.points += 1; awayStats.points += 1 }
+    })
+
+    const sorted = Array.from(statsMap.values()).filter(s => s.played > 0).sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff
+      return b.goalsFor - a.goalsFor
+    })
+
+    const map = new Map<number, number>()
+    sorted.forEach((stats, index) => map.set(stats.teamId, index + 1))
+    return map
+  }, [teamsData, matchesData])
+
+  // 総合順位マップ（DB優先）
+  const overallRankingsMap = useMemo(() => {
+    if (overallStandings?.entries && overallStandings.entries.length > 0) {
+      const map = new Map<number, number>()
+      overallStandings.entries.forEach(entry => map.set(entry.teamId, entry.overallRank))
+      return map
+    }
+    return calculatedOverallRankings
+  }, [overallStandings, calculatedOverallRankings])
+
+  // 総合順位表エントリ（DB優先、なければローカル計算）
+  const displayOverallEntries = useMemo((): StandingsEntry[] => {
+    if (overallStandings?.entries && overallStandings.entries.length > 0) {
+      return overallStandings.entries
+    }
+
+    const teams = teamsData?.teams || []
+    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed') || []
+    if (teams.length === 0 || matches.length === 0) return []
+
+    const statsMap = new Map<number, TeamStats>()
+    teams.forEach(t => {
+      statsMap.set(t.id, {
+        teamId: t.id,
+        teamName: t.name,
+        shortName: t.short_name || t.shortName || t.name,
+        groupId: t.group_id || t.groupId || '',
+        points: 0, goalDiff: 0, goalsFor: 0, goalsAgainst: 0,
+        played: 0, won: 0, drawn: 0, lost: 0,
+      })
+    })
+
+    matches.forEach(m => {
+      const homeId = m.homeTeamId ?? m.home_team_id
+      const awayId = m.awayTeamId ?? m.away_team_id
+      const homeScore = m.homeScoreTotal ?? m.home_score_total ?? 0
+      const awayScore = m.awayScoreTotal ?? m.away_score_total ?? 0
+      if (!homeId || !awayId) return
+
+      const homeStats = statsMap.get(homeId)
+      const awayStats = statsMap.get(awayId)
+      if (!homeStats || !awayStats) return
+
+      homeStats.played++; awayStats.played++
+      homeStats.goalsFor += homeScore; homeStats.goalsAgainst += awayScore
+      awayStats.goalsFor += awayScore; awayStats.goalsAgainst += homeScore
+      homeStats.goalDiff += (homeScore - awayScore); awayStats.goalDiff += (awayScore - homeScore)
+
+      if (homeScore > awayScore) { homeStats.points += 3; homeStats.won++; awayStats.lost++ }
+      else if (homeScore < awayScore) { awayStats.points += 3; awayStats.won++; homeStats.lost++ }
+      else { homeStats.points += 1; awayStats.points += 1; homeStats.drawn++; awayStats.drawn++ }
+    })
+
+    const sorted = Array.from(statsMap.values()).filter(s => s.played > 0).sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points
+      if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff
+      return b.goalsFor - a.goalsFor
+    })
+
+    return sorted.map((stats, index) => ({
+      overallRank: index + 1,
+      groupId: stats.groupId,
+      groupRank: 0,
+      teamId: stats.teamId,
+      teamName: stats.teamName,
+      shortName: stats.shortName,
+      points: stats.points,
+      goalDifference: stats.goalDiff,
+      goalsFor: stats.goalsFor,
+      goalsAgainst: stats.goalsAgainst,
+      played: stats.played,
+      won: stats.won,
+      drawn: stats.drawn,
+      lost: stats.lost,
+    }))
+  }, [overallStandings, teamsData, matchesData])
+
+  // 更新アニメーション
+  useEffect(() => {
+    if (dataUpdatedAt) {
+      setRecentlyUpdated(true)
+      const timer = setTimeout(() => setRecentlyUpdated(false), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [dataUpdatedAt])
+
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('ja-JP') : null
+
+  const handlePrint = () => window.print()
+  const handleRefresh = () => { refetch(); refetchOverall() }
+
+  return {
+    // State
+    viewMode, setViewMode,
+    recentlyUpdated,
+
+    // Data
+    tournamentId,
+    currentTournament,
+    groupStandings,
+    matchesData,
+    teamsData,
+    venuesData,
+    overallStandings,
+    displayOverallEntries,
+    overallRankingsMap,
+
+    // Flags
+    useGroupSystem,
+    isOverallRanking,
+    isConnected,
+    isLoading: isLoading || isLoadingTeams || isLoadingMatches,
+    isLoadingOverall,
+    isFetching,
+    isError,
+    error,
+    lastUpdated,
+
+    // Handlers
+    handlePrint,
+    handleRefresh,
+    refetch,
+  }
+}

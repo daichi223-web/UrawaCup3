@@ -28,13 +28,16 @@ export interface ReportRecipient {
   name: string;
   email?: string;
   fax?: string;
+  role?: string;
   isActive: boolean;
 }
 
 export interface SenderSettings {
-  senderOrganization: string | null;
-  senderName: string | null;
-  senderContact: string | null;
+  tournamentId?: number;
+  senderOrganization?: string | null;
+  senderName?: string | null;
+  senderContact?: string | null;
+  senderTitle?: string | null;
 }
 
 export interface SenderSettingsUpdate {

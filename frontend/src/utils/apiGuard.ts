@@ -5,14 +5,8 @@
  */
 
 import { supabase } from '@/lib/supabase'
-import { showError, isUnauthorizedError, isNetworkError } from './errorHandler'
-
-/**
- * セッション状態
- */
-let sessionCheckInProgress = false
-let lastSessionCheck = 0
-const SESSION_CHECK_INTERVAL = 60000 // 1分
+import { isNetworkError } from './errorHandler'
+import type { ProfileRow } from '@/lib/supabase-query'
 
 /**
  * 401対策: セッションの有効性を確認（簡略化版）
@@ -61,15 +55,18 @@ export async function checkPermission(
     return false
   }
 
-  const { data: profile, error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('role, venue_id')
     .eq('id', session.user.id)
     .single()
 
-  if (error || !profile) {
+  if (error || !data) {
     return false
   }
+
+  // Cast to typed profile
+  const profile = data as Pick<ProfileRow, 'role' | 'venue_id'>
 
   // adminは全ての権限を持つ
   if (profile.role === 'admin') {
@@ -113,7 +110,7 @@ export async function requireVenueStaff(venueId?: number): Promise<void> {
 export async function checkExists(
   table: string,
   id: number,
-  entityName: string = 'データ'
+  _entityName: string = 'データ'
 ): Promise<boolean> {
   const { data, error } = await supabase
     .from(table)

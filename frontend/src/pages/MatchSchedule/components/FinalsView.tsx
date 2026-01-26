@@ -1,0 +1,114 @@
+// src/pages/MatchSchedule/components/FinalsView.tsx
+import FinalsBracket from '@/components/FinalsBracket'
+import DraggableMatchList from '@/components/DraggableMatchList'
+import type { MatchWithDetails, VenueInfo, TeamInfo } from '../types'
+
+interface FinalsViewProps {
+  finalsMatches: MatchWithDetails[]
+  allMatches: MatchWithDetails[]
+  venues: VenueInfo[]
+  allTeams: TeamInfo[]
+  hasTrainingMatches: boolean
+  isUpdatingBracket: boolean
+  onSwapTeams: (matchId: number, homeTeamId: number, awayTeamId: number) => Promise<void>
+  onUpdateBracket: () => void
+}
+
+export function FinalsView({
+  finalsMatches,
+  allMatches,
+  venues,
+  allTeams,
+  hasTrainingMatches,
+  isUpdatingBracket,
+  onSwapTeams,
+  onUpdateBracket,
+}: FinalsViewProps) {
+  return (
+    <div className="space-y-6">
+      {/* 決勝トーナメント */}
+      {finalsMatches.length > 0 && (
+        <>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900">決勝トーナメント</h3>
+            <button
+              className="btn-secondary text-sm"
+              onClick={onUpdateBracket}
+              disabled={isUpdatingBracket}
+            >
+              {isUpdatingBracket ? '更新中...' : '組み合わせ更新'}
+            </button>
+          </div>
+          {(() => {
+            const matchesByVenue: Record<number, MatchWithDetails[]> = {}
+            finalsMatches.forEach(m => {
+              const vid = m.venueId || m.venue_id
+              if (vid === undefined) return
+              if (!matchesByVenue[vid]) matchesByVenue[vid] = []
+              matchesByVenue[vid].push(m)
+            })
+            return Object.entries(matchesByVenue).map(([venueId, matches]) => {
+              const venue = venues.find(v => v.id === Number(venueId))
+              return (
+                <div key={venueId} className="rounded-lg border-2 border-purple-200 bg-purple-50 overflow-hidden mb-4">
+                  <div className="px-4 py-2 bg-purple-100 text-purple-800 font-semibold flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-purple-500" />
+                    <span>{venue?.name || `会場${venueId}`}</span>
+                    <span className="ml-auto text-xs font-normal opacity-75">{matches.length}試合</span>
+                  </div>
+                  <div className="p-3">
+                    <FinalsBracket matches={matches} onSwapTeams={onSwapTeams} />
+                  </div>
+                </div>
+              )
+            })
+          })()}
+        </>
+      )}
+
+      {/* 研修試合 */}
+      {hasTrainingMatches && (
+        <div className="mt-4">
+          <h3 className="font-semibold text-gray-900 mb-3">順位リーグ（研修試合）</h3>
+          {(() => {
+            const trainingMatches = allMatches.filter(m => m.stage === 'training')
+            const matchesByVenue: Record<number, MatchWithDetails[]> = {}
+            trainingMatches.forEach(m => {
+              const vid = m.venueId || m.venue_id
+              if (vid === undefined) return
+              if (!matchesByVenue[vid]) matchesByVenue[vid] = []
+              matchesByVenue[vid].push(m)
+            })
+            Object.values(matchesByVenue).forEach(matches => {
+              matches.sort((a, b) => (a.matchOrder || 0) - (b.matchOrder || 0))
+            })
+            return Object.entries(matchesByVenue).map(([venueId, matches]) => {
+              const venue = venues.find(v => v.id === Number(venueId))
+              return (
+                <div key={venueId} className="rounded-lg border-2 border-gray-200 bg-gray-50 overflow-hidden mb-4">
+                  <div className="px-4 py-2 bg-gray-100 text-gray-800 font-semibold flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-gray-500" />
+                    <span>{venue?.name || `会場${venueId}`}</span>
+                    <span className="ml-auto text-xs font-normal opacity-75">{matches.length}試合</span>
+                  </div>
+                  <div className="p-3">
+                    <DraggableMatchList
+                      matches={matches}
+                      onSwapTeams={onSwapTeams}
+                      title=""
+                      emptyMessage="研修試合がありません"
+                      teams={allTeams}
+                      enableConstraintCheck
+                    />
+                  </div>
+                </div>
+              )
+            })
+          })()}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default FinalsView

@@ -1,17 +1,21 @@
 import { create } from 'zustand'
 import type {
-  Match,
   MatchWithDetails,
   MatchScoreInput,
   GoalInput,
   MatchStatus,
   ApprovalStatus,
-  MatchApprovalResponse,
-  PendingMatchesResponse
 } from '@shared/types'
 import { matchesApi, standingsApi } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
+
+// Type for match query result (used for recalculating standings)
+interface MatchQueryResult {
+  tournament_id: number
+  group_id: string | null
+  stage: string
+}
 
 /**
  * 試合管理状態
@@ -124,12 +128,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
       })
 
       // 一覧を更新
+      const updatedData = data as Partial<MatchWithDetails>
       set((state) => ({
         matches: state.matches.map((m) =>
-          m.id === matchId ? { ...m, ...data } : m
+          m.id === matchId ? { ...m, ...updatedData } : m
         ),
         selectedMatch: state.selectedMatch?.id === matchId
-          ? { ...state.selectedMatch, ...data }
+          ? { ...state.selectedMatch, ...updatedData }
           : state.selectedMatch,
         isLoading: false,
         pendingGoals: [],
@@ -138,12 +143,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
 
       // スコア更新後に順位表を再計算（グループステージの試合の場合）
       try {
-        const { data: matchData } = await supabase
+        const { data } = await supabase
           .from('matches')
           .select('tournament_id, group_id, stage')
           .eq('id', matchId)
           .single()
 
+        const matchData = data as MatchQueryResult | null
         if (matchData?.group_id && matchData?.stage === 'preliminary') {
           console.log('[Standings] Recalculating standings for group:', matchData.group_id)
           await standingsApi.recalculate(matchData.tournament_id, matchData.group_id)
@@ -336,12 +342,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
       // 承認後に順位表を再計算（グループステージの試合の場合）
       // 承認済み試合のみが順位に反映されるため
       try {
-        const { data: matchData } = await supabase
+        const { data } = await supabase
           .from('matches')
           .select('tournament_id, group_id, stage')
           .eq('id', matchId)
           .single()
 
+        const matchData = data as MatchQueryResult | null
         if (matchData?.group_id && matchData?.stage === 'preliminary') {
           console.log('[Standings] Recalculating standings after approval for group:', matchData.group_id)
           await standingsApi.recalculate(matchData.tournament_id, matchData.group_id)
@@ -388,12 +395,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
 
       // 却下後に順位表を再計算（承認済みだった試合が却下された場合に対応）
       try {
-        const { data: matchData } = await supabase
+        const { data } = await supabase
           .from('matches')
           .select('tournament_id, group_id, stage')
           .eq('id', matchId)
           .single()
 
+        const matchData = data as MatchQueryResult | null
         if (matchData?.group_id && matchData?.stage === 'preliminary') {
           console.log('[Standings] Recalculating standings after rejection for group:', matchData.group_id)
           await standingsApi.recalculate(matchData.tournament_id, matchData.group_id)
@@ -437,12 +445,13 @@ export const useMatchStore = create<MatchState>((set, _get) => ({
 
       // 再提出後に順位表を再計算（pendingは順位に反映されないため）
       try {
-        const { data: matchData } = await supabase
+        const { data } = await supabase
           .from('matches')
           .select('tournament_id, group_id, stage')
           .eq('id', matchId)
           .single()
 
+        const matchData = data as MatchQueryResult | null
         if (matchData?.group_id && matchData?.stage === 'preliminary') {
           console.log('[Standings] Recalculating standings after resubmit for group:', matchData.group_id)
           await standingsApi.recalculate(matchData.tournament_id, matchData.group_id)

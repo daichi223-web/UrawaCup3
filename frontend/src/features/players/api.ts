@@ -2,7 +2,7 @@
 // 選手API呼び出し - Supabase版
 import { playersApi } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import {
   normalizePlayerName,
   normalizeJerseyNumber,
@@ -44,9 +44,13 @@ export const playerApi = {
   create: async (data: CreatePlayerInput): Promise<Player> => {
     const player = await playersApi.create({
       team_id: data.teamId,
-      number: data.number,
+      number: data.number ?? null,
       name: data.name,
-      position: data.position,
+      position: data.position ?? null,
+      name_kana: null,
+      grade: null,
+      is_captain: false,
+      notes: null,
     });
     return player as Player;
   },
@@ -60,7 +64,7 @@ export const playerApi = {
 
     const { data: player, error } = await supabase
       .from('players')
-      .update(updateData)
+      .update(updateData as never)
       .eq('id', id)
       .select()
       .single();
@@ -115,10 +119,21 @@ export const playerApi = {
     }
 
     if (error) throw error;
-    return (data || []).map(p => ({
+    interface PlayerQueryResult {
+      id: number;
+      number: number;
+      name: string;
+    }
+    const players = (data || []) as PlayerQueryResult[];
+    return players.map(p => ({
       id: p.id,
+      teamId: teamId,
       number: p.number,
       name: p.name,
+      nameKana: '',
+      position: null,
+      grade: null,
+      displayText: `${p.number} ${p.name}`,
     }));
   },
 
@@ -155,7 +170,7 @@ export const playerApi = {
             number: isNaN(normalizedNumber) ? 0 : normalizedNumber,
             name: normalizedName,
             position: normalizedPosition,
-          })
+          } as never)
           .select()
           .single();
 
@@ -178,8 +193,9 @@ export const playerApi = {
 
     if (error) throw error;
 
+    const typedPlayers = (players || []) as Array<{ number: number; name: string; position: string | null }>;
     const csvRows = ['番号,氏名,ポジション'];
-    for (const player of players || []) {
+    for (const player of typedPlayers) {
       csvRows.push(`${player.number},${player.name},${player.position || ''}`);
     }
 
@@ -187,66 +203,127 @@ export const playerApi = {
   },
 
   // Excelインポートプレビュー
-  previewExcelImport: async (teamId: number, file: File): Promise<ImportPreviewResult> => {
+  previewExcelImport: async (_teamId: number, file: File): Promise<ImportPreviewResult> => {
     const arrayBuffer = await file.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
 
-    const players: Array<{ number: number; name: string; position?: string }> = [];
-    const staff: Array<{ role: string; name: string }> = [];
-    const warnings: string[] = [];
-    const errors: string[] = [];
+    const players: Array<{
+      rowNumber: number;
+      number: number | null;
+      name: string;
+      nameKana: string | null;
+      grade: number | null;
+      position: string | null;
+      height: number | null;
+      previousTeam: string | null;
+      status: 'new' | 'update' | 'error' | 'warning';
+      errors: string[];
+    }> = [];
+    const staff: Array<{ role: string; name: string; phone: string | null; email: string | null }> = [];
+    const errors: Array<{ row: number; field: string; type: 'error' | 'warning'; message: string }> = [];
 
     // 選手シートを探す（"選手", "players", 最初のシート）
-    const playerSheetName = workbook.SheetNames.find(
+    const sheetNames = workbook.worksheets.map(ws => ws.name);
+    const playerSheetName = sheetNames.find(
       name => name.toLowerCase().includes('選手') || name.toLowerCase().includes('player')
-    ) || workbook.SheetNames[0];
+    ) || sheetNames[0];
 
     if (playerSheetName) {
-      const sheet = workbook.Sheets[playerSheetName];
-      const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      const sheet = workbook.getWorksheet(playerSheetName);
+      if (sheet) {
+        // ヘッダー行を取得
+        const headerRow = sheet.getRow(1);
+        const headers: Record<number, string> = {};
+        headerRow.eachCell((cell, colNumber) => {
+          headers[colNumber] = String(cell.value || '').toLowerCase();
+        });
 
-      for (let i = 0; i < data.length; i++) {
-        const row = data[i];
-        // カラム名の候補を探す
-        const number = row['番号'] || row['背番号'] || row['No'] || row['number'] || 0;
-        const name = row['氏名'] || row['名前'] || row['選手名'] || row['name'] || '';
-        const position = row['ポジション'] || row['position'] || row['POS'] || '';
+        // データ行を処理
+        sheet.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) return; // ヘッダー行をスキップ
 
-        if (name) {
-          players.push({
-            number: typeof number === 'number' ? number : parseInt(String(number)) || 0,
-            name: String(name),
-            position: position ? String(position) : undefined,
+          const rowData: Record<string, unknown> = {};
+          row.eachCell((cell, colNumber) => {
+            const headerName = headers[colNumber];
+            if (headerName) {
+              rowData[headerName] = cell.value;
+            }
           });
-        } else {
-          warnings.push(`行 ${i + 2}: 名前が空のためスキップ`);
-        }
+
+          // カラム名の候補を探す
+          const number = rowData['番号'] || rowData['背番号'] || rowData['no'] || rowData['number'] || 0;
+          const name = rowData['氏名'] || rowData['名前'] || rowData['選手名'] || rowData['name'] || '';
+          const position = rowData['ポジション'] || rowData['position'] || rowData['pos'] || '';
+
+          if (name) {
+            players.push({
+              rowNumber,
+              number: typeof number === 'number' ? number : parseInt(String(number)) || null,
+              name: String(name),
+              nameKana: null,
+              grade: null,
+              position: position ? String(position) : null,
+              height: null,
+              previousTeam: null,
+              status: 'new',
+              errors: [],
+            });
+          } else {
+            errors.push({ row: rowNumber, field: 'name', type: 'warning', message: '名前が空のためスキップ' });
+          }
+        });
       }
     }
 
     // スタッフシートを探す
-    const staffSheetName = workbook.SheetNames.find(
+    const staffSheetName = sheetNames.find(
       name => name.toLowerCase().includes('スタッフ') || name.toLowerCase().includes('staff')
     );
 
     if (staffSheetName) {
-      const sheet = workbook.Sheets[staffSheetName];
-      const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+      const sheet = workbook.getWorksheet(staffSheetName);
+      if (sheet) {
+        const headerRow = sheet.getRow(1);
+        const headers: Record<number, string> = {};
+        headerRow.eachCell((cell, colNumber) => {
+          headers[colNumber] = String(cell.value || '').toLowerCase();
+        });
 
-      for (const row of data) {
-        const role = row['役職'] || row['role'] || '';
-        const name = row['氏名'] || row['名前'] || row['name'] || '';
+        sheet.eachRow((row, rowNumber) => {
+          if (rowNumber === 1) return;
 
-        if (name && role) {
-          staff.push({
-            role: String(role),
-            name: String(name),
+          const rowData: Record<string, unknown> = {};
+          row.eachCell((cell, colNumber) => {
+            const headerName = headers[colNumber];
+            if (headerName) {
+              rowData[headerName] = cell.value;
+            }
           });
-        }
+
+          const role = rowData['役職'] || rowData['role'] || '';
+          const name = rowData['氏名'] || rowData['名前'] || rowData['name'] || '';
+
+          if (name && role) {
+            staff.push({
+              role: String(role),
+              name: String(name),
+              phone: null,
+              email: null,
+            });
+          }
+        });
       }
     }
 
-    return { players, staff, warnings, errors };
+    return {
+      format: 'excel',
+      teamInfo: null,
+      players,
+      staff,
+      uniforms: [],
+      errors,
+    };
   },
 
   // Excelインポート実行
@@ -261,14 +338,14 @@ export const playerApi = {
     } = {}
   ): Promise<ImportResult> => {
     const preview = await playerApi.previewExcelImport(teamId, file);
-    const warnings: string[] = [...preview.warnings];
+    const importErrors: Array<{ row: number; field: string; type: 'error' | 'warning'; message: string }> = [...preview.errors];
 
     if (options.replaceExisting) {
       // 既存選手を削除
       await supabase.from('players').delete().eq('team_id', teamId);
     }
 
-    let playersImported = 0;
+    let imported = 0;
     for (const player of preview.players) {
       // 全角半角正規化
       const normalizedName = normalizePlayerName(player.name);
@@ -281,16 +358,15 @@ export const playerApi = {
           number: player.number,
           name: normalizedName,
           position: normalizedPosition,
-        });
+        } as never);
 
       if (!error) {
-        playersImported++;
+        imported++;
       } else {
-        warnings.push(`選手 ${player.name} のインポートに失敗: ${error.message}`);
+        importErrors.push({ row: player.rowNumber, field: 'name', type: 'error', message: `選手 ${player.name} のインポートに失敗: ${error.message}` });
       }
     }
 
-    let staffImported = 0;
     if (options.importStaff && preview.staff.length > 0) {
       for (const s of preview.staff) {
         const { error } = await supabase
@@ -299,20 +375,20 @@ export const playerApi = {
             team_id: teamId,
             role: s.role,
             name: s.name,
-          });
+          } as never);
 
-        if (!error) {
-          staffImported++;
+        if (error) {
+          importErrors.push({ row: 0, field: 'staff', type: 'error', message: `スタッフ ${s.name} のインポートに失敗: ${error.message}` });
         }
       }
     }
 
-    return { playersImported, staffImported, warnings };
+    return { imported, updated: 0, skipped: 0, errors: importErrors };
   },
 
   // Excelエクスポート
-  exportExcel: async (teamId: number, teamName: string): Promise<Blob> => {
-    const { data: players, error } = await supabase
+  exportExcel: async (teamId: number, _teamName: string): Promise<Blob> => {
+    const { data: playersData, error } = await supabase
       .from('players')
       .select('*')
       .eq('team_id', teamId)
@@ -320,19 +396,24 @@ export const playerApi = {
 
     if (error) throw error;
 
-    const wsData = [
-      ['番号', '氏名', 'ポジション'],
-      ...(players || []).map(p => [p.number, p.name, p.position || ''])
-    ];
+    const players = (playersData || []) as Array<{ number: number; name: string; position: string | null }>;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('選手');
 
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '選手');
+    // ヘッダー行
+    worksheet.addRow(['番号', '氏名', 'ポジション']);
+
+    // データ行
+    for (const p of players) {
+      worksheet.addRow([p.number, p.name, p.position || '']);
+    }
 
     // カラム幅を設定
-    ws['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 12 }];
+    worksheet.getColumn(1).width = 8;
+    worksheet.getColumn(2).width = 20;
+    worksheet.getColumn(3).width = 12;
 
-    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 };

@@ -10,6 +10,13 @@ export interface ExclusionPair {
   reason: string | null;
   createdAt: string;
 
+  // Supabase snake_case variants (raw API response)
+  tournament_id?: number;
+  group_id?: string;
+  team1_id?: number;
+  team2_id?: number;
+  created_at?: string;
+
   // 結合データ
   team1?: { id: number; name: string };
   team2?: { id: number; name: string };
@@ -28,7 +35,8 @@ export interface ExclusionSuggestion {
   team1Name: string;
   team2Id: number;
   team2Name: string;
-  suggestedReason: string;
+  reason: string;
+  confidence: number;
 }
 
 export interface BulkExclusionInput {

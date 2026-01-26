@@ -15,7 +15,7 @@
 //   - UI警告: 「簡易版PDF」と表示
 // =====================================================
 import { supabase } from '@/lib/supabase';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import type { ReportGenerateInput, ReportJob, ReportRecipient, SenderSettings, SenderSettingsUpdate } from './types';
@@ -24,15 +24,55 @@ import type { ReportGenerateInput, ReportJob, ReportRecipient, SenderSettings, S
 const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
 
 // jsPDF autotable型定義
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
+interface AutoTableOptions {
+  startY?: number
+  head?: (string | number)[][]
+  body?: (string | number | null | undefined)[][]
+  styles?: { fontSize?: number; cellPadding?: number }
+  headStyles?: { fillColor?: number[] }
+  columnStyles?: Record<number, { cellWidth?: number }>
+  margin?: { left?: number }
+}
+
+interface JsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: AutoTableOptions) => jsPDF
+  lastAutoTable?: { finalY: number }
 }
 
 // ================================================
 // 型定義
 // ================================================
+
+// 得点者情報（PDF/Excel出力用）
+interface Scorer {
+  time: string
+  team: string
+  name: string
+}
+
+// 会場別試合データ（PDF出力用）
+interface VenueMatchData {
+  homeTeam: { name: string }
+  awayTeam: { name: string }
+  kickoff: string
+  homeScore1H: number | string
+  homeScore2H: number | string
+  awayScore1H: number | string
+  awayScore2H: number | string
+  scorers: Scorer[]
+}
+
+// 優秀選手APIレスポンス
+interface OutstandingPlayerApiResponse {
+  id: number
+  award_type: 'mvp' | 'outstanding'
+  player_name: string
+  player_number?: number
+  team_name?: string
+  display_order: number
+  team?: { name: string; short_name?: string }
+}
+
 interface Team {
   id: number
   name: string
@@ -51,23 +91,48 @@ interface Goal {
 interface Match {
   id: number
   stage: string
+  status?: string
   match_time?: string
+  match_date?: string
   venue?: { name: string }
+  venue_id?: number
   home_team?: Team
   away_team?: Team
-  home_score_half1?: number
-  home_score_half2?: number
-  away_score_half1?: number
-  away_score_half2?: number
-  home_score_total?: number
-  away_score_total?: number
-  home_pk?: number
-  away_pk?: number
+  home_team_id?: number
+  away_team_id?: number
+  home_score_half1?: number | null
+  home_score_half2?: number | null
+  away_score_half1?: number | null
+  away_score_half2?: number | null
+  home_score_total?: number | null
+  away_score_total?: number | null
+  home_pk?: number | null
+  away_pk?: number | null
   has_penalty_shootout?: boolean
   result?: string
   goals?: Goal[]
-  home_seed?: string
-  away_seed?: string
+  home_seed?: string | null
+  away_seed?: string | null
+}
+
+// Type for tournament query
+interface TournamentInfo {
+  name?: string
+  start_date?: string
+  end_date?: string
+}
+
+// Type for sender settings query
+interface SenderSettingsQuery {
+  recipient?: string
+  sender_name?: string
+  contact?: string
+}
+
+// Type for group query
+interface GroupInfo {
+  id: string
+  name?: string
 }
 
 interface Standing {
@@ -128,15 +193,15 @@ export interface FinalScheduleData {
 
 export const reportApi = {
   // 報告書生成開始（Supabase Edge Functionが必要）
-  generate: async (data: ReportGenerateInput): Promise<{ jobId: string }> => {
+  generate: async (_data: ReportGenerateInput): Promise<{ jobId: string }> => {
     console.warn('Report generation requires Supabase Edge Function');
     return { jobId: 'not-implemented' };
   },
 
   // 生成ジョブ状態確認
-  getJobStatus: async (jobId: string): Promise<ReportJob> => {
+  getJobStatus: async (_jobId: string): Promise<ReportJob> => {
     return {
-      id: jobId,
+      id: _jobId,
       status: 'completed',
       progress: 100,
       createdAt: new Date().toISOString(),
@@ -144,7 +209,7 @@ export const reportApi = {
   },
 
   // 報告書ダウンロード（Supabase Edge Functionが必要）
-  download: async (jobId: string): Promise<Blob> => {
+  download: async (_jobId: string): Promise<Blob> => {
     console.warn('Report download requires Supabase Edge Function');
     return new Blob(['Report generation not implemented'], { type: 'text/plain' });
   },
@@ -170,8 +235,10 @@ export const reportApi = {
       query = query.eq('venue_id', params.venueId);
     }
 
-    const { data: matches, error } = await query;
+    const { data: matchesData, error } = await query;
     if (error) throw error;
+
+    const matches = matchesData as Match[] | null;
 
     // デバッグ: 試合データと会場情報を確認
     console.log('[downloadPdf] Matches count:', matches?.length || 0);
@@ -184,18 +251,22 @@ export const reportApi = {
     }
 
     // 大会情報を取得
-    const { data: tournament } = await supabase
+    const { data: tournamentData } = await supabase
       .from('tournaments')
       .select('name, start_date, end_date')
       .eq('id', params.tournamentId)
       .single();
 
+    const tournament = tournamentData as TournamentInfo | null;
+
     // 発信元設定を取得
-    const { data: senderSettings } = await supabase
+    const { data: senderData } = await supabase
       .from('sender_settings')
       .select('*')
       .eq('tournament_id', params.tournamentId)
       .single();
+
+    const senderSettings = senderData as SenderSettingsQuery | null;
 
     // 日付から第N日を計算
     let day = 1;
@@ -211,7 +282,7 @@ export const reportApi = {
     const dateStr = `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日（${weekdays[dateObj.getDay()]}）`;
 
     // 会場ごとにグループ化
-    const matchesByVenue: Record<string, any[]> = {};
+    const matchesByVenue: Record<string, VenueMatchData[]> = {};
     for (const match of matches || []) {
       const venueName = match.venue?.name || '未定';
       if (!matchesByVenue[venueName]) {
@@ -219,9 +290,9 @@ export const reportApi = {
       }
 
       // 得点者リストを作成
-      const scorers = (match.goals || [])
-        .sort((a: any, b: any) => (a.minute || 0) - (b.minute || 0))
-        .map((goal: any) => ({
+      const scorers: Scorer[] = (match.goals || [])
+        .sort((a: Goal, b: Goal) => (a.minute || 0) - (b.minute || 0))
+        .map((goal: Goal) => ({
           time: String(goal.minute || ''),
           team: goal.team_id === match.home_team_id
             ? (match.home_team?.short_name || match.home_team?.name || '')
@@ -244,7 +315,7 @@ export const reportApi = {
     // デバッグ: 会場別グループ化結果
     console.log('[downloadPdf] Venues found:', Object.keys(matchesByVenue));
     console.log('[downloadPdf] Matches per venue:', Object.fromEntries(
-      Object.entries(matchesByVenue).map(([k, v]) => [k, (v as any[]).length])
+      Object.entries(matchesByVenue).map(([k, v]) => [k, v.length])
     ));
 
     // バックエンドAPIを呼び出し
@@ -302,7 +373,7 @@ export const reportApi = {
       doc.text(`発信: ${senderSettings?.sender_name || ''}`, 14, 33);
 
       // 試合データをテーブル形式に変換
-      const tableData = venueMatches.map((m: any) => {
+      const tableData = venueMatches.map((m: VenueMatchData) => {
         // 数値かどうかをチェック（0も有効な値として扱う）
         const hasHomeScore = typeof m.homeScore1H === 'number' && typeof m.homeScore2H === 'number';
         const hasAwayScore = typeof m.awayScore1H === 'number' && typeof m.awayScore2H === 'number';
@@ -314,15 +385,15 @@ export const reportApi = {
           ? `${m.awayScore1H}-${m.awayScore2H}`
           : '';
         const totalHome = hasHomeScore
-          ? m.homeScore1H + m.homeScore2H
+          ? (m.homeScore1H as number) + (m.homeScore2H as number)
           : '';
         const totalAway = hasAwayScore
-          ? m.awayScore1H + m.awayScore2H
+          ? (m.awayScore1H as number) + (m.awayScore2H as number)
           : '';
 
         // 得点者リスト
         const scorersList = (m.scorers || [])
-          .map((s: any) => `${s.time}' ${s.team} ${s.name}`)
+          .map((s: Scorer) => `${s.time}' ${s.team} ${s.name}`)
           .join(', ');
 
         return [
@@ -336,7 +407,7 @@ export const reportApi = {
         ];
       });
 
-      doc.autoTable({
+      (doc as JsPDFWithAutoTable).autoTable({
         startY: 40,
         head: [['時間', 'ホーム', '前後半', 'スコア', '前後半', 'アウェイ', '得点者']],
         body: tableData,
@@ -389,28 +460,34 @@ export const reportApi = {
       query = query.eq('venue_id', params.venueId);
     }
 
-    const { data: matches, error } = await query;
+    const { data: matchesData, error } = await query;
     if (error) throw error;
 
-    const wsData = [
-      ['時間', 'ホーム', 'スコア', 'アウェイ', '会場', '状態'],
-      ...(matches || []).map(m => [
+    const matches = matchesData as Match[] | null;
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('試合結果');
+
+    worksheet.addRow(['時間', 'ホーム', 'スコア', 'アウェイ', '会場', '状態']);
+    for (const m of matches || []) {
+      worksheet.addRow([
         m.match_time?.slice(0, 5) || '',
         m.home_team?.short_name || m.home_team?.name || '未定',
         m.status === 'completed' ? `${m.home_score_total ?? 0} - ${m.away_score_total ?? 0}` : 'vs',
         m.away_team?.short_name || m.away_team?.name || '未定',
         m.venue?.name || '',
         m.status === 'completed' ? '終了' : m.status === 'in_progress' ? '試合中' : '予定'
-      ])
-    ];
+      ]);
+    }
 
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '試合結果');
+    worksheet.getColumn(1).width = 8;
+    worksheet.getColumn(2).width = 15;
+    worksheet.getColumn(3).width = 10;
+    worksheet.getColumn(4).width = 15;
+    worksheet.getColumn(5).width = 15;
+    worksheet.getColumn(6).width = 8;
 
-    ws['!cols'] = [{ wch: 8 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 8 }];
-
-    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 
@@ -435,7 +512,7 @@ export const reportApi = {
         email: data.email,
         role: data.role,
         is_active: data.isActive ?? true,
-      })
+      } as never)
       .select()
       .single();
     if (error) throw error;
@@ -452,7 +529,7 @@ export const reportApi = {
 
     const { data: recipient, error } = await supabase
       .from('report_recipients')
-      .update(updateData)
+      .update(updateData as never)
       .eq('id', id)
       .select()
       .single();
@@ -471,11 +548,13 @@ export const reportApi = {
 
   // グループ順位表PDFダウンロード
   downloadGroupStandings: async (params: { tournamentId: number; groupId?: string }): Promise<Blob> => {
-    const { data: groups } = await supabase
+    const { data: groupsData } = await supabase
       .from('groups')
       .select('*')
       .eq('tournament_id', params.tournamentId)
       .order('id');
+
+    const groups = groupsData as GroupInfo[] | null;
 
     const doc = new jsPDF();
     doc.setFont('helvetica');
@@ -486,12 +565,14 @@ export const reportApi = {
     for (const group of groups || []) {
       if (params.groupId && group.id !== params.groupId) continue;
 
-      const { data: standings } = await supabase
+      const { data: standingsData } = await supabase
         .from('standings')
         .select('*, team:teams(name, short_name)')
         .eq('tournament_id', params.tournamentId)
         .eq('group_id', group.id)
         .order('rank');
+
+      const standings = standingsData as Standing[] | null;
 
       doc.setFontSize(12);
       doc.text(`${group.name}`, 14, yPos);
@@ -510,7 +591,7 @@ export const reportApi = {
         s.points
       ]);
 
-      doc.autoTable({
+      (doc as JsPDFWithAutoTable).autoTable({
         startY: yPos,
         head: [['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点']],
         body: tableData,
@@ -519,7 +600,7 @@ export const reportApi = {
         margin: { left: 14 },
       });
 
-      yPos = (doc as any).lastAutoTable.finalY + 10;
+      yPos = (doc as JsPDFWithAutoTable).lastAutoTable?.finalY ?? yPos + 10;
       if (yPos > 250) {
         doc.addPage();
         yPos = 20;
@@ -531,27 +612,32 @@ export const reportApi = {
 
   // グループ順位表Excelダウンロード
   downloadGroupStandingsExcel: async (params: { tournamentId: number; groupId?: string }): Promise<Blob> => {
-    const { data: groups } = await supabase
+    const { data: groupsData } = await supabase
       .from('groups')
       .select('*')
       .eq('tournament_id', params.tournamentId)
       .order('id');
 
-    const wb = XLSX.utils.book_new();
+    const groups = groupsData as GroupInfo[] | null;
+
+    const workbook = new ExcelJS.Workbook();
 
     for (const group of groups || []) {
       if (params.groupId && group.id !== params.groupId) continue;
 
-      const { data: standings } = await supabase
+      const { data: standingsData } = await supabase
         .from('standings')
         .select('*, team:teams(name, short_name)')
         .eq('tournament_id', params.tournamentId)
         .eq('group_id', group.id)
         .order('rank');
 
-      const wsData = [
-        ['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点'],
-        ...(standings || []).map(s => [
+      const standings = standingsData as Standing[] | null;
+
+      const worksheet = workbook.addWorksheet(group.name || group.id);
+      worksheet.addRow(['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点']);
+      for (const s of standings || []) {
+        worksheet.addRow([
           s.rank,
           s.team?.short_name || s.team?.name || '',
           s.played,
@@ -562,21 +648,28 @@ export const reportApi = {
           s.goals_against,
           s.goal_difference,
           s.points
-        ])
-      ];
+        ]);
+      }
 
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [{ wch: 6 }, { wch: 15 }, { wch: 6 }, { wch: 5 }, { wch: 5 }, { wch: 5 }, { wch: 6 }, { wch: 6 }, { wch: 6 }, { wch: 6 }];
-      XLSX.utils.book_append_sheet(wb, ws, group.name || group.id);
+      worksheet.getColumn(1).width = 6;
+      worksheet.getColumn(2).width = 15;
+      worksheet.getColumn(3).width = 6;
+      worksheet.getColumn(4).width = 5;
+      worksheet.getColumn(5).width = 5;
+      worksheet.getColumn(6).width = 5;
+      worksheet.getColumn(7).width = 6;
+      worksheet.getColumn(8).width = 6;
+      worksheet.getColumn(9).width = 6;
+      worksheet.getColumn(10).width = 6;
     }
 
-    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 
   // 最終日組み合わせ表PDFダウンロード
   downloadFinalDaySchedule: async (params: { tournamentId: number; date: string }): Promise<Blob> => {
-    const { data: matches, error } = await supabase
+    const { data: matchesData, error } = await supabase
       .from('matches')
       .select(`
         *,
@@ -590,6 +683,8 @@ export const reportApi = {
       .order('match_time');
 
     if (error) throw error;
+
+    const matches = matchesData as Match[] | null;
 
     const doc = new jsPDF();
     doc.setFont('helvetica');
@@ -605,7 +700,7 @@ export const reportApi = {
       m.venue?.name || ''
     ]);
 
-    doc.autoTable({
+    (doc as JsPDFWithAutoTable).autoTable({
       startY: 30,
       head: [['時間', 'ステージ', 'ホーム', '', 'アウェイ', '会場']],
       body: tableData,
@@ -618,7 +713,7 @@ export const reportApi = {
 
   // 最終日組み合わせ表Excelダウンロード
   downloadFinalDayScheduleExcel: async (params: { tournamentId: number; date: string }): Promise<Blob> => {
-    const { data: matches, error } = await supabase
+    const { data: matchesData, error } = await supabase
       .from('matches')
       .select(`
         *,
@@ -633,32 +728,38 @@ export const reportApi = {
 
     if (error) throw error;
 
-    const wsData = [
-      ['時間', 'ステージ', 'ホーム', '', 'アウェイ', '会場'],
-      ...(matches || []).map(m => [
+    const matches = matchesData as Match[] | null;
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('最終日日程');
+
+    worksheet.addRow(['時間', 'ステージ', 'ホーム', '', 'アウェイ', '会場']);
+    for (const m of matches || []) {
+      worksheet.addRow([
         m.match_time?.slice(0, 5) || '',
         m.stage === 'final' ? '決勝' : m.stage === 'third_place' ? '3位決定戦' : m.stage === 'semifinal' ? '準決勝' : '順位リーグ',
         m.home_team?.short_name || m.home_team?.name || m.home_seed || '未定',
         'vs',
         m.away_team?.short_name || m.away_team?.name || m.away_seed || '未定',
         m.venue?.name || ''
-      ])
-    ];
+      ]);
+    }
 
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '最終日日程');
+    worksheet.getColumn(1).width = 8;
+    worksheet.getColumn(2).width = 12;
+    worksheet.getColumn(3).width = 15;
+    worksheet.getColumn(4).width = 4;
+    worksheet.getColumn(5).width = 15;
+    worksheet.getColumn(6).width = 15;
 
-    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 4 }, { wch: 15 }, { wch: 15 }];
-
-    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 
   // 最終結果報告書PDFダウンロード
   downloadFinalResult: async (tournamentId: number): Promise<Blob> => {
     // 決勝・3位決定戦の結果を取得
-    const { data: finalMatches } = await supabase
+    const { data: finalMatchesData } = await supabase
       .from('matches')
       .select(`
         *,
@@ -669,6 +770,8 @@ export const reportApi = {
       .in('stage', ['final', 'third_place'])
       .eq('status', 'completed');
 
+    const finalMatches = (finalMatchesData || []) as Match[];
+
     const doc = new jsPDF();
     doc.setFont('helvetica');
     doc.setFontSize(18);
@@ -677,8 +780,8 @@ export const reportApi = {
     let yPos = 35;
     doc.setFontSize(14);
 
-    const finalMatch = finalMatches?.find(m => m.stage === 'final');
-    const thirdMatch = finalMatches?.find(m => m.stage === 'third_place');
+    const finalMatch = finalMatches.find((m) => m.stage === 'final');
+    const thirdMatch = finalMatches.find((m) => m.stage === 'third_place');
 
     if (finalMatch) {
       const winner = finalMatch.result === 'home_win' ? finalMatch.home_team : finalMatch.away_team;
@@ -712,7 +815,7 @@ export const reportApi = {
 
   // 最終結果報告書Excelダウンロード
   downloadFinalResultExcel: async (tournamentId: number): Promise<Blob> => {
-    const { data: finalMatches } = await supabase
+    const { data: finalMatchesData } = await supabase
       .from('matches')
       .select(`
         *,
@@ -723,35 +826,36 @@ export const reportApi = {
       .in('stage', ['final', 'third_place'])
       .eq('status', 'completed');
 
-    const finalMatch = finalMatches?.find(m => m.stage === 'final');
-    const thirdMatch = finalMatches?.find(m => m.stage === 'third_place');
+    const finalMatches = (finalMatchesData || []) as Match[];
+    const finalMatch = finalMatches.find((m) => m.stage === 'final');
+    const thirdMatch = finalMatches.find((m) => m.stage === 'third_place');
 
-    const wsData: (string | number)[][] = [['最終結果'], []];
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('最終結果');
+
+    worksheet.addRow(['最終結果']);
+    worksheet.addRow([]);
 
     if (finalMatch) {
       const winner = finalMatch.result === 'home_win' ? finalMatch.home_team : finalMatch.away_team;
       const runnerUp = finalMatch.result === 'home_win' ? finalMatch.away_team : finalMatch.home_team;
 
-      wsData.push(['優勝', winner?.name || '']);
-      wsData.push(['準優勝', runnerUp?.name || '']);
+      worksheet.addRow(['優勝', winner?.name || '']);
+      worksheet.addRow(['準優勝', runnerUp?.name || '']);
     }
 
     if (thirdMatch) {
       const third = thirdMatch.result === 'home_win' ? thirdMatch.home_team : thirdMatch.away_team;
-      wsData.push(['第3位', third?.name || '']);
+      worksheet.addRow(['第3位', third?.name || '']);
     }
 
-    wsData.push([]);
-    wsData.push(['【決勝戦詳細】']);
+    worksheet.addRow([]);
+    worksheet.addRow(['【決勝戦詳細】']);
     if (finalMatch) {
-      wsData.push(['', finalMatch.home_team?.name || '', finalMatch.home_score_total ?? 0, '-', finalMatch.away_score_total ?? 0, finalMatch.away_team?.name || '']);
+      worksheet.addRow(['', finalMatch.home_team?.name || '', finalMatch.home_score_total ?? 0, '-', finalMatch.away_score_total ?? 0, finalMatch.away_team?.name || '']);
     }
 
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '最終結果');
-
-    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 
@@ -782,9 +886,9 @@ export const reportApi = {
       .upsert({
         tournament_id: tournamentId,
         sender_name: data.senderName,
-        sender_title: data.senderTitle,
+        sender_title: (data as Record<string, unknown>).senderTitle ?? '',
         sender_organization: data.senderOrganization,
-      })
+      } as never)
       .select()
       .single();
 
@@ -801,11 +905,13 @@ export const reportApi = {
     console.log('getFinalResultData: Starting for tournament', tournamentId);
 
     // 大会情報を取得
-    const { data: tournament, error: tournamentError } = await supabase
+    const { data: tournamentData, error: tournamentError } = await supabase
       .from('tournaments')
       .select('name, end_date')
       .eq('id', tournamentId)
       .single();
+
+    const tournament = tournamentData as TournamentInfo | null;
 
     if (tournamentError) {
       console.error('Failed to fetch tournament:', tournamentError);
@@ -853,8 +959,9 @@ export const reportApi = {
 
     // 順位を計算
     const ranking: (Team | null)[] = [null, null, null, null];
-    const finalMatch = tournamentMatches?.find((m: any) => m.stage === 'final');
-    const thirdMatch = tournamentMatches?.find((m: any) => m.stage === 'third_place');
+    const typedTournamentMatches = (tournamentMatches || []) as Match[];
+    const finalMatch = typedTournamentMatches.find((m) => m.stage === 'final');
+    const thirdMatch = typedTournamentMatches.find((m) => m.stage === 'third_place');
 
     console.log('Final match:', finalMatch?.id, 'status:', finalMatch?.status);
     console.log('Third match:', thirdMatch?.id, 'status:', thirdMatch?.status);
@@ -866,21 +973,21 @@ export const reportApi = {
       let runnerUp: Team | null = null;
 
       if (homeTotal > awayTotal) {
-        winner = finalMatch.home_team;
-        runnerUp = finalMatch.away_team;
+        winner = finalMatch.home_team ?? null;
+        runnerUp = finalMatch.away_team ?? null;
       } else if (awayTotal > homeTotal) {
-        winner = finalMatch.away_team;
-        runnerUp = finalMatch.home_team;
+        winner = finalMatch.away_team ?? null;
+        runnerUp = finalMatch.home_team ?? null;
       } else if (finalMatch.has_penalty_shootout) {
         // PK戦
         const homePK = finalMatch.home_pk ?? 0;
         const awayPK = finalMatch.away_pk ?? 0;
         if (homePK > awayPK) {
-          winner = finalMatch.home_team;
-          runnerUp = finalMatch.away_team;
+          winner = finalMatch.home_team ?? null;
+          runnerUp = finalMatch.away_team ?? null;
         } else {
-          winner = finalMatch.away_team;
-          runnerUp = finalMatch.home_team;
+          winner = finalMatch.away_team ?? null;
+          runnerUp = finalMatch.home_team ?? null;
         }
       }
 
@@ -895,20 +1002,20 @@ export const reportApi = {
       let fourth: Team | null = null;
 
       if (homeTotal > awayTotal) {
-        third = thirdMatch.home_team;
-        fourth = thirdMatch.away_team;
+        third = thirdMatch.home_team ?? null;
+        fourth = thirdMatch.away_team ?? null;
       } else if (awayTotal > homeTotal) {
-        third = thirdMatch.away_team;
-        fourth = thirdMatch.home_team;
+        third = thirdMatch.away_team ?? null;
+        fourth = thirdMatch.home_team ?? null;
       } else if (thirdMatch.has_penalty_shootout) {
         const homePK = thirdMatch.home_pk ?? 0;
         const awayPK = thirdMatch.away_pk ?? 0;
         if (homePK > awayPK) {
-          third = thirdMatch.home_team;
-          fourth = thirdMatch.away_team;
+          third = thirdMatch.home_team ?? null;
+          fourth = thirdMatch.away_team ?? null;
         } else {
-          third = thirdMatch.away_team;
-          fourth = thirdMatch.home_team;
+          third = thirdMatch.away_team ?? null;
+          fourth = thirdMatch.home_team ?? null;
         }
       }
 
@@ -934,7 +1041,7 @@ export const reportApi = {
     }
     console.log('Outstanding players:', outstandingPlayersData?.length || 0);
 
-    const outstandingPlayers: OutstandingPlayerData[] = (outstandingPlayersData || []).map((p: any) => ({
+    const outstandingPlayers: OutstandingPlayerData[] = (outstandingPlayersData || []).map((p: OutstandingPlayerApiResponse) => ({
       id: p.id,
       awardType: p.award_type,
       playerName: p.player_name,
@@ -944,7 +1051,7 @@ export const reportApi = {
     }));
 
     // outstandingPlayersからplayers配列を生成（後方互換性のため）
-    const players: Player[] = (outstandingPlayersData || []).map((p: any) => ({
+    const players: Player[] = (outstandingPlayersData || []).map((p: OutstandingPlayerApiResponse) => ({
       type: p.award_type === 'mvp' ? '最優秀選手' : '優秀選手',
       name: p.player_name,
       team: p.team_name || p.team?.short_name || p.team?.name || '',
@@ -968,11 +1075,13 @@ export const reportApi = {
     console.log('getFinalScheduleData: Starting for tournament', tournamentId);
 
     // 大会情報を取得
-    const { data: tournament, error: tournamentError } = await supabase
+    const { data: tournamentData, error: tournamentError } = await supabase
       .from('tournaments')
       .select('name, end_date')
       .eq('id', tournamentId)
       .single();
+
+    const tournament = tournamentData as TournamentInfo | null;
 
     if (tournamentError) {
       console.error('Failed to fetch tournament:', tournamentError);
@@ -980,11 +1089,13 @@ export const reportApi = {
     console.log('Tournament:', tournament);
 
     // グループ順位表を取得
-    const { data: groups, error: groupsError } = await supabase
+    const { data: groupsData, error: groupsError } = await supabase
       .from('groups')
       .select('*')
       .eq('tournament_id', tournamentId)
       .order('id');
+
+    const groups = groupsData as GroupInfo[] | null;
 
     if (groupsError) {
       console.error('Failed to fetch groups:', groupsError);
@@ -1085,7 +1196,7 @@ export const reportApi = {
       console.error('Failed to fetch outstanding players:', playersError);
     }
 
-    const outstandingPlayers: OutstandingPlayerData[] = (outstandingPlayersData || []).map((p: any) => ({
+    const outstandingPlayers: OutstandingPlayerData[] = (outstandingPlayersData || []).map((p: OutstandingPlayerApiResponse) => ({
       id: p.id,
       awardType: p.award_type,
       playerName: p.player_name,
@@ -1109,29 +1220,26 @@ export const reportApi = {
   downloadFinalResultExcelRich: async (tournamentId: number): Promise<Blob> => {
     const data = await reportApi.getFinalResultData(tournamentId);
 
-    const wb = XLSX.utils.book_new();
+    const workbook = new ExcelJS.Workbook();
 
     // シート1: 最終順位
-    const rankingData = [
-      ['最終順位'],
-      ['順位', 'チーム名'],
-      ['優勝', data.ranking[0]?.name || ''],
-      ['準優勝', data.ranking[1]?.name || ''],
-      ['第3位', data.ranking[2]?.name || ''],
-      ['第4位', data.ranking[3]?.name || ''],
-    ];
-    const wsRanking = XLSX.utils.aoa_to_sheet(rankingData);
-    wsRanking['!cols'] = [{ wch: 10 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, wsRanking, '最終順位');
+    const wsRanking = workbook.addWorksheet('最終順位');
+    wsRanking.addRow(['最終順位']);
+    wsRanking.addRow(['順位', 'チーム名']);
+    wsRanking.addRow(['優勝', data.ranking[0]?.name || '']);
+    wsRanking.addRow(['準優勝', data.ranking[1]?.name || '']);
+    wsRanking.addRow(['第3位', data.ranking[2]?.name || '']);
+    wsRanking.addRow(['第4位', data.ranking[3]?.name || '']);
+    wsRanking.getColumn(1).width = 10;
+    wsRanking.getColumn(2).width = 20;
 
     // シート2: 決勝トーナメント
-    const tournamentData: (string | number)[][] = [
-      ['決勝トーナメント結果'],
-      ['種別', '時間', 'ホーム', '前半', '後半', '合計', 'PK', 'アウェイ', '前半', '後半', '合計', 'PK'],
-    ];
+    const wsTournament = workbook.addWorksheet('決勝トーナメント');
+    wsTournament.addRow(['決勝トーナメント結果']);
+    wsTournament.addRow(['種別', '時間', 'ホーム', '前半', '後半', '合計', 'PK', 'アウェイ', '前半', '後半', '合計', 'PK']);
     for (const m of data.tournament) {
       const stageName = m.stage === 'final' ? '決勝' : m.stage === 'third_place' ? '3位決定戦' : '準決勝';
-      tournamentData.push([
+      wsTournament.addRow([
         stageName,
         m.match_time?.slice(0, 5) || '',
         m.home_team?.short_name || m.home_team?.name || '',
@@ -1146,16 +1254,13 @@ export const reportApi = {
         m.away_pk ?? '',
       ]);
     }
-    const wsTournament = XLSX.utils.aoa_to_sheet(tournamentData);
-    XLSX.utils.book_append_sheet(wb, wsTournament, '決勝トーナメント');
 
     // シート3: 研修試合
-    const trainingData: (string | number)[][] = [
-      ['研修試合結果'],
-      ['会場', '時間', 'ホーム', '前半', '後半', '合計', 'アウェイ', '前半', '後半', '合計'],
-    ];
+    const wsTraining = workbook.addWorksheet('研修試合');
+    wsTraining.addRow(['研修試合結果']);
+    wsTraining.addRow(['会場', '時間', 'ホーム', '前半', '後半', '合計', 'アウェイ', '前半', '後半', '合計']);
     for (const m of data.training) {
-      trainingData.push([
+      wsTraining.addRow([
         m.venue?.name || '',
         m.match_time?.slice(0, 5) || '',
         m.home_team?.short_name || m.home_team?.name || '',
@@ -1168,10 +1273,8 @@ export const reportApi = {
         m.away_score_total ?? '',
       ]);
     }
-    const wsTraining = XLSX.utils.aoa_to_sheet(trainingData);
-    XLSX.utils.book_append_sheet(wb, wsTraining, '研修試合');
 
-    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 
@@ -1179,16 +1282,15 @@ export const reportApi = {
   downloadFinalScheduleExcelRich: async (tournamentId: number, date?: string): Promise<Blob> => {
     const data = await reportApi.getFinalScheduleData(tournamentId, date);
 
-    const wb = XLSX.utils.book_new();
+    const workbook = new ExcelJS.Workbook();
 
     // シート1: 順位表
     for (const group of data.standings) {
-      const standingsData: (string | number)[][] = [
-        [`グループ${group.groupId} 順位表`],
-        ['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点'],
-      ];
+      const ws = workbook.addWorksheet(`グループ${group.groupId}`);
+      ws.addRow([`グループ${group.groupId} 順位表`]);
+      ws.addRow(['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点']);
       for (const s of group.standings) {
-        standingsData.push([
+        ws.addRow([
           s.rank,
           s.team?.short_name || s.team?.name || '',
           s.played ?? 0,
@@ -1201,18 +1303,15 @@ export const reportApi = {
           s.points ?? 0,
         ]);
       }
-      const ws = XLSX.utils.aoa_to_sheet(standingsData);
-      XLSX.utils.book_append_sheet(wb, ws, `グループ${group.groupId}`);
     }
 
     // シート: 決勝トーナメント
-    const tournamentData: (string | number)[][] = [
-      ['決勝トーナメント組み合わせ'],
-      ['種別', '時間', '会場', 'ホーム', '', 'アウェイ'],
-    ];
+    const wsTournament = workbook.addWorksheet('決勝トーナメント');
+    wsTournament.addRow(['決勝トーナメント組み合わせ']);
+    wsTournament.addRow(['種別', '時間', '会場', 'ホーム', '', 'アウェイ']);
     for (const m of data.tournament) {
       const stageName = m.stage === 'final' ? '決勝' : m.stage === 'third_place' ? '3位決定戦' : '準決勝';
-      tournamentData.push([
+      wsTournament.addRow([
         stageName,
         m.match_time?.slice(0, 5) || '',
         m.venue?.name || '',
@@ -1221,18 +1320,15 @@ export const reportApi = {
         m.away_team?.short_name || m.away_team?.name || m.away_seed || '未定',
       ]);
     }
-    const wsTournament = XLSX.utils.aoa_to_sheet(tournamentData);
-    XLSX.utils.book_append_sheet(wb, wsTournament, '決勝トーナメント');
 
     // シート: 研修試合
-    const trainingData: (string | number)[][] = [
-      ['研修試合組み合わせ'],
-      ['会場', '時間', 'ホーム', 'シード', '', 'アウェイ', 'シード'],
-    ];
+    const wsTraining = workbook.addWorksheet('研修試合');
+    wsTraining.addRow(['研修試合組み合わせ']);
+    wsTraining.addRow(['会場', '時間', 'ホーム', 'シード', '', 'アウェイ', 'シード']);
     for (const m of data.training) {
       const homeSeed = m.home_team ? `${m.home_team.group_id || ''}` : '';
       const awaySeed = m.away_team ? `${m.away_team.group_id || ''}` : '';
-      trainingData.push([
+      wsTraining.addRow([
         m.venue?.name || '',
         m.match_time?.slice(0, 5) || '',
         m.home_team?.short_name || m.home_team?.name || '未定',
@@ -1242,10 +1338,8 @@ export const reportApi = {
         awaySeed,
       ]);
     }
-    const wsTraining = XLSX.utils.aoa_to_sheet(trainingData);
-    XLSX.utils.book_append_sheet(wb, wsTraining, '研修試合');
 
-    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const buffer = await workbook.xlsx.writeBuffer();
     return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   },
 };

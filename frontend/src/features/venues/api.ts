@@ -47,7 +47,7 @@ export const venueApi = {
     console.log('[venueApi.create] Inserting:', insertData);
     const { data: venue, error } = await supabase
       .from('venues')
-      .insert(insertData)
+      .insert(insertData as never)
       .select()
       .single();
     if (error) {
@@ -63,12 +63,15 @@ export const venueApi = {
     const { id, ...rest } = data;
     const updateData: Record<string, unknown> = {};
     if (rest.name !== undefined) updateData.name = rest.name;
+    if (rest.shortName !== undefined) updateData.short_name = rest.shortName;
     if (rest.address !== undefined) updateData.address = rest.address;
-    if (rest.mapUrl !== undefined) updateData.map_url = rest.mapUrl;
+    if (rest.pitchCount !== undefined) updateData.pitch_count = rest.pitchCount;
+    if (rest.managerTeamId !== undefined) updateData.manager_team_id = rest.managerTeamId;
+    if (rest.groupId !== undefined) updateData.group_id = rest.groupId;
 
     const { data: venue, error } = await supabase
       .from('venues')
-      .update(updateData)
+      .update(updateData as never)
       .eq('id', id)
       .select()
       .single();
@@ -106,7 +109,7 @@ export const venueApi = {
         venue_id: data.venueId,
         user_id: data.userId,
         role: data.role || 'manager',
-      })
+      } as never)
       .select()
       .single();
     if (error) throw error;
@@ -149,7 +152,7 @@ export const venueApi = {
   assignToGroup: async (venueId: number, groupId: string): Promise<Venue> => {
     const { data, error } = await supabase
       .from('venues')
-      .update({ group_id: groupId })
+      .update({ group_id: groupId } as never)
       .eq('id', venueId)
       .select()
       .single();
