@@ -608,15 +608,15 @@ export const standingsApi = {
 
     if (groupId) {
       teamQuery = teamQuery.eq('group_id', groupId)
-    } else {
-      teamQuery = teamQuery.is('group_id', null)
     }
+    // single-group mode: get ALL teams for the tournament (no group_id filter)
 
     const { data: teamsData, error: teamError } = await teamQuery
 
     if (teamError) throw teamError
 
     const teams = (teamsData || []) as TeamRow[]
+    console.log(`[Standings] Found ${teams.length} teams for group ${groupId || '(all teams)'}`)
 
     // チームごとの成績を計算
     const stats = new Map<number, {
