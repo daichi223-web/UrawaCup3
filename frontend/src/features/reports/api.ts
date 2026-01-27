@@ -547,121 +547,158 @@ export const reportApi = {
     if (error) throw error;
   },
 
-  // グループ順位表PDFダウンロード
+  // グループ順位表PDFダウンロード（一グループ制対応）
   downloadGroupStandings: async (params: { tournamentId: number; groupId?: string }): Promise<Blob> => {
-    const { data: groupsData } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('tournament_id', params.tournamentId)
-      .order('id');
+    // 大会設定を確認
+    const { data: tournamentData } = await supabase
+      .from('tournaments')
+      .select('use_group_system')
+      .eq('id', params.tournamentId)
+      .single();
 
-    const groups = groupsData as GroupInfo[] | null;
+    const useGroupSystem = (tournamentData as { use_group_system?: boolean } | null)?.use_group_system !== false;
 
     const doc = new jsPDF();
     doc.setFont('helvetica');
     doc.setFontSize(16);
-    doc.text('グループ順位表', 14, 20);
+    doc.text(useGroupSystem ? 'Group Standings' : 'Standings', 14, 20);
 
     let yPos = 30;
-    for (const group of groups || []) {
-      if (params.groupId && group.id !== params.groupId) continue;
 
+    if (useGroupSystem) {
+      // グループ制
+      const { data: groupsData } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('tournament_id', params.tournamentId)
+        .order('id');
+
+      const groups = groupsData as GroupInfo[] | null;
+
+      for (const group of groups || []) {
+        if (params.groupId && group.id !== params.groupId) continue;
+
+        const { data: standingsData } = await supabase
+          .from('standings')
+          .select('*, team:teams(name, short_name)')
+          .eq('tournament_id', params.tournamentId)
+          .eq('group_id', group.id)
+          .order('rank');
+
+        const standings = standingsData as Standing[] | null;
+
+        doc.setFontSize(12);
+        doc.text(`${group.name}`, 14, yPos);
+        yPos += 5;
+
+        const tableData = (standings || []).map(s => [
+          s.rank,
+          s.team?.short_name || s.team?.name || '',
+          s.played, s.won, s.drawn, s.lost,
+          s.goals_for, s.goals_against, s.goal_difference, s.points
+        ]);
+
+        (doc as JsPDFWithAutoTable).autoTable({
+          startY: yPos,
+          head: [['#', 'Team', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts']],
+          body: tableData,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [66, 139, 202] },
+          margin: { left: 14 },
+        });
+
+        yPos = (doc as JsPDFWithAutoTable).lastAutoTable?.finalY ?? yPos + 10;
+        if (yPos > 250) { doc.addPage(); yPos = 20; }
+      }
+    } else {
+      // 一グループ制
       const { data: standingsData } = await supabase
         .from('standings')
         .select('*, team:teams(name, short_name)')
         .eq('tournament_id', params.tournamentId)
-        .eq('group_id', group.id)
         .order('rank');
 
       const standings = standingsData as Standing[] | null;
 
-      doc.setFontSize(12);
-      doc.text(`${group.name}`, 14, yPos);
-      yPos += 5;
-
       const tableData = (standings || []).map(s => [
         s.rank,
         s.team?.short_name || s.team?.name || '',
-        s.played,
-        s.won,
-        s.drawn,
-        s.lost,
-        s.goals_for,
-        s.goals_against,
-        s.goal_difference,
-        s.points
+        s.played, s.won, s.drawn, s.lost,
+        s.goals_for, s.goals_against, s.goal_difference, s.points
       ]);
 
       (doc as JsPDFWithAutoTable).autoTable({
         startY: yPos,
-        head: [['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点']],
+        head: [['#', 'Team', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts']],
         body: tableData,
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [66, 139, 202] },
         margin: { left: 14 },
       });
-
-      yPos = (doc as JsPDFWithAutoTable).lastAutoTable?.finalY ?? yPos + 10;
-      if (yPos > 250) {
-        doc.addPage();
-        yPos = 20;
-      }
     }
 
     return doc.output('blob');
   },
 
-  // グループ順位表Excelダウンロード
+  // グループ順位表Excelダウンロード（一グループ制対応）
   downloadGroupStandingsExcel: async (params: { tournamentId: number; groupId?: string }): Promise<Blob> => {
-    const { data: groupsData } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('tournament_id', params.tournamentId)
-      .order('id');
+    // 大会設定を確認
+    const { data: tournamentData } = await supabase
+      .from('tournaments')
+      .select('use_group_system')
+      .eq('id', params.tournamentId)
+      .single();
 
-    const groups = groupsData as GroupInfo[] | null;
+    const useGroupSystem = (tournamentData as { use_group_system?: boolean } | null)?.use_group_system !== false;
 
     const workbook = new ExcelJS.Workbook();
 
-    for (const group of groups || []) {
-      if (params.groupId && group.id !== params.groupId) continue;
-
-      const { data: standingsData } = await supabase
-        .from('standings')
-        .select('*, team:teams(name, short_name)')
-        .eq('tournament_id', params.tournamentId)
-        .eq('group_id', group.id)
-        .order('rank');
-
-      const standings = standingsData as Standing[] | null;
-
-      const worksheet = workbook.addWorksheet(group.name || group.id);
+    const addStandingsSheet = (sheetName: string, standings: Standing[] | null) => {
+      const worksheet = workbook.addWorksheet(sheetName);
       worksheet.addRow(['順位', 'チーム', '試合', '勝', '分', '負', '得点', '失点', '得失', '勝点']);
       for (const s of standings || []) {
         worksheet.addRow([
           s.rank,
           s.team?.short_name || s.team?.name || '',
-          s.played,
-          s.won,
-          s.drawn,
-          s.lost,
-          s.goals_for,
-          s.goals_against,
-          s.goal_difference,
-          s.points
+          s.played, s.won, s.drawn, s.lost,
+          s.goals_for, s.goals_against, s.goal_difference, s.points
         ]);
       }
-
       worksheet.getColumn(1).width = 6;
       worksheet.getColumn(2).width = 15;
-      worksheet.getColumn(3).width = 6;
-      worksheet.getColumn(4).width = 5;
-      worksheet.getColumn(5).width = 5;
-      worksheet.getColumn(6).width = 5;
-      worksheet.getColumn(7).width = 6;
-      worksheet.getColumn(8).width = 6;
-      worksheet.getColumn(9).width = 6;
-      worksheet.getColumn(10).width = 6;
+      for (let i = 3; i <= 10; i++) worksheet.getColumn(i).width = 6;
+    };
+
+    if (useGroupSystem) {
+      const { data: groupsData } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('tournament_id', params.tournamentId)
+        .order('id');
+
+      const groups = groupsData as GroupInfo[] | null;
+
+      for (const group of groups || []) {
+        if (params.groupId && group.id !== params.groupId) continue;
+
+        const { data: standingsData } = await supabase
+          .from('standings')
+          .select('*, team:teams(name, short_name)')
+          .eq('tournament_id', params.tournamentId)
+          .eq('group_id', group.id)
+          .order('rank');
+
+        addStandingsSheet(group.name || group.id, standingsData as Standing[] | null);
+      }
+    } else {
+      // 一グループ制
+      const { data: standingsData } = await supabase
+        .from('standings')
+        .select('*, team:teams(name, short_name)')
+        .eq('tournament_id', params.tournamentId)
+        .order('rank');
+
+      addStandingsSheet('成績表', standingsData as Standing[] | null);
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
