@@ -24,9 +24,8 @@ export function VenueSettingsTable({ venues, onEdit, onAdd }: Props) {
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 px-3 font-medium">会場名</th>
-                <th className="text-left py-2 px-3 font-medium">用途</th>
                 <th className="text-left py-2 px-3 font-medium">グループ</th>
-                <th className="text-right py-2 px-3 font-medium">収容人数</th>
+                <th className="text-left py-2 px-3 font-medium">用途</th>
                 <th className="text-center py-2 px-3 font-medium">操作</th>
               </tr>
             </thead>
@@ -34,6 +33,19 @@ export function VenueSettingsTable({ venues, onEdit, onAdd }: Props) {
               {venues.map((venue) => (
                 <tr key={venue.id} className="border-b hover:bg-gray-50">
                   <td className="py-2 px-3">{venue.name}</td>
+                  <td className="py-2 px-3">
+                    {venue.assigned_group ? (
+                      <span
+                        className={`px-2 py-0.5 text-xs rounded ${
+                          GROUP_COLORS[venue.assigned_group] || 'bg-gray-100'
+                        }`}
+                      >
+                        グループ{venue.assigned_group}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-sm">未割当</span>
+                    )}
+                  </td>
                   <td className="py-2 px-3">
                     <div className="flex flex-wrap gap-1">
                       {venue.for_preliminary !== false && (
@@ -50,20 +62,6 @@ export function VenueSettingsTable({ venues, onEdit, onAdd }: Props) {
                       )}
                     </div>
                   </td>
-                  <td className="py-2 px-3">
-                    {venue.assigned_group ? (
-                      <span
-                        className={`px-2 py-0.5 text-xs rounded ${
-                          GROUP_COLORS[venue.assigned_group] || 'bg-gray-100'
-                        }`}
-                      >
-                        グループ{venue.assigned_group}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 text-sm">未割当</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-3 text-right">{venue.capacity || '-'}</td>
                   <td className="py-2 px-3 text-center">
                     <button
                       className="text-blue-600 hover:text-blue-800 text-sm"

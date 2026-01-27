@@ -275,12 +275,18 @@ export function useSettings() {
           finals_match_count: form.finalsMatchCount,
         } as never)
         .eq('id', form.id)
-      if (error) throw error
+      if (error) {
+        console.error('Venue update error:', error)
+        throw error
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues', selectedTournamentId] })
       setShowVenueModal(false)
       setSelectedVenue(null)
+    },
+    onError: (error) => {
+      console.error('Venue update failed:', error)
     },
   })
 
