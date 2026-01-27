@@ -598,7 +598,7 @@ export const standingsApi = {
 
     let matches = (matchesData || []) as MatchRow[]
 
-    // 該当グループのチームを取得（先に取得してフォールバック判定に使う）
+    // 該当グループのチームを取得
     let teamQuery = supabase
       .from('teams')
       .select('*')
@@ -629,7 +629,6 @@ export const standingsApi = {
         .eq('stage', 'preliminary')
 
       if (!fallbackError && fallbackData) {
-        // ホームまたはアウェイがこのグループのチームである試合をフィルタ
         const teamIdSet = new Set(teamIds)
         matches = (fallbackData as MatchRow[]).filter(m =>
           teamIdSet.has(m.home_team_id) || teamIdSet.has(m.away_team_id)

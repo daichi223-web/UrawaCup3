@@ -286,19 +286,18 @@ export const standingApi = {
    */
   recalculateAll: async (tournamentId: number): Promise<{ groups: number; success: boolean }> => {
     try {
-      // 全グループを取得
+      // グループ一覧を取得
       const { data: groupsData, error: groupsError } = await supabase
         .from('groups')
         .select('id')
         .eq('tournament_id', tournamentId);
 
       if (groupsError) throw groupsError;
-
       const groups = groupsData as GroupQueryResult[] | null;
 
-      // 各グループの順位を再計算
       let calculatedGroups = 0;
       if (groups && groups.length > 0) {
+        // グループ制: 各グループを再計算（試合group_id=nullでもチームIDフォールバックあり）
         for (const group of groups) {
           await standingsApi.recalculate(tournamentId, group.id);
           calculatedGroups++;
