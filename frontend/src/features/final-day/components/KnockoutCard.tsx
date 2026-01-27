@@ -69,7 +69,6 @@ export function KnockoutCard({
             <tr className="border-b bg-gray-50 text-xs">
               <th className="px-2 py-1 w-8"></th>
               <th className="px-2 py-1 w-16">KO</th>
-              <th className="px-2 py-1 w-16">種別</th>
               <th className="px-2 py-1">対 戦</th>
               <th className="px-2 py-1 w-20">審 判</th>
             </tr>
@@ -88,7 +87,7 @@ export function KnockoutCard({
               ))
             ) : (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
                   決勝トーナメントが生成されていません
                 </td>
               </tr>

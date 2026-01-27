@@ -72,24 +72,23 @@ export function MatchRow({ match, onMatchClick, showLabel = false, isRematch = f
         {match.kickoffTime}
       </td>
 
-      {/* 試合種別（オプション） */}
-      {showLabel && (
-        <td className="px-2 py-2 text-center w-16">
-          <span className={`
-            text-xs px-1.5 py-0.5 rounded
-            ${match.matchType === 'final' ? 'bg-yellow-100 text-yellow-800' : ''}
-            ${match.matchType === 'third_place' ? 'bg-orange-100 text-orange-800' : ''}
-            ${match.matchType === 'semifinal' ? 'bg-blue-100 text-blue-800' : ''}
-            ${match.matchType === 'training' ? 'bg-gray-100 text-gray-600' : ''}
-          `}>
-            {getMatchLabel()}
-          </span>
-        </td>
-      )}
-
       {/* 対戦カード */}
       <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex flex-col">
+          {/* 試合種別バッジ（対戦欄内に表示） */}
+          {showLabel && (
+            <div className="flex justify-center mb-1">
+              <span className={`
+                text-xs px-1.5 py-0.5 rounded
+                ${match.matchType === 'final' ? 'bg-yellow-100 text-yellow-800' : ''}
+                ${match.matchType === 'third_place' ? 'bg-orange-100 text-orange-800' : ''}
+                ${match.matchType === 'semifinal' ? 'bg-blue-100 text-blue-800' : ''}
+                ${match.matchType === 'training' ? 'bg-gray-100 text-gray-600' : ''}
+              `}>
+                {getMatchLabel()}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-center gap-2">
             <DraggableTeamSlot
               matchId={match.id}
