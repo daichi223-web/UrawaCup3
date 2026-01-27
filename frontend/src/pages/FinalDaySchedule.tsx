@@ -421,18 +421,19 @@ export default function FinalDaySchedule() {
           【3決・決勝戦】
         </h2>
         {knockoutVenues.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="flex flex-wrap gap-4">
             {knockoutVenues.map((venue, idx) => (
-              <KnockoutCard
-                key={venue.id}
-                venueName={venue.name}
-                matches={venue.matches}
-                onMatchClick={setEditingMatch}
-                onUpdateBracket={idx === 0 ? handleUpdateBracket : undefined}
-                isUpdating={updateFinalsBracket.isPending}
-                selectedSlot={selectedSlot}
-                onSlotClick={handleSlotClick}
-              />
+              <div key={venue.id} className="w-full md:w-[calc(25%-0.75rem)]">
+                <KnockoutCard
+                  venueName={venue.name}
+                  matches={venue.matches}
+                  onMatchClick={setEditingMatch}
+                  onUpdateBracket={idx === 0 ? handleUpdateBracket : undefined}
+                  isUpdating={updateFinalsBracket.isPending}
+                  selectedSlot={selectedSlot}
+                  onSlotClick={handleSlotClick}
+                />
+              </div>
             ))}
           </div>
         ) : (
