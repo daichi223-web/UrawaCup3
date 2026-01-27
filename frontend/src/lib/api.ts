@@ -600,6 +600,17 @@ export const standingsApi = {
 
     console.log(`[Standings] Found ${matches?.length || 0} completed+approved matches for group ${groupId || '(single league)'}`)
 
+    // デバッグ: 試合が0件の場合、全試合のstatus/group_idを確認
+    if (matches.length === 0) {
+      const { data: allMatches } = await supabase
+        .from('matches')
+        .select('id, status, approval_status, group_id, stage')
+        .eq('tournament_id', tournamentId)
+        .limit(10)
+      console.log(`[Standings] DEBUG: Sample matches for tournament ${tournamentId}:`,
+        (allMatches || []).map((m: Record<string, unknown>) => ({ id: m.id, status: m.status, approval: m.approval_status, group_id: m.group_id, stage: m.stage })))
+    }
+
     // 該当グループのチームを取得
     let teamQuery = supabase
       .from('teams')
