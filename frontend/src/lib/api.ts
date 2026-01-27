@@ -576,29 +576,43 @@ export const standingsApi = {
     return sorted
   },
 
-  async recalculate(tournamentId: number, groupId: string) {
+  async recalculate(tournamentId: number, groupId?: string) {
     // 該当グループの完了済み＆承認済み試合を取得（stageは問わない）
     // approval_status が null（承認フロー未使用）または 'approved'（承認済み）のみ対象
-    const { data: matchesData, error: matchError } = await supabase
+    let matchQuery = supabase
       .from('matches')
       .select('*')
       .eq('tournament_id', tournamentId)
-      .eq('group_id', groupId)
       .eq('status', 'completed')
       .or('approval_status.is.null,approval_status.eq.approved')
+
+    if (groupId) {
+      matchQuery = matchQuery.eq('group_id', groupId)
+    } else {
+      matchQuery = matchQuery.is('group_id', null)
+    }
+
+    const { data: matchesData, error: matchError } = await matchQuery
 
     if (matchError) throw matchError
 
     const matches = (matchesData || []) as MatchRow[]
 
-    console.log(`[Standings] Found ${matches?.length || 0} completed+approved matches for group ${groupId}`)
+    console.log(`[Standings] Found ${matches?.length || 0} completed+approved matches for group ${groupId || '(single league)'}`)
 
     // 該当グループのチームを取得
-    const { data: teamsData, error: teamError } = await supabase
+    let teamQuery = supabase
       .from('teams')
       .select('*')
       .eq('tournament_id', tournamentId)
-      .eq('group_id', groupId)
+
+    if (groupId) {
+      teamQuery = teamQuery.eq('group_id', groupId)
+    } else {
+      teamQuery = teamQuery.is('group_id', null)
+    }
+
+    const { data: teamsData, error: teamError } = await teamQuery
 
     if (teamError) throw teamError
 
@@ -652,7 +666,7 @@ export const standingsApi = {
     // 順位を計算してDBに保存
     const standings = Array.from(stats.entries()).map(([teamId, s]) => ({
       tournament_id: tournamentId,
-      group_id: groupId,
+      group_id: groupId || null,
       team_id: teamId,
       played: s.played,
       won: s.won,
@@ -675,11 +689,17 @@ export const standingsApi = {
     standings.forEach((s, i) => { s.rank = i + 1 })
 
     // 既存の順位を削除して再挿入
-    await supabase
+    let deleteQuery = supabase
       .from('standings')
       .delete()
       .eq('tournament_id', tournamentId)
-      .eq('group_id', groupId)
+
+    if (groupId) {
+      deleteQuery = deleteQuery.eq('group_id', groupId)
+    } else {
+      deleteQuery = deleteQuery.is('group_id', null)
+    }
+    await deleteQuery
 
     const { error } = await supabase
       .from('standings')

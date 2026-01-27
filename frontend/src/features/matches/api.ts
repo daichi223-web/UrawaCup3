@@ -297,12 +297,15 @@ export const matchApi = {
         .single();
 
       const matchData = matchDataRaw as { tournament_id: number; group_id: string | null; stage: string } | null;
-      if (matchData?.group_id) {
-        console.log('[Standings] Recalculating standings for group:', matchData.group_id);
-        await standingsApi.recalculate(matchData.tournament_id, matchData.group_id);
+      if (matchData?.tournament_id) {
+        if (matchData.group_id) {
+          console.log('[Standings] Recalculating standings for group:', matchData.group_id);
+          await standingsApi.recalculate(matchData.tournament_id, matchData.group_id);
+        } else {
+          console.log('[Standings] No group_id, recalculating all groups');
+          await standingsApi.recalculate(matchData.tournament_id);
+        }
         console.log('[Standings] Standings recalculated successfully');
-      } else {
-        console.log('[Standings] No group_id, skipping recalculation');
       }
     } catch (err) {
       console.error('[Standings] Failed to recalculate standings:', err);

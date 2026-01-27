@@ -108,10 +108,13 @@ export const standingApi = {
         .eq('tournament_id', tournamentId);
 
       const groups = data as GroupQueryResult[] | null;
-      if (groups) {
+      if (groups && groups.length > 0) {
         for (const group of groups) {
           await standingsApi.recalculate(tournamentId, group.id);
         }
+      } else {
+        // 一グループ制: group_id なしで再計算
+        await standingsApi.recalculate(tournamentId);
       }
     }
   },
