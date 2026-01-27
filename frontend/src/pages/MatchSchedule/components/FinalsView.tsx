@@ -103,6 +103,7 @@ export function FinalsView({
                           teams={allTeams}
                           enableConstraintCheck
                           compact
+                          venueGroupId={String.fromCharCode(65 + idx)}
                         />
                       </div>
                     </div>

@@ -114,6 +114,7 @@ async function getOverallTopTeams(tournamentId: number, count: number = 4): Prom
 
 /**
  * 決勝進出チームを取得（ルールに応じて）
+ * グループ数が4未満の場合は自動的に総合順位ルールにフォールバック
  */
 async function getQualifyingTeams(
   tournamentId: number,
@@ -121,9 +122,17 @@ async function getQualifyingTeams(
 ): Promise<QualifyingTeam[]> {
   if (qualificationRule === 'overall_ranking') {
     return getOverallTopTeams(tournamentId, 4);
-  } else {
-    return getGroupWinners(tournamentId);
   }
+
+  // グループ数を確認
+  const winners = await getGroupWinners(tournamentId);
+  if (winners.length >= 4) {
+    return winners;
+  }
+
+  // グループ数不足の場合、総合順位で上位4チームを取得
+  console.log(`[Finals] グループ1位が${winners.length}チームのみ。総合順位ルールにフォールバック`);
+  return getOverallTopTeams(tournamentId, 4);
 }
 
 export const finalDayApi = {

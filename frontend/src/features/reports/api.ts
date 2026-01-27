@@ -17,7 +17,8 @@
 import { supabase } from '@/lib/supabase';
 import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import { applyPlugin } from 'jspdf-autotable';
+applyPlugin(jsPDF);
 import type { ReportGenerateInput, ReportJob, ReportRecipient, SenderSettings, SenderSettingsUpdate } from './types';
 
 // バックエンドAPI URL（PDF生成・日程生成サーバー）
@@ -1077,48 +1078,71 @@ export const reportApi = {
     // 大会情報を取得
     const { data: tournamentData, error: tournamentError } = await supabase
       .from('tournaments')
-      .select('name, end_date')
+      .select('name, end_date, use_group_system')
       .eq('id', tournamentId)
       .single();
 
-    const tournament = tournamentData as TournamentInfo | null;
+    const tournament = tournamentData as (TournamentInfo & { use_group_system?: boolean }) | null;
 
     if (tournamentError) {
       console.error('Failed to fetch tournament:', tournamentError);
     }
     console.log('Tournament:', tournament);
 
+    const useGroupSystem = tournament?.use_group_system !== false;
+
     // グループ順位表を取得
-    const { data: groupsData, error: groupsError } = await supabase
-      .from('groups')
-      .select('*')
-      .eq('tournament_id', tournamentId)
-      .order('id');
-
-    const groups = groupsData as GroupInfo[] | null;
-
-    if (groupsError) {
-      console.error('Failed to fetch groups:', groupsError);
-    }
-    console.log('Groups:', groups?.length || 0, groups);
-
     const standings: GroupStanding[] = [];
-    for (const group of groups || []) {
-      const { data: groupStandings, error: standingsError } = await supabase
+
+    if (useGroupSystem) {
+      // グループ制: グループごとに成績表を作成
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('id');
+
+      const groups = groupsData as GroupInfo[] | null;
+
+      if (groupsError) {
+        console.error('Failed to fetch groups:', groupsError);
+      }
+      console.log('Groups:', groups?.length || 0, groups);
+
+      for (const group of groups || []) {
+        const { data: groupStandings, error: standingsError } = await supabase
+          .from('standings')
+          .select('*, team:teams(id, name, short_name, group_id)')
+          .eq('tournament_id', tournamentId)
+          .eq('group_id', group.id)
+          .order('rank');
+
+        if (standingsError) {
+          console.error(`Failed to fetch standings for group ${group.id}:`, standingsError);
+        }
+        console.log(`Group ${group.id} standings:`, groupStandings?.length || 0);
+
+        standings.push({
+          groupId: group.id,
+          standings: groupStandings || [],
+        });
+      }
+    } else {
+      // 一グループ制: 全チームを一つの成績表にまとめる
+      const { data: allStandings, error: standingsError } = await supabase
         .from('standings')
         .select('*, team:teams(id, name, short_name, group_id)')
         .eq('tournament_id', tournamentId)
-        .eq('group_id', group.id)
         .order('rank');
 
       if (standingsError) {
-        console.error(`Failed to fetch standings for group ${group.id}:`, standingsError);
+        console.error('Failed to fetch standings:', standingsError);
       }
-      console.log(`Group ${group.id} standings:`, groupStandings?.length || 0);
+      console.log('Single league standings:', allStandings?.length || 0);
 
       standings.push({
-        groupId: group.id,
-        standings: groupStandings || [],
+        groupId: 'all',
+        standings: allStandings || [],
       });
     }
 
