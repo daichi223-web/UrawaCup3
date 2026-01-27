@@ -38,6 +38,11 @@ export interface VenueForm {
   capacity: number | null
   notes: string
   assigned_group: string
+  forPreliminary: boolean
+  forFinalDay: boolean
+  isFinalsVenue: boolean
+  isMixedUse: boolean
+  finalsMatchCount: number
 }
 
 export interface AddVenueForm {
@@ -60,6 +65,11 @@ export interface Venue {
   capacity: number | null
   notes: string
   assigned_group: string | null
+  for_preliminary?: boolean
+  for_final_day?: boolean
+  is_finals_venue?: boolean
+  is_mixed_use?: boolean
+  finals_match_count?: number
 }
 
 export interface Team {

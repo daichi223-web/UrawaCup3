@@ -89,6 +89,61 @@ export function EditVenueModal({
             onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
           />
         </div>
+
+        {/* 会場用途チェック */}
+        <div className="space-y-2 border-t pt-3">
+          <label className="block text-sm font-medium mb-1">会場用途</label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-4 h-4 text-primary-600 rounded"
+              checked={form.forPreliminary}
+              onChange={(e) => setForm((prev) => ({ ...prev, forPreliminary: e.target.checked }))}
+            />
+            <span className="text-sm">予選リーグ会場</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-4 h-4 text-primary-600 rounded"
+              checked={form.forFinalDay}
+              onChange={(e) => setForm((prev) => ({ ...prev, forFinalDay: e.target.checked }))}
+            />
+            <span className="text-sm">最終日の順位リーグ会場</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-4 h-4 text-primary-600 rounded"
+              checked={form.isFinalsVenue}
+              onChange={(e) => setForm((prev) => ({ ...prev, isFinalsVenue: e.target.checked }))}
+            />
+            <span className="text-sm">決勝トーナメント会場（3決・決勝戦）</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-4 h-4 text-primary-600 rounded"
+              checked={form.isMixedUse}
+              onChange={(e) => setForm((prev) => ({ ...prev, isMixedUse: e.target.checked }))}
+            />
+            <span className="text-sm">混合会場（決勝＋研修を同一会場で行う）</span>
+          </label>
+          {form.isMixedUse && (
+            <div className="ml-6 mt-1 p-2 bg-purple-50 rounded">
+              <label className="block text-sm text-gray-700 mb-1">決勝トーナメント試合数</label>
+              <input
+                type="number"
+                className="form-input w-20"
+                min={1}
+                max={4}
+                value={form.finalsMatchCount}
+                onChange={(e) => setForm((prev) => ({ ...prev, finalsMatchCount: parseInt(e.target.value) || 1 }))}
+              />
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-between pt-2">
           <button
             className="btn-danger"

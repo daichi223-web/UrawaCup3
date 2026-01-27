@@ -47,6 +47,11 @@ export const DEFAULT_VENUE_FORM = {
   capacity: null,
   notes: '',
   assigned_group: '',
+  forPreliminary: true,
+  forFinalDay: false,
+  isFinalsVenue: false,
+  isMixedUse: false,
+  finalsMatchCount: 1,
 }
 
 export const DEFAULT_ADD_VENUE_FORM = {

@@ -268,6 +268,11 @@ export function useSettings() {
           capacity: form.capacity,
           notes: form.notes,
           assigned_group: form.assigned_group || null,
+          for_preliminary: form.forPreliminary,
+          for_final_day: form.forFinalDay,
+          is_finals_venue: form.isFinalsVenue,
+          is_mixed_use: form.isMixedUse,
+          finals_match_count: form.finalsMatchCount,
         } as never)
         .eq('id', form.id)
       if (error) throw error
@@ -400,6 +405,11 @@ export function useSettings() {
       capacity: venue.capacity,
       notes: venue.notes || '',
       assigned_group: venue.assigned_group || '',
+      forPreliminary: venue.for_preliminary ?? true,
+      forFinalDay: venue.for_final_day ?? false,
+      isFinalsVenue: venue.is_finals_venue ?? false,
+      isMixedUse: venue.is_mixed_use ?? false,
+      finalsMatchCount: venue.finals_match_count ?? 1,
     })
     setShowVenueModal(true)
   }, [])
