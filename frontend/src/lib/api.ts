@@ -607,8 +607,8 @@ export const standingsApi = {
         .select('id, status, approval_status, group_id, stage')
         .eq('tournament_id', tournamentId)
         .limit(10)
-      console.log(`[Standings] DEBUG: Sample matches for tournament ${tournamentId}:`,
-        (allMatches || []).map((m: Record<string, unknown>) => ({ id: m.id, status: m.status, approval: m.approval_status, group_id: m.group_id, stage: m.stage })))
+      const samples = (allMatches || []).map((m: Record<string, unknown>) => `id=${m.id} status=${m.status} approval=${m.approval_status} group=${m.group_id} stage=${m.stage}`)
+      console.log(`[Standings] DEBUG: Sample matches:\n${samples.join('\n')}`)
     }
 
     // 該当グループのチームを取得
