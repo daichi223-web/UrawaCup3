@@ -596,22 +596,9 @@ export const standingsApi = {
 
     if (matchError) throw matchError
 
-    const matches = (matchesData || []) as MatchRow[]
+    let matches = (matchesData || []) as MatchRow[]
 
-    console.log(`[Standings] Found ${matches?.length || 0} completed+approved matches for group ${groupId || '(single league)'}`)
-
-    // デバッグ: 試合が0件の場合、全試合のstatus/group_idを確認
-    if (matches.length === 0) {
-      const { data: allMatches } = await supabase
-        .from('matches')
-        .select('id, status, approval_status, group_id, stage')
-        .eq('tournament_id', tournamentId)
-        .limit(10)
-      const samples = (allMatches || []).map((m: Record<string, unknown>) => `id=${m.id} status=${m.status} approval=${m.approval_status} group=${m.group_id} stage=${m.stage}`)
-      console.log(`[Standings] DEBUG: Sample matches:\n${samples.join('\n')}`)
-    }
-
-    // 該当グループのチームを取得
+    // 該当グループのチームを取得（先に取得してフォールバック判定に使う）
     let teamQuery = supabase
       .from('teams')
       .select('*')
@@ -620,13 +607,38 @@ export const standingsApi = {
     if (groupId) {
       teamQuery = teamQuery.eq('group_id', groupId)
     }
-    // single-group mode: get ALL teams for the tournament (no group_id filter)
 
     const { data: teamsData, error: teamError } = await teamQuery
 
     if (teamError) throw teamError
 
     const teams = (teamsData || []) as TeamRow[]
+
+    // フォールバック: group_idで試合が0件だが、試合のgroup_idがnullの場合
+    // チームのIDでフィルタして試合を取得する
+    if (matches.length === 0 && groupId && teams.length > 0) {
+      const teamIds = teams.map(t => t.id)
+      console.log(`[Standings] group_id=${groupId} の試合が0件。チームID (${teamIds.join(',')}) でフォールバック検索`)
+
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('matches')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .eq('status', 'completed')
+        .or('approval_status.is.null,approval_status.eq.approved')
+        .eq('stage', 'preliminary')
+
+      if (!fallbackError && fallbackData) {
+        // ホームまたはアウェイがこのグループのチームである試合をフィルタ
+        const teamIdSet = new Set(teamIds)
+        matches = (fallbackData as MatchRow[]).filter(m =>
+          teamIdSet.has(m.home_team_id) || teamIdSet.has(m.away_team_id)
+        )
+        console.log(`[Standings] フォールバック: ${matches.length} 試合を検出（チームID照合）`)
+      }
+    }
+
+    console.log(`[Standings] Found ${matches.length} completed+approved matches for group ${groupId || '(single league)'}`)
     console.log(`[Standings] Found ${teams.length} teams for group ${groupId || '(all teams)'}`)
 
     // チームごとの成績を計算
