@@ -15,3 +15,4 @@ venv/
 # Windows reserved names
 nul
 NUL
+.env*.local

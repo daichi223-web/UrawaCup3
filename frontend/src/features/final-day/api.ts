@@ -247,19 +247,21 @@ export const finalDayApi = {
       throw new Error(`決勝進出チームが不足しています（${qualifyingTeams.length}/4チーム）`);
     }
 
-    // 3. 決勝会場を取得
-    const { data: finalsVenueData, error: venueError } = await supabase
+    // 3. 決勝会場を取得（複数会場対応）
+    const { data: finalsVenuesData, error: venueError } = await supabase
       .from('venues')
       .select('*')
       .eq('tournament_id', tournamentId)
       .eq('is_finals_venue', true)
-      .single();
+      .order('id');
 
-    if (venueError || !finalsVenueData) {
+    if (venueError || !finalsVenuesData || finalsVenuesData.length === 0) {
       throw new Error('決勝会場が設定されていません');
     }
 
-    const finalsVenue = finalsVenueData as VenueQueryResult;
+    const finalsVenues = finalsVenuesData as VenueQueryResult[];
+    const mainVenue = finalsVenues[0]; // メイン会場（3位決定戦・決勝）
+    const hasMultipleVenues = finalsVenues.length >= 2;
 
     // 4. 既存の最終日試合を削除
     await supabase
@@ -338,10 +340,10 @@ export const finalDayApi = {
       }
     };
 
-    // 準決勝1
+    // 準決勝1（メイン会場）
     matchesToInsert.push({
       tournament_id: tournamentId,
-      venue_id: finalsVenue.id,
+      venue_id: mainVenue.id,
       home_team_id: semifinalPairs[0][0].teamId,
       away_team_id: semifinalPairs[0][1].teamId,
       match_date: finalDate,
@@ -351,16 +353,21 @@ export const finalDayApi = {
       status: 'scheduled',
       notes: getSemifinalNote(0, semifinalPairs[0]),
     });
-    currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
 
-    // 準決勝2
+    // 準決勝2（複数会場ならサブ会場で同時刻、1会場なら順次）
+    const sf2Venue = hasMultipleVenues ? finalsVenues[1] : mainVenue;
+    const sf2Time = hasMultipleVenues ? currentTime : addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
+    if (!hasMultipleVenues) {
+      currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
+    }
+
     matchesToInsert.push({
       tournament_id: tournamentId,
-      venue_id: finalsVenue.id,
+      venue_id: sf2Venue.id,
       home_team_id: semifinalPairs[1][0].teamId,
       away_team_id: semifinalPairs[1][1].teamId,
       match_date: finalDate,
-      match_time: currentTime,
+      match_time: sf2Time,
       match_order: matchOrder++,
       stage: 'semifinal',
       status: 'scheduled',
@@ -368,10 +375,10 @@ export const finalDayApi = {
     });
     currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
 
-    // 3位決定戦（チームはTBD - 準決勝後に決定）
+    // 3位決定戦（メイン会場、チームはTBD - 準決勝後に決定）
     matchesToInsert.push({
       tournament_id: tournamentId,
-      venue_id: finalsVenue.id,
+      venue_id: mainVenue.id,
       home_team_id: null,
       away_team_id: null,
       match_date: finalDate,
@@ -385,10 +392,10 @@ export const finalDayApi = {
     });
     currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
 
-    // 決勝（チームはTBD - 準決勝後に決定）
+    // 決勝（メイン会場、チームはTBD - 準決勝後に決定）
     matchesToInsert.push({
       tournament_id: tournamentId,
-      venue_id: finalsVenue.id,
+      venue_id: mainVenue.id,
       home_team_id: null,
       away_team_id: null,
       match_date: finalDate,
