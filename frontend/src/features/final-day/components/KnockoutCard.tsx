@@ -42,15 +42,18 @@ export function KnockoutCard({
     semifinals.every((m) => m.status === 'completed');
 
   return (
-    <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+    <div className="border-2 border-blue-300 rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow">
       {/* 会場名ヘッダー */}
-      <div className="bg-blue-50 px-4 py-2 font-semibold text-center border-b flex items-center justify-between">
-        <span className="flex-1 text-center">{venueName}</span>
+      <div className="bg-blue-600 text-white px-3 py-2 font-semibold text-center border-b text-sm">
+        <div className="flex items-center justify-center gap-2">
+          <span>{venueName}</span>
+          <span className="px-1.5 py-0.5 bg-blue-500 text-blue-100 text-xs rounded">決勝</span>
+        </div>
         {onUpdateBracket && bothSemifinalsCompleted && (
           <button
             onClick={onUpdateBracket}
             disabled={isUpdating}
-            className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+            className="mt-1 text-xs px-2 py-1 bg-white text-blue-700 rounded hover:bg-blue-50 disabled:opacity-50 inline-flex items-center gap-1"
             title="準決勝結果を3決・決勝に反映"
           >
             <RefreshCw size={12} className={isUpdating ? 'animate-spin' : ''} />

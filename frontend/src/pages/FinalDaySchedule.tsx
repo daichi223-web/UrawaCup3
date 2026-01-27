@@ -421,7 +421,7 @@ export default function FinalDaySchedule() {
           【3決・決勝戦】
         </h2>
         {knockoutVenues.length > 0 ? (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {knockoutVenues.map((venue, idx) => (
               <KnockoutCard
                 key={venue.id}
