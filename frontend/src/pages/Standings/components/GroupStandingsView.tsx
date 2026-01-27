@@ -59,7 +59,7 @@ export function GroupStandingsView({
             recentlyUpdated ? 'shadow-lg ring-2 ring-green-200' : ''
           }`}>
             <div className={`card-header group-${groupData.groupId.toLowerCase()} flex justify-between items-center`}>
-              <h3 className="text-lg font-semibold">{groupData.groupId}グループ 成績表</h3>
+              <h3 className="text-lg font-semibold">成績表</h3>
             </div>
             <div className="card-body p-4">
               {groupTeams.length > 0 ? (

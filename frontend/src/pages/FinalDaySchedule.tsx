@@ -26,6 +26,7 @@ import type {
 import { useTeams } from '@/features/teams/hooks';
 import { useVenuesByTournament, useUpdateVenue } from '@/features/venues/hooks';
 import { useAppStore } from '@/stores/appStore';
+import { supabase } from '@/lib/supabase';
 
 // クリック入れ替え用の型
 interface SwapSlot {
@@ -260,8 +261,27 @@ export default function FinalDaySchedule() {
 
   // 自動生成
   const handleGenerate = async () => {
-    if (!confirm('最終日の組み合わせを自動生成しますか？\n既存の試合は上書きされます。\n※予選リーグ全試合が完了している必要があります。')) {
-      return;
+    // 予選リーグの未完了試合数をチェック
+    const { data: prelimMatches } = await supabase
+      .from('matches')
+      .select('id, status')
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'preliminary');
+
+    const incompleteCount = (prelimMatches || []).filter(m => m.status !== 'completed').length;
+
+    if (incompleteCount > 0) {
+      if (!confirm(
+        `⚠️ 未完了の予選試合が ${incompleteCount} 試合あります。\n` +
+        `暫定順位で決勝トーナメントを作成しますか？\n\n` +
+        `※ 既存の最終日試合は上書きされます。`
+      )) {
+        return;
+      }
+    } else {
+      if (!confirm('最終日の組み合わせを自動生成しますか？\n既存の試合は上書きされます。')) {
+        return;
+      }
     }
 
     try {

@@ -152,14 +152,16 @@ const FinalSchedulePrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref)
       {/* 予選順位表（成績表形式） */}
       <section className="mb-8">
         <h2 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b-2 border-gray-300">
-          📊 予選リーグ成績表
+          📊 成績表
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className={`grid gap-6 ${data.standings.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
           {data.standings.map((group) => (
             <div key={group.groupId}>
-              <h4 className="text-sm font-bold text-blue-600 mb-2">
-                グループ {group.groupId}
-              </h4>
+              {data.standings.length > 1 && (
+                <h4 className="text-sm font-bold text-blue-600 mb-2">
+                  グループ {group.groupId}
+                </h4>
+              )}
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="bg-blue-600 text-white">

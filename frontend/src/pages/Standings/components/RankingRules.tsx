@@ -20,10 +20,8 @@ export function RankingRules({ useGroupSystem, isOverallRanking }: RankingRulesP
           <li>抽選</li>
         </ol>
         <p className="mt-3 text-xs text-gray-500">
-          {useGroupSystem
-            ? (isOverallRanking
-                ? '※ 総合順位で上位4チームが決勝トーナメントに進出します'
-                : '※ 各グループ上位2チームが決勝トーナメントに進出します')
+          {useGroupSystem && !isOverallRanking
+            ? '※ 各グループ1位が決勝トーナメントに進出します'
             : '※ 総合順位で上位4チームが決勝トーナメントに進出します'}
         </p>
       </div>
