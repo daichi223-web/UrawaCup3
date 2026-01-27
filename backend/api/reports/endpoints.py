@@ -10,6 +10,7 @@ import uuid
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from ....generate_daily_report_pdf import DailyReportGenerator, create_sample_data as create_daily_sample
 from ....generate_final_result_pdf import FinalResultPDFGenerator, create_sample_data as create_final_sample
+from ....generate_standings_pdf import StandingsPDFGenerator
 
 router = APIRouter()
 
@@ -101,6 +102,25 @@ async def generate_final_results_sample():
         return FileResponse(
             path=output_path,
             filename="sample_final_results.pdf",
+            media_type='application/pdf'
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/standings-pdf", summary="順位表PDF生成（日本語対応）")
+async def generate_standings_pdf(
+    data: Dict[str, Any] = Body(...)
+):
+    try:
+        generator = StandingsPDFGenerator()
+        filename = f"standings_{uuid.uuid4()}.pdf"
+        output_path = os.path.join(os.getcwd(), filename)
+
+        generator.generate(data, output_path)
+
+        return FileResponse(
+            path=output_path,
+            filename="standings.pdf",
             media_type='application/pdf'
         )
     except Exception as e:

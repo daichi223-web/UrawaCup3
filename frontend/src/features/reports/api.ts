@@ -547,8 +547,8 @@ export const reportApi = {
     if (error) throw error;
   },
 
-  // グループ順位表PDFダウンロード（一グループ制対応）
-  downloadGroupStandings: async (params: { tournamentId: number; groupId?: string }): Promise<Blob> => {
+  // グループ順位表PDFダウンロード（一グループ制対応・バックエンド日本語PDF優先）
+  downloadGroupStandings: async (params: { tournamentId: number; groupId?: string }): Promise<{ blob: Blob; usedFallback: boolean }> => {
     // 大会設定を確認
     const { data: tournamentData } = await supabase
       .from('tournaments')
@@ -558,24 +558,34 @@ export const reportApi = {
 
     const useGroupSystem = (tournamentData as { use_group_system?: boolean } | null)?.use_group_system !== false;
 
-    const doc = new jsPDF();
-    doc.setFont('helvetica');
-    doc.setFontSize(16);
-    doc.text(useGroupSystem ? 'Group Standings' : 'Standings', 14, 20);
+    // 順位データを取得
+    interface StandingsGroup {
+      groupId: string;
+      groupName: string;
+      standings: {
+        rank: number;
+        teamName: string;
+        played: number;
+        won: number;
+        drawn: number;
+        lost: number;
+        goalsFor: number;
+        goalsAgainst: number;
+        goalDifference: number;
+        points: number;
+      }[];
+    }
 
-    let yPos = 30;
+    const groups: StandingsGroup[] = [];
 
     if (useGroupSystem) {
-      // グループ制
       const { data: groupsData } = await supabase
         .from('groups')
         .select('*')
         .eq('tournament_id', params.tournamentId)
         .order('id');
 
-      const groups = groupsData as GroupInfo[] | null;
-
-      for (const group of groups || []) {
+      for (const group of (groupsData as GroupInfo[] | null) || []) {
         if (params.groupId && group.id !== params.groupId) continue;
 
         const { data: standingsData } = await supabase
@@ -585,46 +595,79 @@ export const reportApi = {
           .eq('group_id', group.id)
           .order('rank');
 
-        const standings = standingsData as Standing[] | null;
-
-        doc.setFontSize(12);
-        doc.text(`${group.name}`, 14, yPos);
-        yPos += 5;
-
-        const tableData = (standings || []).map(s => [
-          s.rank,
-          s.team?.short_name || s.team?.name || '',
-          s.played, s.won, s.drawn, s.lost,
-          s.goals_for, s.goals_against, s.goal_difference, s.points
-        ]);
-
-        (doc as JsPDFWithAutoTable).autoTable({
-          startY: yPos,
-          head: [['#', 'Team', 'P', 'W', 'D', 'L', 'GF', 'GA', 'GD', 'Pts']],
-          body: tableData,
-          styles: { fontSize: 8, cellPadding: 2 },
-          headStyles: { fillColor: [66, 139, 202] },
-          margin: { left: 14 },
+        groups.push({
+          groupId: group.id,
+          groupName: group.name || `${group.id}グループ`,
+          standings: ((standingsData as Standing[] | null) || []).map(s => ({
+            rank: s.rank,
+            teamName: s.team?.short_name || s.team?.name || '',
+            played: s.played, won: s.won, drawn: s.drawn, lost: s.lost,
+            goalsFor: s.goals_for, goalsAgainst: s.goals_against,
+            goalDifference: s.goal_difference, points: s.points,
+          })),
         });
-
-        yPos = (doc as JsPDFWithAutoTable).lastAutoTable?.finalY ?? yPos + 10;
-        if (yPos > 250) { doc.addPage(); yPos = 20; }
       }
     } else {
-      // 一グループ制
       const { data: standingsData } = await supabase
         .from('standings')
         .select('*, team:teams(name, short_name)')
         .eq('tournament_id', params.tournamentId)
         .order('rank');
 
-      const standings = standingsData as Standing[] | null;
+      groups.push({
+        groupId: 'all',
+        groupName: '',
+        standings: ((standingsData as Standing[] | null) || []).map(s => ({
+          rank: s.rank,
+          teamName: s.team?.short_name || s.team?.name || '',
+          played: s.played, won: s.won, drawn: s.drawn, lost: s.lost,
+          goalsFor: s.goals_for, goalsAgainst: s.goals_against,
+          goalDifference: s.goal_difference, points: s.points,
+        })),
+      });
+    }
 
-      const tableData = (standings || []).map(s => [
-        s.rank,
-        s.team?.short_name || s.team?.name || '',
+    const pdfPayload = {
+      title: '成績表',
+      groups,
+    };
+
+    // バックエンドAPI（日本語フォント対応）を試行
+    try {
+      const response = await fetch(`${CORE_API_URL}/standings-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pdfPayload),
+      });
+
+      if (response.ok) {
+        console.log('[downloadGroupStandings] Backend API success');
+        return { blob: await response.blob(), usedFallback: false };
+      }
+      console.warn('[downloadGroupStandings] Backend API failed:', response.status);
+    } catch (e) {
+      console.warn('[downloadGroupStandings] Backend API error, falling back:', e);
+    }
+
+    // フォールバック: jsPDF（日本語文字化けあり）
+    const doc = new jsPDF();
+    doc.setFont('helvetica');
+    doc.setFontSize(16);
+    doc.text(useGroupSystem ? 'Group Standings' : 'Standings', 14, 20);
+
+    let yPos = 30;
+
+    for (const group of groups) {
+      if (group.groupName) {
+        doc.setFontSize(12);
+        doc.text(group.groupName, 14, yPos);
+        yPos += 5;
+      }
+
+      const tableData = group.standings.map(s => [
+        s.rank, s.teamName,
         s.played, s.won, s.drawn, s.lost,
-        s.goals_for, s.goals_against, s.goal_difference, s.points
+        s.goalsFor, s.goalsAgainst, s.goalDifference, s.points
       ]);
 
       (doc as JsPDFWithAutoTable).autoTable({
@@ -635,9 +678,12 @@ export const reportApi = {
         headStyles: { fillColor: [66, 139, 202] },
         margin: { left: 14 },
       });
+
+      yPos = (doc as JsPDFWithAutoTable).lastAutoTable?.finalY ?? yPos + 10;
+      if (yPos > 250) { doc.addPage(); yPos = 20; }
     }
 
-    return doc.output('blob');
+    return { blob: doc.output('blob'), usedFallback: true };
   },
 
   // グループ順位表Excelダウンロード（一グループ制対応）

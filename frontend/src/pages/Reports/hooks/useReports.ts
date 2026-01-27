@@ -231,11 +231,16 @@ export function useReports() {
       let filename: string;
       const ext = reportFormat === 'pdf' ? 'pdf' : 'xlsx';
 
+      let usedFallback = false;
       switch (type) {
         case 'groupStandings':
-          blob = reportFormat === 'pdf'
-            ? await reportApi.downloadGroupStandings({ tournamentId })
-            : await reportApi.downloadGroupStandingsExcel({ tournamentId });
+          if (reportFormat === 'pdf') {
+            const result = await reportApi.downloadGroupStandings({ tournamentId });
+            blob = result.blob;
+            usedFallback = result.usedFallback;
+          } else {
+            blob = await reportApi.downloadGroupStandingsExcel({ tournamentId });
+          }
           filename = `group_standings_${tournamentId}.${ext}`;
           break;
         case 'finalDaySchedule':
@@ -266,7 +271,11 @@ export function useReports() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast.success('ダウンロードを開始しました');
+      if (usedFallback) {
+        toast.success('簡易版PDFをダウンロードしました（日本語が正しく表示されない場合があります）');
+      } else {
+        toast.success('ダウンロードを開始しました');
+      }
     } catch (err: unknown) {
       console.error(err);
       toast.error('レポートの生成に失敗しました');
