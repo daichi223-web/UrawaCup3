@@ -163,7 +163,16 @@ export const standingApi = {
       .eq('tournament_id', tournamentId)
       .order('rank', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Standings] getOverallStandings error:', error);
+      throw error;
+    }
+
+    console.log(`[Standings] getOverallStandings: raw rows=${standingsData?.length || 0}`);
+    if (standingsData && standingsData.length > 0) {
+      const first = standingsData[0] as Record<string, unknown>;
+      console.log('[Standings] First row sample:', { team_id: first.team_id, group_id: first.group_id, played: first.played, points: first.points, rank: first.rank, team: first.team });
+    }
 
     const standings = standingsData as StandingsWithTeamResult[] | null;
 

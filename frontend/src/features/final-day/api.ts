@@ -102,6 +102,10 @@ async function getGroupWinners(tournamentId: number): Promise<QualifyingTeam[]> 
  */
 async function getOverallTopTeams(tournamentId: number, count: number = 4): Promise<QualifyingTeam[]> {
   const overallStandings = await standingApi.getOverallStandings(tournamentId);
+  console.log(`[Finals] getOverallTopTeams: entries=${overallStandings.entries.length}, qualifyingCount=${overallStandings.qualifyingCount}`);
+  if (overallStandings.entries.length > 0) {
+    console.log('[Finals] Top entries:', overallStandings.entries.slice(0, 4).map(e => `${e.teamName}(pts:${e.points},played:${e.played})`));
+  }
 
   return overallStandings.entries.slice(0, count).map(entry => ({
     teamId: entry.teamId,
