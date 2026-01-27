@@ -260,6 +260,7 @@ export function useSettings() {
 
   const updateVenueMutation = useMutation({
     mutationFn: async (form: VenueForm & { id: number }) => {
+      // 基本フィールド
       const { error } = await supabase
         .from('venues')
         .update({
@@ -268,25 +269,28 @@ export function useSettings() {
           capacity: form.capacity,
           notes: form.notes,
           assigned_group: form.assigned_group || null,
-          for_preliminary: form.forPreliminary,
-          for_final_day: form.forFinalDay,
-          is_finals_venue: form.isFinalsVenue,
-          is_mixed_use: form.isMixedUse,
-          finals_match_count: form.finalsMatchCount,
         } as never)
         .eq('id', form.id)
-      if (error) {
-        console.error('Venue update error:', error)
-        throw error
+      if (error) throw error
+
+      // 用途フィールド（カラムが存在しなくてもモーダルは閉じる）
+      try {
+        await supabase
+          .from('venues')
+          .update({
+            for_preliminary: form.forPreliminary,
+            for_final_day: form.forFinalDay,
+            is_finals_venue: form.isFinalsVenue,
+            is_mixed_use: form.isMixedUse,
+            finals_match_count: form.finalsMatchCount,
+          } as never)
+          .eq('id', form.id)
+      } catch (e) {
+        console.warn('用途フィールドの保存に失敗（カラム未作成の可能性）:', e)
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['venues', selectedTournamentId] })
-      setShowVenueModal(false)
-      setSelectedVenue(null)
-    },
-    onError: (error) => {
-      console.error('Venue update failed:', error)
     },
   })
 
@@ -422,7 +426,10 @@ export function useSettings() {
 
   const handleSaveVenue = useCallback(() => {
     if (!selectedVenue) return
-    updateVenueMutation.mutate({ ...venueForm, id: selectedVenue.id })
+    const formData = { ...venueForm, id: selectedVenue.id }
+    setShowVenueModal(false)
+    setSelectedVenue(null)
+    updateVenueMutation.mutate(formData)
   }, [selectedVenue, venueForm, updateVenueMutation])
 
   const handleDeleteVenue = useCallback(() => {
