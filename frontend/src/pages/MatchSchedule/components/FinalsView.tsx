@@ -52,7 +52,7 @@ export function FinalsView({
             })
             const venueEntries = Object.entries(matchesByVenue)
             return (
-              <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {venueEntries.map(([venueId, matches]) => {
                   const venue = venues.find(v => v.id === Number(venueId))
                   return (
@@ -98,7 +98,7 @@ export function FinalsView({
             })
             const venueEntries = Object.entries(matchesByVenue)
             return (
-              <div className="grid grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 {venueEntries.map(([venueId, matches], idx) => {
                   const venue = venues.find(v => v.id === Number(venueId))
                   const colors = VENUE_COLORS_LIST[idx % VENUE_COLORS_LIST.length]

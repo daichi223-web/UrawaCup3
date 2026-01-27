@@ -485,6 +485,12 @@ export function useMatchSchedule() {
   // 日程削除
   const deleteMatchesMutation = useMutation({
     mutationFn: async (stage: 'preliminary' | 'finals' | 'training' | 'all') => {
+      if (stage === 'finals') {
+        // 最終日削除: 決勝トーナメント＋研修試合を両方削除
+        const r1 = await matchApi.deleteByStage(tournamentId, 'finals')
+        const r2 = await matchApi.deleteByStage(tournamentId, 'training')
+        return { deleted: (r1.deleted || 0) + (r2.deleted || 0), stage }
+      }
       const result = await matchApi.deleteByStage(tournamentId, stage)
       if (stage === 'preliminary' || stage === 'all') {
         await standingApi.clearStandings(tournamentId)
@@ -493,7 +499,7 @@ export function useMatchSchedule() {
       return { deleted: result.deleted, stage }
     },
     onSuccess: (data) => {
-      const stageLabel = data.stage === 'preliminary' ? '予選リーグ' : data.stage === 'finals' ? '決勝トーナメント' : data.stage === 'training' ? '研修試合' : '全試合'
+      const stageLabel = data.stage === 'preliminary' ? '予選リーグ' : data.stage === 'finals' ? '最終日' : data.stage === 'training' ? '研修試合' : '全試合'
       toast.success(`${stageLabel}の日程を削除しました`)
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
       if (data.stage === 'preliminary' || data.stage === 'all') {

@@ -71,24 +71,12 @@ export function GenerateButtons({
     if (hasFinalsMatches || hasTrainingMatches) {
       buttons.push(
         <button
-          key="finals-delete"
+          key="finalday-delete"
           className="btn-danger"
           onClick={onDeleteFinals}
           disabled={isGenerating || isDeleting}
         >
-          決勝T削除
-        </button>
-      )
-    }
-    if (hasTrainingMatches) {
-      buttons.push(
-        <button
-          key="training-delete"
-          className="btn-danger"
-          onClick={onDeleteTraining}
-          disabled={isGenerating || isDeleting}
-        >
-          研修試合削除
+          最終日削除
         </button>
       )
       buttons.push(
