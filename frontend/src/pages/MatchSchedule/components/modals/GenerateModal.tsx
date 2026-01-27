@@ -25,7 +25,7 @@ export function GenerateModal({
 }: GenerateModalProps) {
   const title =
     generateType === 'preliminary' ? '予選リーグ日程生成' :
-    generateType === 'finals' ? '決勝トーナメント生成' :
+    generateType === 'finals' ? '最終日生成' :
     '研修試合生成'
 
   return (

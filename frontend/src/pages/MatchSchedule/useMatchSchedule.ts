@@ -454,14 +454,14 @@ export function useMatchSchedule() {
     onError: (error: MutationError) => toast.error(error.message || '日程生成に失敗しました'),
   })
 
-  // 決勝トーナメント生成
+  // 最終日生成（決勝トーナメント＋研修試合を同時生成）
   const generateFinalsMutation = useMutation({
     mutationFn: async () => {
       const createdMatches = await finalDayApi.generateFinalDaySchedule(tournamentId)
       return { created: createdMatches.length, warnings: [] as string[] }
     },
     onSuccess: (data) => {
-      toast.success(`決勝トーナメント ${data.created}試合を生成しました`)
+      toast.success(`最終日 ${data.created}試合を生成しました`)
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
       setShowGenerateModal(false)
     },

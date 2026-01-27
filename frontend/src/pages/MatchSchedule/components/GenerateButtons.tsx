@@ -59,16 +59,16 @@ export function GenerateButtons({
   } else if (activeTab === 'day3') {
     buttons.push(
       <button
-        key="finals-generate"
+        key="finalday-generate"
         className="btn-primary"
         onClick={onGenerateFinals}
         disabled={isGenerating || isDeleting || !hasPreliminaryMatches}
         title={!hasPreliminaryMatches ? '予選リーグを先に生成してください' : ''}
       >
-        決勝トーナメント生成
+        最終日生成
       </button>
     )
-    if (hasFinalsMatches) {
+    if (hasFinalsMatches || hasTrainingMatches) {
       buttons.push(
         <button
           key="finals-delete"
@@ -80,17 +80,6 @@ export function GenerateButtons({
         </button>
       )
     }
-    buttons.push(
-      <button
-        key="training-generate"
-        className="btn-secondary"
-        onClick={onGenerateTraining}
-        disabled={isGenerating || isDeleting || !hasPreliminaryMatches}
-        title={!hasPreliminaryMatches ? '予選リーグを先に生成してください' : ''}
-      >
-        研修試合生成
-      </button>
-    )
     if (hasTrainingMatches) {
       buttons.push(
         <button
