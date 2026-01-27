@@ -24,7 +24,7 @@ export function VenueSettingsTable({ venues, onEdit, onAdd }: Props) {
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 px-3 font-medium">会場名</th>
-                <th className="text-left py-2 px-3 font-medium">住所</th>
+                <th className="text-left py-2 px-3 font-medium">用途</th>
                 <th className="text-left py-2 px-3 font-medium">グループ</th>
                 <th className="text-right py-2 px-3 font-medium">収容人数</th>
                 <th className="text-center py-2 px-3 font-medium">操作</th>
@@ -34,7 +34,22 @@ export function VenueSettingsTable({ venues, onEdit, onAdd }: Props) {
               {venues.map((venue) => (
                 <tr key={venue.id} className="border-b hover:bg-gray-50">
                   <td className="py-2 px-3">{venue.name}</td>
-                  <td className="py-2 px-3 text-sm text-gray-600">{venue.address || '-'}</td>
+                  <td className="py-2 px-3">
+                    <div className="flex flex-wrap gap-1">
+                      {venue.for_preliminary !== false && (
+                        <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-100 text-green-700">予選</span>
+                      )}
+                      {venue.for_final_day && (
+                        <span className="px-1.5 py-0.5 text-[10px] rounded bg-orange-100 text-orange-700">研修</span>
+                      )}
+                      {venue.is_finals_venue && (
+                        <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-100 text-blue-700">決勝</span>
+                      )}
+                      {venue.is_mixed_use && (
+                        <span className="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 text-purple-700">混合</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-2 px-3">
                     {venue.assigned_group ? (
                       <span
