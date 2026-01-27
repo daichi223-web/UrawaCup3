@@ -235,6 +235,11 @@ export const finalDayApi = {
 
     console.log(`[Finals] 組み合わせ方式: ${bracketMethod}, 進出ルール: ${qualificationRule}`);
 
+    // 1.5. 順位表を再計算（最新の試合結果を反映）
+    console.log('[Finals] 順位表を再計算中...');
+    await standingApi.recalculateAll(tournamentId);
+    console.log('[Finals] 順位表の再計算完了');
+
     // 2. 決勝進出チームを取得
     const qualifyingTeams = await getQualifyingTeams(tournamentId, qualificationRule);
 

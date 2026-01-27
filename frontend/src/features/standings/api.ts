@@ -298,10 +298,17 @@ export const standingApi = {
 
       // 各グループの順位を再計算
       let calculatedGroups = 0;
-      for (const group of groups || []) {
-        await standingsApi.recalculate(tournamentId, group.id);
-        calculatedGroups++;
-        console.log(`[Standings] Recalculated group ${group.id}`);
+      if (groups && groups.length > 0) {
+        for (const group of groups) {
+          await standingsApi.recalculate(tournamentId, group.id);
+          calculatedGroups++;
+          console.log(`[Standings] Recalculated group ${group.id}`);
+        }
+      } else {
+        // 一グループ制: group_id なしで再計算
+        console.log('[Standings] No groups found, recalculating as single league');
+        await standingsApi.recalculate(tournamentId);
+        calculatedGroups = 1;
       }
 
       console.log(`[Standings] All ${calculatedGroups} groups recalculated for tournament ${tournamentId}`);
