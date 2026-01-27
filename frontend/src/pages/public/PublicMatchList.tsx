@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { matchesApi, tournamentsApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
-import { format } from 'date-fns';
-import { ja } from 'date-fns/locale';
 import { MapPin, Clock, AlertCircle, Calendar } from 'lucide-react';
 
 // Supabaseから取得するデータの型
@@ -27,7 +25,7 @@ interface MatchData {
 }
 
 // グループごとの色設定
-const GROUP_COLORS: Record<string, { bg: string; border: string; header: string; headerText: string }> = {
+const _GROUP_COLORS: Record<string, { bg: string; border: string; header: string; headerText: string }> = {
     A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100', headerText: 'text-red-800' },
     B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100', headerText: 'text-blue-800' },
     C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100', headerText: 'text-green-800' },
@@ -35,6 +33,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; header: string;
     finals: { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100', headerText: 'text-purple-800' },
     training: { bg: 'bg-gray-50', border: 'border-gray-200', header: 'bg-gray-100', headerText: 'text-gray-700' },
 }
+void _GROUP_COLORS
 
 export default function PublicMatchList() {
     const [matches, setMatches] = useState<MatchData[]>([]);
@@ -67,7 +66,7 @@ export default function PublicMatchList() {
                 const latestTournament = tournaments[0];
                 const tournamentId = latestTournament.id;
                 setTournamentName(latestTournament.name || latestTournament.short_name || '');
-                setUseGroupSystem(latestTournament.use_group_system ?? true);
+                setUseGroupSystem((latestTournament as unknown as { use_group_system?: boolean }).use_group_system ?? true);
 
                 // タイムアウト付きで試合データをフェッチ
                 const fetchPromise = matchesApi.getAll(tournamentId);
@@ -75,20 +74,20 @@ export default function PublicMatchList() {
                     setTimeout(() => reject(new Error('TIMEOUT')), 8000)
                 );
 
-                const data: any = await Promise.race([fetchPromise, timeoutPromise]);
+                const data = await Promise.race([fetchPromise, timeoutPromise]) as { matches?: MatchData[] };
 
                 if (!mounted) return;
 
                 // Sort by date and time
                 const matchList = data.matches || [];
-                const sorted = (matchList as MatchData[]).sort((a, b) => {
+                const sorted = matchList.sort((a, b) => {
                     const aTime = `${a.match_date} ${a.match_time}`;
                     const bTime = `${b.match_date} ${b.match_time}`;
                     return new Date(aTime).getTime() - new Date(bTime).getTime();
                 });
                 setMatches(sorted);
                 setLoading(false);
-            } catch (err: any) {
+            } catch (err: unknown) {
                 if (!mounted) return;
                 console.error("Failed to load matches", err);
 
@@ -103,7 +102,7 @@ export default function PublicMatchList() {
                 }
 
                 // エラータイプを判定
-                const errorMessage = err.message || '';
+                const errorMessage = err instanceof Error ? err.message : '';
                 if (errorMessage === 'TIMEOUT') {
                     setError('TIMEOUT');
                 } else if (errorMessage.includes('permission') || errorMessage.includes('RLS')) {

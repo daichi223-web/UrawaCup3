@@ -45,7 +45,7 @@ const GROUP_COLORS: Record<string, { bg: string; border: string; text: string; b
 /**
  * クリック可能なチームスロット
  */
-function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError, compact, isChanged, venueGroupId, isConfirmed }: TeamSlotProps) {
+function ClickableTeamSlot({ match, position, isSelected, isSwapTarget, onClick, disabled, hasConsecutiveError, compact, isChanged, venueGroupId, isConfirmed: _isConfirmed }: TeamSlotProps) {
   const team = position === 'home' ? match.homeTeam : match.awayTeam
   const teamId = position === 'home' ? match.homeTeamId : match.awayTeamId
   const teamGroupId = team?.groupId || team?.group_id || null
@@ -185,7 +185,7 @@ interface ClickableMatchListProps {
   teams?: {
     id: number
     name: string
-    groupId: string
+    groupId?: string
     teamType?: 'local' | 'invited'  // 地元校 or 招待校
     region?: string                  // 地域
     leagueId?: string | number       // 所属リーグID
@@ -249,7 +249,7 @@ export default function DraggableMatchList({
     // グループ別に分類
     const groupedMatches = new Map<string, MatchWithDetails[]>()
     matches.forEach(match => {
-      const groupId = match.groupId || (match as any).group_id || 'default'
+      const groupId = match.groupId || match.group_id || 'default'
       if (!groupedMatches.has(groupId)) {
         groupedMatches.set(groupId, [])
       }
@@ -290,7 +290,7 @@ export default function DraggableMatchList({
       homeTeamName: m.homeTeam?.shortName || m.homeTeam?.name || '',
       awayTeamName: m.awayTeam?.shortName || m.awayTeam?.name || '',
       groupId: m.groupId || m.group_id || undefined,
-      isBMatch: m.isBMatch || (m as any).is_b_match || false,
+      isBMatch: m.isBMatch || m.is_b_match || false,
     }))
 
     // 設定を ConstraintCheckSettings 形式に変換
@@ -440,19 +440,11 @@ export default function DraggableMatchList({
     setSelectedTeam(null)
   }
 
-  if (matches.length === 0) {
-    return (
-      <div className="text-center py-8 text-gray-500">
-        {emptyMessage}
-      </div>
-    )
-  }
-
-  // 違反サマリー
+  // 違反サマリー (moved before early return to satisfy React Hooks rules)
   const errorCount = violations.filter(v => v.level === 'error').length
   const warningCount = violations.filter(v => v.level === 'warning').length
 
-  // 警告の内訳をタイプ別にカウント
+  // 警告の内訳をタイプ別にカウント (must be called before early return)
   const warningsByType = useMemo(() => {
     const warnings = violations.filter(v => v.level === 'warning')
     const counts: Record<string, number> = {}
@@ -461,6 +453,14 @@ export default function DraggableMatchList({
     })
     return counts
   }, [violations])
+
+  if (matches.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        {emptyMessage}
+      </div>
+    )
+  }
 
   return (
     <div className={compact ? 'space-y-1' : 'space-y-4'}>
@@ -585,8 +585,8 @@ export default function DraggableMatchList({
           const isHomeSwapTarget = selectedTeam !== null && !isHomeSelected && !isDisabled
           const isAwaySwapTarget = selectedTeam !== null && !isAwaySelected && !isDisabled
           // 連戦チェック
-          const homeTeamId = match.homeTeamId || (match as any).home_team_id
-          const awayTeamId = match.awayTeamId || (match as any).away_team_id
+          const homeTeamId = match.homeTeamId || match.home_team_id || 0
+          const awayTeamId = match.awayTeamId || match.away_team_id || 0
           const homeHasConsecutiveError = consecutiveMatchTeams?.has(homeTeamId) ?? false
           const awayHasConsecutiveError = consecutiveMatchTeams?.has(awayTeamId) ?? false
           // 変更チェック
@@ -599,7 +599,7 @@ export default function DraggableMatchList({
           const hasWarning = matchViolations.some(v => v.level === 'warning')
 
           // B戦判定（順位計算対象外）
-          const isBMatch = match.isBMatch || (match as any).is_b_match || false
+          const isBMatch = match.isBMatch || match.is_b_match || false
 
           return compact ? (
             /* コンパクトモード: 1行表示 */

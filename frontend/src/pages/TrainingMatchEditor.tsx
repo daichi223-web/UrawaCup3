@@ -40,6 +40,23 @@ interface Venue {
   name: string
 }
 
+interface League {
+  id: number
+  name: string
+}
+
+interface PastMatch {
+  home_team_id: number
+  away_team_id: number
+}
+
+interface TeamBasic {
+  id: number
+  name: string
+  short_name?: string
+  group_id?: string
+}
+
 // 順位リーグの定義
 const RANK_LEAGUES = [
   { rank: 2, label: '2位リーグ', color: 'bg-blue-100 border-blue-300' },
@@ -66,7 +83,7 @@ export default function TrainingMatchEditor() {
   const [venueTimeEdits, setVenueTimeEdits] = useState<Record<number, string>>({})
 
   // 全チームを取得（試合追加時に使用）
-  const { data: allTeams } = useQuery({
+  const { data: allTeams } = useQuery<TeamBasic[]>({
     queryKey: ['all-teams', tournamentId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -74,12 +91,12 @@ export default function TrainingMatchEditor() {
         .select('id, name, short_name, group_id')
         .eq('tournament_id', tournamentId)
       if (error) throw error
-      return data || []
+      return (data || []) as TeamBasic[]
     },
   })
 
   // 全会場を取得
-  const { data: allVenues } = useQuery({
+  const { data: _allVenues } = useQuery<Venue[]>({
     queryKey: ['all-venues', tournamentId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -88,19 +105,20 @@ export default function TrainingMatchEditor() {
         .eq('tournament_id', tournamentId)
         .order('id')
       if (error) throw error
-      return data || []
+      return (data || []) as Venue[]
     },
   })
+  void _allVenues // Reserved for future use
 
   // リーグ一覧を取得（リーグ名表示用）
-  const { data: leagues } = useQuery({
+  const { data: leagues } = useQuery<League[]>({
     queryKey: ['leagues'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leagues')
         .select('id, name')
       if (error) throw error
-      return data || []
+      return (data || []) as League[]
     },
   })
 
@@ -111,7 +129,7 @@ export default function TrainingMatchEditor() {
   }
 
   // 過去の対戦履歴を取得（対戦済みチェック用）
-  const { data: pastMatches } = useQuery({
+  const { data: pastMatches } = useQuery<PastMatch[]>({
     queryKey: ['past-matches', tournamentId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -120,7 +138,7 @@ export default function TrainingMatchEditor() {
         .eq('tournament_id', tournamentId)
         .neq('stage', 'training')
       if (error) throw error
-      return data || []
+      return (data || []) as PastMatch[]
     },
   })
 
@@ -197,7 +215,7 @@ export default function TrainingMatchEditor() {
     queryKey: ['training-matches', tournamentId],
     queryFn: async () => {
       // まず試合データを取得
-      const { data: matches, error } = await supabase
+      const { data: matchesData, error } = await supabase
         .from('matches')
         .select('*')
         .eq('tournament_id', tournamentId)
@@ -208,7 +226,17 @@ export default function TrainingMatchEditor() {
         console.error('[TrainingMatchEditor] Query error:', error)
         throw error
       }
-      if (!matches || matches.length === 0) return []
+      const matches = (matchesData || []) as Array<{
+        id: number;
+        home_team_id: number;
+        away_team_id: number;
+        venue_id: number;
+        match_date?: string;
+        match_time?: string;
+        match_order?: number;
+        stage: string;
+      }>
+      if (matches.length === 0) return []
 
       // チームと会場を別途取得
       const teamIds = new Set<number>()
@@ -224,8 +252,10 @@ export default function TrainingMatchEditor() {
         supabase.from('venues').select('id, name').in('id', Array.from(venueIds))
       ])
 
-      const teamsMap = new Map((teamsRes.data || []).map(t => [t.id, t]))
-      const venuesMap = new Map((venuesRes.data || []).map(v => [v.id, v]))
+      const teams = (teamsRes.data || []) as Team[]
+      const venues = (venuesRes.data || []) as Venue[]
+      const teamsMap = new Map(teams.map(t => [t.id, t]))
+      const venuesMap = new Map(venues.map(v => [v.id, v]))
 
       // データを結合
       return matches.map(m => ({
@@ -279,22 +309,22 @@ export default function TrainingMatchEditor() {
 
       // 対戦済み（チームペアでユニーク）
       if (hasPlayedBefore(match.home_team_id, match.away_team_id)) {
-        const pairKey = [match.home_team_id, match.away_team_id].sort().join('-')
+        const pairKey = [match.home_team_id, match.away_team_id].sort((a, b) => a - b).join('-')
         uniqueWarnings.played.add(pairKey)
       }
 
       // 同地域（地元同士も含む、チームペアでユニーク）
       if (homeTeam.team_type === 'local' && awayTeam.team_type === 'local') {
-        const pairKey = [match.home_team_id, match.away_team_id].sort().join('-')
+        const pairKey = [match.home_team_id, match.away_team_id].sort((a, b) => a - b).join('-')
         uniqueWarnings.region.add(`local:${pairKey}`)
       } else if (homeTeam.region && awayTeam.region && homeTeam.region === awayTeam.region) {
-        const pairKey = [match.home_team_id, match.away_team_id].sort().join('-')
+        const pairKey = [match.home_team_id, match.away_team_id].sort((a, b) => a - b).join('-')
         uniqueWarnings.region.add(`region:${pairKey}`)
       }
 
       // 同リーグ（チームペアでユニーク）
       if (homeTeam.league_id && awayTeam.league_id && homeTeam.league_id === awayTeam.league_id) {
-        const pairKey = [match.home_team_id, match.away_team_id].sort().join('-')
+        const pairKey = [match.home_team_id, match.away_team_id].sort((a, b) => a - b).join('-')
         uniqueWarnings.league.add(pairKey)
       }
 
@@ -333,6 +363,7 @@ export default function TrainingMatchEditor() {
     stats.total = stats.played + stats.region + stats.league + stats.venue + stats.consecutive
 
     return stats
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trainingMatches, pastMatches])
 
   // 会場IDから順位を推定（会場名に"2位"などが含まれる場合）
@@ -368,7 +399,7 @@ export default function TrainingMatchEditor() {
       updates.push(
         supabase
           .from('matches')
-          .update(match1IsHome ? { home_team_id: team2Id } : { away_team_id: team2Id })
+          .update((match1IsHome ? { home_team_id: team2Id } : { away_team_id: team2Id }) as never)
           .eq('id', match1Id)
       )
 
@@ -376,7 +407,7 @@ export default function TrainingMatchEditor() {
       updates.push(
         supabase
           .from('matches')
-          .update(match2IsHome ? { home_team_id: team1Id } : { away_team_id: team1Id })
+          .update((match2IsHome ? { home_team_id: team1Id } : { away_team_id: team1Id }) as never)
           .eq('id', match2Id)
       )
 
@@ -405,7 +436,7 @@ export default function TrainingMatchEditor() {
 
       const { error } = await supabase
         .from('matches')
-        .update({ match_time: startTime })
+        .update({ match_time: startTime } as never)
         .eq('tournament_id', tournamentId)
         .eq('venue_id', venueId)
         .eq('stage', 'training')
@@ -462,7 +493,7 @@ export default function TrainingMatchEditor() {
           match_date: matchDate,
           match_time: startTime || '09:00',
           match_order: nextOrder,
-        })
+        } as never)
 
       if (error) throw error
     },

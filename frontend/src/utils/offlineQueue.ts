@@ -7,7 +7,7 @@ interface OfflineDB extends DBSchema {
         value: {
             url: string;
             method: string;
-            data: any;
+            data: unknown;
             timestamp: number;
         };
     };
@@ -35,7 +35,7 @@ class OfflineQueue {
     }
 
     // リクエストをキューに追加
-    async addToQueue(url: string, method: string, data: any) {
+    async addToQueue(url: string, method: string, data: unknown) {
         const db = await this.dbPromise;
         await db.add(STORE_NAME, {
             url,

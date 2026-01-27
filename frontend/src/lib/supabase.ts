@@ -55,7 +55,7 @@ const supabaseAnonKey = envSupabaseAnonKey || DEV_FALLBACK_SUPABASE_ANON_KEY
 
 // Debugging: Expose URL and log configuration source
 if (typeof window !== 'undefined') {
-  // @ts-ignore
+  // @ts-expect-error Expose debug info on window object
   window.__SUPABASE_URL__ = supabaseUrl
 
   const isUsingEnvVars = !!envSupabaseUrl && !!envSupabaseAnonKey

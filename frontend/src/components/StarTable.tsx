@@ -1,7 +1,7 @@
 /**
  * 成績表コンポーネント
  * 予選リーグの対戦結果をマトリックス形式で表示
- * ○：勝ち　△：引き分け　●：負け
+ * ○:勝ち △:引き分け ●:負け
  */
 import { useMemo } from 'react'
 import type { MatchWithDetails, Team } from '@/types'

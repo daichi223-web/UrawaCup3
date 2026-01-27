@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/stores/authStore'
-import type { UserRole } from '@shared/types'
+import type { UserRole, Tournament } from '@shared/types'
 import { OfflineIndicator } from './pwa'
 import { ConnectionStatus } from './common/ConnectionStatus'
 import { useQuery } from '@tanstack/react-query'
@@ -113,7 +113,7 @@ function Layout({ children }: LayoutProps) {
   // ストアの状態を更新
   useEffect(() => {
     if (tournament) {
-      setCurrentTournament(tournament)
+      setCurrentTournament(tournament as Tournament)
     }
   }, [tournament, setCurrentTournament])
 

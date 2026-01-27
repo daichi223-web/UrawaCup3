@@ -37,7 +37,7 @@ export interface MatchForValidation {
 export interface TeamInfo {
   id: number
   name: string
-  groupId: string
+  groupId?: string
   teamType?: 'local' | 'invited'  // 地元校 or 招待校
   region?: string                  // 地域（例: '埼玉', '東京'）
   leagueId?: string | number       // 所属リーグID（別リーグ戦）
@@ -457,7 +457,7 @@ function checkNotEnoughGames(matches: MatchForValidation[], teams: TeamInfo[]): 
   const groupTeamIds = new Set(teams.filter(t => t.groupId).map(t => t.id))
 
   // 日付ごとにチームの試合数をカウント
-  const dates = [...new Set(matches.map(m => m.matchDate))].sort()
+  const dates = [...new Set(matches.map(m => m.matchDate))].sort((a, b) => (a ?? '').localeCompare(b ?? ''))
 
   // 2日間のみ対象（予選リーグ）
   const preliminaryDates = dates.slice(0, 2)

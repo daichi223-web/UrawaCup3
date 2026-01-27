@@ -51,7 +51,7 @@ export function calculateMixedVenueSchedule(
     const slotNumber = i + 1
     const isFinals = i < config.finalsMatchCount
     const matchDuration = isFinals ? config.finalsMatchDuration : config.trainingMatchDuration
-    const intervalMinutes = isFinals ? config.finalsIntervalMinutes : config.trainingIntervalMinutes
+    // intervalMinutes is calculated but stored in config for reference
 
     // キックオフ時刻をフォーマット
     const hours = Math.floor(currentMinutes / 60)

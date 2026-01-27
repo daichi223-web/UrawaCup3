@@ -7,6 +7,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { matchApi, type MatchScoreInput } from '@/features/matches';
 import { MatchWithDetails, Goal } from '@shared/types';
 import { Modal } from '@/components/ui/Modal';
+
+// API から返される拡張 Goal 型
+interface ExtendedGoal extends Goal {
+  jerseyNumber?: number | null;
+  scorerName?: string;
+}
 import toast from 'react-hot-toast';
 import { playerApi, type PlayerSuggestion } from '@/features/players';
 import { Minus, Plus } from 'lucide-react';
@@ -133,7 +139,7 @@ function MatchResult() {
         const allMatches = data.matches;
 
         // 日付リストを抽出（重複排除・ソート）
-        const dates = [...new Set(allMatches.map(m => m.matchDate))].sort();
+        const dates = [...new Set(allMatches.map(m => m.matchDate))].sort((a, b) => (a ?? '').localeCompare(b ?? ''));
         setAvailableDates(dates);
 
         // 会場リストを抽出（重複排除）
@@ -160,6 +166,7 @@ function MatchResult() {
   useEffect(() => {
     if (availableDates.length === 0) return; // 初回ロード前はスキップ
     fetchMatches();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFilter, venueFilter, statusFilter]);
 
   const fetchMatches = async () => {
@@ -208,14 +215,14 @@ function MatchResult() {
       hasPenaltyShootout: match.hasPenaltyShootout ?? false,
     });
     // 既存の得点をGoalInput形式に変換
-    const existingGoals: GoalInput[] = (match.goals || []).map((g: Goal, idx: number) => ({
+    const existingGoals: GoalInput[] = (match.goals || []).map((g: ExtendedGoal, idx: number) => ({
       id: `existing-${idx}`,
       teamId: g.teamId,
       teamType: g.teamId === match.homeTeamId ? 'home' : 'away',
       minute: g.minute,
       half: g.half,
-      scorerNumber: (g as any).jerseyNumber ? String((g as any).jerseyNumber) : '',
-      scorerName: (g as any).scorerName || (g as any).playerName || "",
+      scorerNumber: g.jerseyNumber ? String(g.jerseyNumber) : '',
+      scorerName: g.scorerName || g.playerName || "",
       playerId: g.playerId ?? null,
       isOwnGoal: g.isOwnGoal ?? false,
     }));
@@ -302,7 +309,7 @@ function MatchResult() {
         goals: goals.map(g => ({
           teamId: g.teamId,
           playerId: g.playerId,
-          scorerName: (g as any).scorerName || (g as any).playerName || "",
+          scorerName: g.scorerName || "",
           jerseyNumber: g.scorerNumber ? parseInt(g.scorerNumber) : null,
           minute: g.minute,
           half: g.half,

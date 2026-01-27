@@ -4,14 +4,14 @@
  */
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X, Trophy, Medal, Plus, Trash2, Search } from 'lucide-react'
+import { Trophy, Medal, Trash2, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { outstandingPlayersApi } from '../api'
 import { teamsApi } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
-import type { OutstandingPlayer, OutstandingPlayerCreate, Team, Player } from '@shared/types'
+import type { OutstandingPlayerCreate, Team, Player } from '@shared/types'
 
 interface OutstandingPlayersModalProps {
   isOpen: boolean
@@ -54,12 +54,12 @@ export function OutstandingPlayersModal({
   })
 
   // チーム一覧を取得
-  const { data: teams } = useQuery({
+  const { data: teamsData } = useQuery({
     queryKey: ['teams', tournamentId],
     queryFn: () => teamsApi.getAll(tournamentId),
-    select: (data) => data.teams || [],  // { teams: [...], total: n } から配列を抽出
     enabled: isOpen,
   })
+  const teams = (teamsData?.teams || []) as Team[]
 
   // 既存データをフォームに反映
   useEffect(() => {
@@ -328,7 +328,7 @@ export function OutstandingPlayersModal({
                   <option value="">チームを選択...</option>
                   {teams?.map(team => (
                     <option key={team.id} value={team.id}>
-                      {team.name} {team.groupId ? `(${team.groupId}グループ)` : ''}
+                      {team.name} {team.groupId || (team as unknown as Record<string, unknown>).group_id ? `(${team.groupId || (team as unknown as Record<string, unknown>).group_id}グループ)` : ''}
                     </option>
                   ))}
                 </select>

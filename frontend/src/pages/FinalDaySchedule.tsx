@@ -99,8 +99,9 @@ export default function FinalDaySchedule() {
             ? teams.find(t => t.id === managerId)
             : null;
           // 混合会場フラグを取得
-          const isMixedUse = (venueData as any)?.isMixedUse ?? (venueData as any)?.is_mixed_use ?? false;
-          const finalsMatchCount = (venueData as any)?.finalsMatchCount ?? (venueData as any)?.finals_match_count ?? 1;
+          const venueExt = venueData as { isMixedUse?: boolean; is_mixed_use?: boolean; finalsMatchCount?: number; finals_match_count?: number } | undefined;
+          const isMixedUse = venueExt?.isMixedUse ?? venueExt?.is_mixed_use ?? false;
+          const finalsMatchCount = venueExt?.finalsMatchCount ?? venueExt?.finals_match_count ?? 1;
 
           trainingMap.set(venueId, {
             id: venueId,

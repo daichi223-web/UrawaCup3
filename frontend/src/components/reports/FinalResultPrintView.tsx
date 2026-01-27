@@ -60,27 +60,6 @@ interface Props {
 }
 
 const FinalResultPrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref) => {
-  // 勝者を判定
-  const getWinner = (match: Match): Team | null => {
-    if (!match.home_team || !match.away_team) return null
-
-    const homeTotal = (match.home_score_total ?? 0)
-    const awayTotal = (match.away_score_total ?? 0)
-
-    if (homeTotal > awayTotal) return match.home_team
-    if (awayTotal > homeTotal) return match.away_team
-
-    // PK戦の場合
-    if (match.has_penalty_shootout) {
-      const homePK = match.home_pk ?? 0
-      const awayPK = match.away_pk ?? 0
-      if (homePK > awayPK) return match.home_team
-      if (awayPK > homePK) return match.away_team
-    }
-
-    return null
-  }
-
   // スコア表示
   const formatScore = (match: Match) => {
     const home = match.home_score_total ?? 0

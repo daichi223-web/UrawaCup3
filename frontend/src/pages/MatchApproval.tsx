@@ -26,7 +26,7 @@ function MatchApproval() {
             // API側がStringEnumを受け取るか確認が必要だが、通常は文字列でOK
             const data = await matchApi.getMatches({ approval_status: 'pending' });
             setMatches(data.matches);
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
             setError('承認待ちデータの取得に失敗しました');
         } finally {
@@ -46,7 +46,7 @@ function MatchApproval() {
             toast.success('承認しました');
             // リストから削除
             setMatches(prev => prev.filter(m => m.id !== id));
-        } catch (err: any) {
+        } catch (err: unknown) {
             toast.error('承認に失敗しました');
             console.error(err);
         }
@@ -61,7 +61,7 @@ function MatchApproval() {
             setMatches(prev => prev.filter(m => m.id !== rejectingId));
             setRejectingId(null);
             setRejectionReason('');
-        } catch (err: any) {
+        } catch (err: unknown) {
             toast.error('却下に失敗しました');
             console.error(err);
         }

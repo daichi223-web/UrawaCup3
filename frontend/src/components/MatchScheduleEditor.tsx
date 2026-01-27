@@ -38,6 +38,9 @@ interface Team {
   name: string
   shortName?: string
   groupId?: string
+  teamType?: 'local' | 'invited'
+  region?: string | null
+  leagueId?: string | number | null
 }
 
 // 編集中の試合データ
@@ -192,7 +195,7 @@ function MatchRow({
           disabled={disabled}
           className={`
             w-full px-2 py-1 text-xs border rounded h-16
-            ${JSON.stringify(match.refereeTeamIds.sort()) !== JSON.stringify(match.originalRefereeTeamIds.sort())
+            ${JSON.stringify([...match.refereeTeamIds].sort((a, b) => a - b)) !== JSON.stringify([...match.originalRefereeTeamIds].sort((a, b) => a - b))
               ? 'border-blue-400 bg-blue-50'
               : 'border-gray-300'
             }
@@ -386,10 +389,10 @@ export default function MatchScheduleEditor({
         homeTeamId: m.homeTeamId!,
         awayTeamId: m.awayTeamId!,
         groupId: groupId,
-        refereeTeamIds: (m as any).refereeTeamIds || [],
+        refereeTeamIds: (m as { refereeTeamIds?: number[] }).refereeTeamIds || [],
         originalHomeTeamId: m.homeTeamId!,
         originalAwayTeamId: m.awayTeamId!,
-        originalRefereeTeamIds: (m as any).refereeTeamIds || [],
+        originalRefereeTeamIds: (m as { refereeTeamIds?: number[] }).refereeTeamIds || [],
         isModified: false,
       }))
   }, [matches, groupId])
@@ -430,7 +433,7 @@ export default function MatchScheduleEditor({
         homeTeamId: m.homeTeamId!,
         awayTeamId: m.awayTeamId!,
         groupId: groupId,
-        refereeTeamIds: (m as any).refereeTeamIds || [],
+        refereeTeamIds: (m as { refereeTeamIds?: number[] }).refereeTeamIds || [],
       }))
 
     const allMatchesForValidation = [...editedMatchesForValidation, ...otherDayMatches]
@@ -439,9 +442,9 @@ export default function MatchScheduleEditor({
       id: t.id,
       name: t.name,
       groupId: t.groupId || groupId,
-      teamType: (t as any).teamType,
-      region: (t as any).region,
-      leagueId: (t as any).leagueId,
+      teamType: t.teamType,
+      region: t.region ?? undefined,
+      leagueId: t.leagueId ?? undefined,
     }))
 
     console.log('[Validation] Matches:', allMatchesForValidation.length, 'Teams:', teamInfos.length)
@@ -472,7 +475,7 @@ export default function MatchScheduleEditor({
         const isModified =
           teamId !== m.originalHomeTeamId ||
           m.awayTeamId !== m.originalAwayTeamId ||
-          JSON.stringify(m.refereeTeamIds.sort()) !== JSON.stringify(m.originalRefereeTeamIds.sort())
+          JSON.stringify([...m.refereeTeamIds].sort((a, b) => a - b)) !== JSON.stringify([...m.originalRefereeTeamIds].sort((a, b) => a - b))
         return { ...m, homeTeamId: teamId, isModified }
       })
     )
@@ -486,7 +489,7 @@ export default function MatchScheduleEditor({
         const isModified =
           m.homeTeamId !== m.originalHomeTeamId ||
           teamId !== m.originalAwayTeamId ||
-          JSON.stringify(m.refereeTeamIds.sort()) !== JSON.stringify(m.originalRefereeTeamIds.sort())
+          JSON.stringify([...m.refereeTeamIds].sort((a, b) => a - b)) !== JSON.stringify([...m.originalRefereeTeamIds].sort((a, b) => a - b))
         return { ...m, awayTeamId: teamId, isModified }
       })
     )
@@ -500,7 +503,7 @@ export default function MatchScheduleEditor({
         const isModified =
           m.homeTeamId !== m.originalHomeTeamId ||
           m.awayTeamId !== m.originalAwayTeamId ||
-          JSON.stringify(teamIds.sort()) !== JSON.stringify(m.originalRefereeTeamIds.sort())
+          JSON.stringify([...teamIds].sort((a, b) => a - b)) !== JSON.stringify([...m.originalRefereeTeamIds].sort((a, b) => a - b))
         return { ...m, refereeTeamIds: teamIds, isModified }
       })
     )

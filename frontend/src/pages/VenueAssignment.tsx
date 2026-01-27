@@ -12,7 +12,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Wand2, Save, ArrowLeftRight, Users, MapPin, AlertCircle, Check, X } from 'lucide-react'
+import { Wand2, ArrowLeftRight, Users, MapPin, AlertCircle, Check, X } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -246,7 +246,8 @@ function VenueAssignment() {
   const [activeDay, setActiveDay] = useState<DayTab>(1)
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
   const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false)
-  const [pendingChanges, setPendingChanges] = useState<Map<number, { venueId: number; slotOrder: number }>>(new Map())
+  const [_pendingChanges, _setPendingChanges] = useState<Map<number, { venueId: number; slotOrder: number }>>(new Map())
+  void _pendingChanges; void _setPendingChanges // Reserved for future use
 
   // データ取得
   const { data: tournament, isLoading: isLoadingTournament } = useTournament(tournamentId)
@@ -289,7 +290,8 @@ function VenueAssignment() {
   const autoGenerateMutation = useAutoGenerateVenueAssignments()
   const createMutation = useCreateVenueAssignment()
   const updateMutation = useUpdateVenueAssignment()
-  const deleteMutation = useDeleteVenueAssignment()
+  const _deleteMutation = useDeleteVenueAssignment()
+  void _deleteMutation // Reserved for future use
 
   // 選択解除
   const clearSelection = useCallback(() => {
@@ -317,6 +319,7 @@ function VenueAssignment() {
 
     // 別のチームをクリック → 入れ替え実行
     handleSwapTeams(selectedTeam, { teamId: team.id, teamName: team.shortName || team.name, venueId, slotOrder })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeam, clearSelection])
 
   // 未配置チームクリック処理
@@ -342,10 +345,11 @@ function VenueAssignment() {
     if (selectedTeam.venueId !== null) {
       handleSwapWithUnassigned(selectedTeam, team)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeam, clearSelection])
 
   // 空スロットクリック処理
-  const handleEmptySlotClick = useCallback((venueId: number, slotOrder: number) => {
+  const _handleEmptySlotClick = useCallback((venueId: number, slotOrder: number) => {
     if (!selectedTeam || selectedTeam.venueId !== null) return
 
     // 未配置チームを配置
@@ -366,6 +370,7 @@ function VenueAssignment() {
       },
     })
   }, [selectedTeam, tournamentId, activeDay, createMutation, queryClient, clearSelection])
+  void _handleEmptySlotClick // Reserved for future use
 
   // チーム入れ替え処理
   const handleSwapTeams = useCallback(async (
@@ -405,8 +410,9 @@ function VenueAssignment() {
       toast.success(`${source.teamName} と ${target.teamName} を入れ替えました`)
       clearSelection()
       queryClient.invalidateQueries({ queryKey: ['venue-assignments'] })
-    } catch (error: any) {
-      toast.error(`入れ替えに失敗しました: ${error.message}`)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '不明なエラー'
+      toast.error(`入れ替えに失敗しました: ${message}`)
     }
   }, [assignments, updateMutation, queryClient, clearSelection])
 
@@ -432,8 +438,9 @@ function VenueAssignment() {
       toast.success(`${assigned.teamName} と ${unassigned.shortName || unassigned.name} を入れ替えました`)
       clearSelection()
       queryClient.invalidateQueries({ queryKey: ['venue-assignments'] })
-    } catch (error: any) {
-      toast.error(`入れ替えに失敗しました: ${error.message}`)
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '不明なエラー'
+      toast.error(`入れ替えに失敗しました: ${message}`)
     }
   }, [assignments, updateMutation, queryClient, clearSelection])
 

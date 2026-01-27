@@ -5,7 +5,7 @@
  * スタブ実装を提供してビルドエラーを防止します。
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 // ============================================
 // Service Worker登録フック（スタブ）

@@ -14,7 +14,7 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
  * カードヘッダーのプロパティ
  */
 interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
-  children: ReactNode
+  children?: ReactNode
   /** タイトル */
   title?: string
   /** 説明 */

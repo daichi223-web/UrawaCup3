@@ -7,6 +7,32 @@ import { teamsApi, matchesApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StarTable from '@/components/StarTable';
 
+// API レスポンス型
+interface TeamApiData {
+  id: number
+  name: string
+  short_name?: string
+  shortName?: string
+  group_id?: string
+  groupId?: string
+}
+
+interface MatchApiData {
+  id: number
+  home_team_id?: number
+  homeTeamId?: number
+  away_team_id?: number
+  awayTeamId?: number
+  home_score_total?: number
+  homeScoreTotal?: number
+  away_score_total?: number
+  awayScoreTotal?: number
+  group_id?: string
+  groupId?: string
+  stage?: string
+  status?: string
+}
+
 type MainTab = 'results' | 'standings';  // 成績表 or 順位表
 
 export default function PublicStandings() {
@@ -40,10 +66,10 @@ export default function PublicStandings() {
         retry: 2,
     });
 
-    const isOverallRanking = tournament?.qualification_rule === 'overall_ranking';
+    const isOverallRanking = (tournament as unknown as { qualification_rule?: string } | null)?.qualification_rule === 'overall_ranking';
 
     // 大会形式（グループ制か1リーグ制か）
-    const useGroupSystem = tournament?.use_group_system ?? true;
+    const useGroupSystem = (tournament as unknown as { use_group_system?: boolean } | null)?.use_group_system ?? true;
 
     // チーム一覧を取得（成績表用）
     const { data: teamsData } = useQuery({
@@ -53,8 +79,8 @@ export default function PublicStandings() {
         retry: 2,
     });
     const teams = useMemo(() => {
-        const rawTeams = teamsData?.teams || [];
-        return rawTeams.map((t: any) => ({
+        const rawTeams = (teamsData?.teams || []) as TeamApiData[];
+        return rawTeams.map((t) => ({
             ...t,
             shortName: t.short_name || t.shortName,
             groupId: t.group_id || t.groupId,
@@ -69,8 +95,8 @@ export default function PublicStandings() {
         retry: 2,
     });
     const matches = useMemo(() => {
-        const rawMatches = matchesData?.matches || [];
-        return rawMatches.map((m: any) => ({
+        const rawMatches = (matchesData?.matches || []) as MatchApiData[];
+        return rawMatches.map((m) => ({
             ...m,
             homeTeamId: m.home_team_id || m.homeTeamId,
             awayTeamId: m.away_team_id || m.awayTeamId,
@@ -92,7 +118,7 @@ export default function PublicStandings() {
     const calculatedOverallData = useMemo(() => {
         if (teams.length === 0 || matches.length === 0) return { map: new Map<number, number>(), entries: [] };
 
-        const completedMatches = matches.filter((m: any) => m.status === 'completed' && m.stage === 'preliminary');
+        const completedMatches = matches.filter((m) => m.status === 'completed' && m.stage === 'preliminary');
         if (completedMatches.length === 0) return { map: new Map<number, number>(), entries: [] };
 
         // チームごとの成績を集計
@@ -111,7 +137,7 @@ export default function PublicStandings() {
             lost: number;
         }>();
 
-        teams.forEach((t: any) => {
+        teams.forEach((t) => {
             statsMap.set(t.id, {
                 teamId: t.id,
                 teamName: t.name,
@@ -128,7 +154,7 @@ export default function PublicStandings() {
             });
         });
 
-        completedMatches.forEach((m: any) => {
+        completedMatches.forEach((m) => {
             const homeId = m.homeTeamId ?? m.home_team_id;
             const awayId = m.awayTeamId ?? m.away_team_id;
             const homeScore = m.homeScoreTotal ?? m.home_score_total ?? 0;
@@ -311,8 +337,8 @@ export default function PublicStandings() {
                     {teams.length > 0 && matches.length > 0 ? (
                         <div className="overflow-x-auto p-2">
                             <StarTable
-                                teams={teams}
-                                matches={matches}
+                                teams={teams as unknown as import('@/types').Team[]}
+                                matches={matches as unknown as import('@/types').MatchWithDetails[]}
                                 groupId="all"
                                 overallRankings={overallRankingsMap}
                                 showOverallRank={true}

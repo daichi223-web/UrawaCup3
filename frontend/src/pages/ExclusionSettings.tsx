@@ -36,6 +36,7 @@ function ExclusionSettings() {
 
     useEffect(() => {
         fetchExclusions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleToggleExclusion = async (group: GroupExclusions, team1: Team, team2: Team) => {
@@ -77,9 +78,10 @@ function ExclusionSettings() {
             }
             // 再取得して画面更新
             fetchExclusions();
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
-            toast.error(err.response?.data?.detail || '操作に失敗しました');
+            const errorObj = err as { response?: { data?: { detail?: string } } };
+            toast.error(errorObj.response?.data?.detail || '操作に失敗しました');
         }
     };
 
@@ -170,7 +172,7 @@ function ExclusionMatrix({ groupData, tournamentId, onToggle }: {
             try {
                 const { teams: allTeams } = await teamsApi.getAll(tournamentId);
                 // グループIDでフィルタリング
-                const filteredTeams = allTeams.filter((t: any) => t.group_id === groupData.groupId);
+                const filteredTeams = allTeams.filter((t: { group_id?: string }) => t.group_id === groupData.groupId);
                 setTeams(filteredTeams as Team[]);
             } catch (err) {
                 console.error('Failed to fetch teams:', err);

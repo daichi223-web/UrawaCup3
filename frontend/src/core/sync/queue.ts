@@ -10,9 +10,9 @@ import type { SyncQueueItem, SyncResult, ConflictData } from './types';
 
 // Deprecated httpClient stub
 const httpClient = {
-  post: async () => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
-  put: async () => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
-  delete: async () => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
+  post: async (_url: string, _data?: unknown) => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
+  put: async (_url: string, _data?: unknown) => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
+  delete: async (_url: string) => { throw new Error('[DEPRECATED] httpClient is not available. Use Supabase API.'); },
 };
 
 const MAX_RETRIES = 3;

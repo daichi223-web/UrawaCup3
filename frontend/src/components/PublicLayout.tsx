@@ -1,9 +1,10 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Trophy, Calendar, List, Award } from 'lucide-react';
+import { Trophy, Calendar, List, Award, type LucideIcon } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { tournamentsApi } from '@/lib/api';
+import type { Tournament } from '@shared/types';
 
 function PublicLayout() {
     const location = useLocation();
@@ -19,7 +20,7 @@ function PublicLayout() {
     // ストアに保存
     useEffect(() => {
         if (tournament && !currentTournament) {
-            setCurrentTournament(tournament);
+            setCurrentTournament(tournament as Tournament);
         }
     }, [tournament, currentTournament, setCurrentTournament]);
 
@@ -80,7 +81,7 @@ function PublicLayout() {
     );
 }
 
-function NavLink({ to, isActive, icon: Icon, label }: { to: string; isActive: boolean; icon: any; label: string }) {
+function NavLink({ to, isActive, icon: Icon, label }: { to: string; isActive: boolean; icon: LucideIcon; label: string }) {
     return (
         <Link to={to} className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${isActive ? 'text-red-600' : 'text-gray-400'}`}>
             <Icon className={`w-6 h-6 ${isActive ? 'fill-current' : ''}`} strokeWidth={isActive ? 2.5 : 2} />

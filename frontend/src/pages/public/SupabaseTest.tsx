@@ -6,19 +6,52 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+interface TournamentData {
+  id: number
+  name: string
+  short_name: string
+  year: number
+  start_date: string
+  end_date: string
+}
+
+interface GroupData {
+  id: string
+  name: string
+  tournament_id: number
+}
+
+interface TeamData {
+  id: number
+  name: string
+  group_id: string | null
+  tournament_id: number
+}
+
+interface StandingData {
+  group_id: string
+  rank: number
+  team_id: number
+  team?: { name: string }
+  won: number
+  lost: number
+  drawn: number
+  goal_difference: number
+}
+
 export default function SupabaseTest() {
-  const [tournament, setTournament] = useState<any>(null)
-  const [groups, setGroups] = useState<any[]>([])
-  const [teams, setTeams] = useState<any[]>([])
-  const [standings, setStandings] = useState<any[]>([])
+  const [tournament, setTournament] = useState<TournamentData | null>(null)
+  const [groups, setGroups] = useState<GroupData[]>([])
+  const [teams, setTeams] = useState<TeamData[]>([])
+  const [standings, setStandings] = useState<StandingData[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [debugInfo, setDebugInfo] = useState<any>({})
+  const [debugInfo, setDebugInfo] = useState<Record<string, string | boolean>>({})
 
   useEffect(() => {
     async function fetchData() {
       // デバッグ情報を収集
-      const debug: any = {
+      const debug: Record<string, string | boolean> = {
         supabaseUrl: import.meta.env.VITE_SUPABASE_URL || 'NOT SET',
         hasAnonKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
         anonKeyPrefix: import.meta.env.VITE_SUPABASE_ANON_KEY?.substring(0, 20) || 'NOT SET',
@@ -95,9 +128,9 @@ export default function SupabaseTest() {
         }
         setStandings(standingsData || [])
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Catch error:', err)
-        const errorMessage = err?.message || err?.toString() || JSON.stringify(err) || '不明なエラー'
+        const errorMessage = err instanceof Error ? err.message : String(err)
         setError(errorMessage)
       } finally {
         setLoading(false)

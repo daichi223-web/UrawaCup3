@@ -1,5 +1,5 @@
 # EditorConfig - https://editorconfig.org
-# UTF-8エンコーディングを強制し、文字化けを防止
+# Enforce UTF-8 encoding to prevent text corruption and mojibake.
 
 root = true
 
