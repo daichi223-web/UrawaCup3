@@ -418,7 +418,16 @@ export const finalDayApi = {
       throw new Error('試合の作成に失敗しました');
     }
 
-    // 9. 作成した試合を取得して返す
+    // 9. 研修試合（順位リーグ）も同時に生成
+    console.log('[Finals] 研修試合を同時生成中...');
+    try {
+      await finalDayApi.generateTrainingMatches(tournamentId);
+      console.log('[Finals] 研修試合の生成完了');
+    } catch (trainingError) {
+      console.error('[Finals] 研修試合の生成に失敗（決勝トーナメントは生成済み）:', trainingError);
+    }
+
+    // 10. 作成した全試合を取得して返す
     const { data: createdMatches, error: fetchError } = await supabase
       .from('matches')
       .select(`
