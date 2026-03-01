@@ -59,6 +59,9 @@ interface MatchQueryResult {
   result?: string | null;
   home_score_total?: number | null;
   away_score_total?: number | null;
+  has_penalty_shootout?: boolean;
+  home_pk?: number | null;
+  away_pk?: number | null;
   notes?: string;
 }
 
@@ -482,13 +485,38 @@ export const finalDayApi = {
     const losers: number[] = [];
 
     for (const match of semiFinals) {
-      if (match.result === 'home_win' && match.home_team_id && match.away_team_id) {
+      if (!match.home_team_id || !match.away_team_id) continue;
+
+      if (match.result === 'home_win') {
         winners.push(match.home_team_id);
         losers.push(match.away_team_id);
-      } else if (match.result === 'away_win' && match.home_team_id && match.away_team_id) {
+      } else if (match.result === 'away_win') {
         winners.push(match.away_team_id);
         losers.push(match.home_team_id);
+      } else if (match.result === 'draw' && match.has_penalty_shootout) {
+        // PK戦で決着
+        if ((match.home_pk ?? 0) > (match.away_pk ?? 0)) {
+          winners.push(match.home_team_id);
+          losers.push(match.away_team_id);
+        } else {
+          winners.push(match.away_team_id);
+          losers.push(match.home_team_id);
+        }
       }
+    }
+
+    if (winners.length < 2 || losers.length < 2) {
+      const incomplete = semiFinals.filter(
+        (m) => m.result === 'draw' && !m.has_penalty_shootout
+      );
+      if (incomplete.length > 0) {
+        throw new Error(
+          `準決勝${incomplete.length}試合が引き分けのままです。PK戦の結果を入力してください。`
+        );
+      }
+      throw new Error(
+        `準決勝の結果が不完全です（勝者: ${winners.length}/2, 敗者: ${losers.length}/2）`
+      );
     }
 
     // 決勝戦を更新

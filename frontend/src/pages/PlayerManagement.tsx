@@ -54,8 +54,6 @@ export default function PlayerManagement() {
     nameKana: '',
     grade: undefined,
     position: undefined,
-    height: undefined,
-    previousTeam: '',
     isCaptain: false,
     notes: '',
   });
@@ -83,8 +81,6 @@ export default function PlayerManagement() {
       nameKana: '',
       grade: undefined,
       position: undefined,
-      height: undefined,
-      previousTeam: '',
       isCaptain: false,
       notes: '',
     });
@@ -101,8 +97,6 @@ export default function PlayerManagement() {
       nameKana: player.nameKana || '',
       grade: player.grade || undefined,
       position: player.position || undefined,
-      height: player.height || undefined,
-      previousTeam: player.previousTeam || '',
       isCaptain: player.isCaptain,
       notes: player.notes || '',
     });
@@ -124,8 +118,6 @@ export default function PlayerManagement() {
           nameKana: form.nameKana,
           grade: form.grade,
           position: form.position,
-          height: form.height,
-          previousTeam: form.previousTeam,
           isCaptain: form.isCaptain,
           notes: form.notes,
         };
@@ -306,22 +298,18 @@ export default function PlayerManagement() {
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">フリガナ</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">学年</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ポジション</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">身長</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">前所属</th>
                 <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">C</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-gray-600">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {players.map((player) => (
-                <tr key={player.id} className={!player.isActive ? 'bg-gray-50 opacity-60' : ''}>
+                <tr key={player.id}>
                   <td className="px-4 py-3 text-sm">{player.number ?? '-'}</td>
                   <td className="px-4 py-3 text-sm font-medium">{player.name}</td>
                   <td className="px-4 py-3 text-sm text-gray-600">{player.nameKana || '-'}</td>
                   <td className="px-4 py-3 text-sm">{player.grade ? `${player.grade}年` : '-'}</td>
                   <td className="px-4 py-3 text-sm">{player.position || '-'}</td>
-                  <td className="px-4 py-3 text-sm">{player.height ? `${player.height}cm` : '-'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{player.previousTeam || '-'}</td>
                   <td className="px-4 py-3 text-center">
                     {player.isCaptain && <span className="text-yellow-500">★</span>}
                   </td>
@@ -390,7 +378,7 @@ export default function PlayerManagement() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">学年</label>
                   <select
@@ -417,27 +405,6 @@ export default function PlayerManagement() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">身長(cm)</label>
-                  <input
-                    type="number"
-                    min="100"
-                    max="220"
-                    className="form-input w-full"
-                    value={form.height ?? ''}
-                    onChange={(e) => setForm({ ...form, height: e.target.value ? Number(e.target.value) : undefined })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">前所属チーム</label>
-                <input
-                  type="text"
-                  className="form-input w-full"
-                  value={form.previousTeam}
-                  onChange={(e) => setForm({ ...form, previousTeam: e.target.value })}
-                />
               </div>
 
               <div>

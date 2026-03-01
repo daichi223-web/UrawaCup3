@@ -24,17 +24,6 @@ interface MatchData {
     venue: { id: number; name: string } | null;
 }
 
-// グループごとの色設定
-const _GROUP_COLORS: Record<string, { bg: string; border: string; header: string; headerText: string }> = {
-    A: { bg: 'bg-red-50', border: 'border-red-200', header: 'bg-red-100', headerText: 'text-red-800' },
-    B: { bg: 'bg-blue-50', border: 'border-blue-200', header: 'bg-blue-100', headerText: 'text-blue-800' },
-    C: { bg: 'bg-green-50', border: 'border-green-200', header: 'bg-green-100', headerText: 'text-green-800' },
-    D: { bg: 'bg-yellow-50', border: 'border-yellow-200', header: 'bg-yellow-100', headerText: 'text-yellow-800' },
-    finals: { bg: 'bg-purple-50', border: 'border-purple-200', header: 'bg-purple-100', headerText: 'text-purple-800' },
-    training: { bg: 'bg-gray-50', border: 'border-gray-200', header: 'bg-gray-100', headerText: 'text-gray-700' },
-}
-void _GROUP_COLORS
-
 export default function PublicMatchList() {
     const [matches, setMatches] = useState<MatchData[]>([]);
     const [selectedGroup, setSelectedGroup] = useState<string>('all');

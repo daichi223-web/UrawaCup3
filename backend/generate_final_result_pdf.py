@@ -19,45 +19,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, 
     Spacer, KeepTogether
 )
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-import os
-
-# 日本語フォント登録（Windows環境対応）
-def register_japanese_font():
-    """Windows環境で利用可能な日本語フォントを登録"""
-    # (font_name, font_path, subfontIndex) - subfontIndexはTTCファイル用
-    font_candidates = [
-        # Windows標準フォント（優先度順）
-        ('YuGothic', r'C:\Windows\Fonts\YuGothR.ttc', 0),
-        ('MSGothic', r'C:\Windows\Fonts\msgothic.ttc', 0),
-        ('Meiryo', r'C:\Windows\Fonts\meiryo.ttc', 0),
-        ('MSMincho', r'C:\Windows\Fonts\msmincho.ttc', 0),
-    ]
-
-    for font_name, font_path, subfont_index in font_candidates:
-        if os.path.exists(font_path):
-            try:
-                pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=subfont_index))
-                print(f"[PDF] Using font: {font_name} from {font_path}")
-                return font_name
-            except Exception as e:
-                print(f"[PDF] Font {font_name} failed: {e}")
-                continue
-
-    # CIDフォントにフォールバック（環境によっては動作しない可能性あり）
-    try:
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-        pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
-        print("[PDF] Using CID font: HeiseiKakuGo-W5")
-        return 'HeiseiKakuGo-W5'
-    except Exception as e:
-        print(f"[PDF] CID font failed: {e}")
-        pass
-
-    # 最後の手段: Helvetica（日本語表示不可）
-    print("[PDF] WARNING: No Japanese font available, using Helvetica")
-    return 'Helvetica'
+from pdf_utils import register_japanese_font
 
 FONT = register_japanese_font()
 

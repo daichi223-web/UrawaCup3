@@ -10,9 +10,7 @@ console.log('[Main] 3. App imported')
 import './index.css'
 console.log('[Main] 4. CSS imported')
 
-// PWA: 同期サービスを初期化
-import { initSyncService } from './lib/syncService'
-console.log('[Main] 5. syncService imported')
+console.log('[Main] 5. Initialization start')
 
 // ============================================
 // キャッシュクリーンアップ（起動時に実行）
@@ -60,9 +58,6 @@ async function cleanupOldCache() {
 
 // クリーンアップを実行
 cleanupOldCache()
-
-// 同期サービスを開始
-initSyncService()
 
 // React Query クライアント設定
 const queryClient = new QueryClient({

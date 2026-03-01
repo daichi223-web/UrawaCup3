@@ -1,6 +1,6 @@
 console.log('[App] 1. Starting App imports...')
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { AlertCircle } from 'lucide-react'
 console.log('[App] 2. React Router imported')
 import Layout from './components/Layout'
@@ -14,8 +14,7 @@ import { isSupabaseConfigured } from './lib/supabase'
 console.log('[App] 6. supabase imported')
 
 // PWAコンポーネント
-import { UpdatePrompt, InstallPrompt, ConflictResolver } from './components/pwa'
-import { useSyncState } from './hooks/usePWA'
+import { UpdatePrompt, InstallPrompt } from './components/pwa'
 console.log('[App] 7. PWA components imported')
 
 // ページコンポーネントを遅延読み込み
@@ -84,8 +83,6 @@ function ConfigErrorScreen() {
  */
 function App() {
   const { checkAuth } = useAuthStore()
-  const { conflictCount } = useSyncState()
-  const [showConflictResolver, setShowConflictResolver] = useState(false)
 
   // アプリ起動時に認証状態を確認（初回のみ）
   useEffect(() => {
@@ -94,13 +91,6 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // 競合がある場合は自動的にダイアログを表示
-  useEffect(() => {
-    if (conflictCount > 0) {
-      setShowConflictResolver(true)
-    }
-  }, [conflictCount])
 
   // 環境設定チェック
   if (!isSupabaseConfigured) {
@@ -278,13 +268,6 @@ function App() {
       {/* PWAコンポーネント */}
       <UpdatePrompt />
       <InstallPrompt />
-
-      {/* 競合解決ダイアログ */}
-      {showConflictResolver && (
-        <ConflictResolver
-          onResolve={() => setShowConflictResolver(false)}
-        />
-      )}
     </>
   )
 }

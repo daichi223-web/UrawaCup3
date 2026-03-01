@@ -1,6 +1,6 @@
 # 浦和カップ トーナメント管理システム - システム構成書
 
-**最終更新**: 2026-01-07
+**最終更新**: 2026-03-01
 
 ---
 
@@ -12,7 +12,8 @@
 ### 1.1 本番環境
 | 項目 | サービス | URL |
 |------|----------|-----|
-| フロントエンド | Vercel | https://urawa-cup2.vercel.app |
+| フロントエンド | Vercel | https://urawacup3.vercel.app |
+| バックエンド (PDF生成) | Render | render.yaml 参照 |
 | データベース | Supabase | https://ulpdvtxqtwtmpzcnkelz.supabase.co |
 | 認証 | Supabase Auth | 同上 |
 
@@ -21,54 +22,59 @@
 - **状態管理**: Zustand + TanStack Query
 - **データベース**: Supabase (PostgreSQL)
 - **認証**: Supabase Auth
-- **リアルタイム**: Supabase Realtime (WebSocket)
-- **ホスティング**: Vercel
+- **リアルタイム**: Supabase Realtime (postgres_changes)
+- **バックエンド**: FastAPI (PDF生成・スケジュール生成)
+- **ホスティング**: Vercel (フロントエンド) + Render (バックエンド)
 
 ---
 
 ## 2. ディレクトリ構造
 
-### 2.1 使用中のコード（Supabase版）
 ```
-D:\UrawaCup2\UrawaCup\new\src\
-├── frontend/                    # メインのフロントエンド
+UrawaCup3/
+├── frontend/                    # React フロントエンド
 │   ├── src/
 │   │   ├── App.tsx             # ルーティング定義
 │   │   ├── lib/
 │   │   │   ├── supabase.ts     # Supabase初期化
-│   │   │   ├── api.ts          # ★ 全APIコール（重要）
+│   │   │   ├── api.ts          # 全APIコール（standingsApi, realtimeApi等）
 │   │   │   └── database.types.ts
 │   │   ├── features/           # 機能別API
-│   │   │   ├── matches/api.ts  # ★ 試合API（順位表更新含む）
+│   │   │   ├── matches/api.ts  # 試合API（順位表更新含む）
+│   │   │   ├── final-day/api.ts # 最終日ロジック
+│   │   │   ├── players/api.ts  # 選手API
 │   │   │   ├── standings/api.ts
 │   │   │   └── ...
 │   │   ├── pages/              # ページコンポーネント
 │   │   │   ├── MatchResult.tsx # 試合結果入力
 │   │   │   ├── Standings.tsx   # 順位表（管理用）
+│   │   │   ├── MatchSchedule/  # 日程管理
 │   │   │   └── public/         # 公開ページ
-│   │   │       ├── PublicStandings.tsx  # ★ 公開順位表
-│   │   │       └── ...
 │   │   ├── stores/             # Zustand状態管理
-│   │   │   └── authStore.ts    # ★ 認証状態
+│   │   │   └── authStore.ts    # 認証状態
 │   │   └── hooks/
-│   │       └── useRealtimeUpdates.ts  # リアルタイム更新
-│   ├── .env                    # 環境変数（Supabase設定）
+│   │       └── useRealtimeUpdates.ts  # Supabase Realtime → React Query
+│   ├── .env
 │   └── .env.production
-└── backend/                    # FastAPI（現在未使用）
+├── backend/                    # FastAPI バックエンド
+│   ├── server.py               # メインサーバー
+│   ├── pdf_utils.py            # PDF日本語フォント共通
+│   ├── generate_standings_pdf.py
+│   ├── generate_daily_report_pdf.py
+│   ├── generate_final_result_pdf.py
+│   ├── api/                    # APIエンドポイント
+│   │   ├── scheduling/         # スケジュール生成
+│   │   ├── standings/          # 順位表PDF
+│   │   ├── reports/            # レポートPDF
+│   │   └── matches/            # 試合API
+│   ├── Dockerfile
+│   └── requirements.txt
+├── supabase/
+│   ├── schema.sql              # テーブル定義・RLS
+│   └── seed.sql                # サンプルデータ
+├── docs/                       # ドキュメント
+└── render.yaml                 # Render デプロイ設定
 ```
-
-### 2.2 Supabaseスキーマ
-```
-D:\UrawaCup2\UrawaCup\new\supabase\
-├── schema.sql                  # テーブル定義・RLS
-└── seed.sql                    # サンプルデータ
-```
-
-### 2.3 アーカイブ済み（未使用）
-```
-D:\UrawaCup2\impl-repo_archived_20260107\   # FastAPI版（旧実装・2026-01-07アーカイブ）
-```
-※ 削除しても問題なし
 
 ---
 
@@ -140,7 +146,7 @@ result         -- 'home_win' | 'away_win' | 'draw'（自動計算）
     │ 5. standingsテーブルを更新           │
     └───────────────────────────────────────┘
         ↓
-[PublicStandings.tsx] 30秒ごとに自動更新
+[Supabase Realtime] postgres_changes → useRealtimeUpdates → React Query invalidation
 ```
 
 ### 4.2 認証フロー
@@ -167,16 +173,19 @@ admin / venue_staff / viewer
 ### 5.1 API関連（最重要）
 | ファイル | 役割 |
 |----------|------|
-| `lib/api.ts` | 全Supabase APIコール（standingsApi.recalculate含む） |
+| `lib/api.ts` | 全Supabase APIコール（standingsApi.recalculate, realtimeApi含む） |
 | `features/matches/api.ts` | 試合API（スコア入力→順位表更新をトリガー） |
-| `features/standings/api.ts` | 順位表API（ラッパー） |
+| `features/final-day/api.ts` | 最終日ロジック（決勝トーナメント・研修試合生成） |
+| `features/players/api.ts` | 選手API（CRUD, Excel/CSVインポート） |
 
 ### 5.2 ページ
 | ファイル | 役割 |
 |----------|------|
 | `pages/MatchResult.tsx` | 試合結果入力（管理用） |
 | `pages/Standings.tsx` | 順位表（管理用） |
-| `pages/public/PublicStandings.tsx` | 順位表（公開用・30秒自動更新） |
+| `pages/MatchSchedule/` | 日程管理（スケジュール生成含む） |
+| `pages/PlayerManagement.tsx` | 選手管理 |
+| `pages/public/PublicStandings.tsx` | 順位表（公開用） |
 | `pages/public/PublicMatchList.tsx` | 試合一覧（公開用） |
 
 ### 5.3 状態管理
@@ -194,7 +203,7 @@ admin / venue_staff / viewer
 VITE_SUPABASE_URL=https://ulpdvtxqtwtmpzcnkelz.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGci...
 VITE_APP_NAME=浦和カップ トーナメント管理システム
-VITE_ENABLE_DEBUG_MODE=true
+VITE_CORE_API_URL=https://xxx.onrender.com  # PDF生成用バックエンド
 ```
 
 ### 6.2 Vercel環境変数
@@ -206,14 +215,17 @@ VITE_ENABLE_DEBUG_MODE=true
 
 ### 7.1 Vercelへのデプロイ
 ```bash
-cd D:\UrawaCup2\UrawaCup3\frontend
+cd frontend
 git add -A
 git commit -m "変更内容"
 git push origin main
 ```
 → Vercelが自動でビルド・デプロイ
 
-### 7.2 Supabaseスキーマ更新
+### 7.2 Render（バックエンド）
+`render.yaml` に基づき自動デプロイ
+
+### 7.3 Supabaseスキーマ更新
 1. Supabase Dashboard → SQL Editor
 2. `supabase/schema.sql` の内容を実行
 
@@ -245,17 +257,8 @@ git push origin main
 
 ---
 
-## 9. 今後の課題
-
-1. ~~**FastAPIバックエンド削除**~~: 2026-01-07 アーカイブ済み（`impl-repo_archived_20260107`）
-2. **エラーハンドリング統一**: 各ページでのエラー表示を統一
-3. **テスト拡充**: E2Eテスト（Playwright）のカバレッジ向上
-4. **型安全性向上**: `database.types.ts` をSupabase CLIで自動生成
-
----
-
-## 10. 連絡先・参考リンク
+## 9. 連絡先・参考リンク
 
 - **Supabase Dashboard**: https://supabase.com/dashboard/project/ulpdvtxqtwtmpzcnkelz
 - **Vercel Dashboard**: https://vercel.com/
-- **本番URL**: https://urawa-cup2.vercel.app
+- **本番URL**: https://urawacup3.vercel.app

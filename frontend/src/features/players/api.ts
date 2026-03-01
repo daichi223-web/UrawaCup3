@@ -47,10 +47,10 @@ export const playerApi = {
       number: data.number ?? null,
       name: data.name,
       position: data.position ?? null,
-      name_kana: null,
-      grade: null,
-      is_captain: false,
-      notes: null,
+      name_kana: data.nameKana || null,
+      grade: data.grade ?? null,
+      is_captain: data.isCaptain ?? false,
+      notes: data.notes || null,
     });
     return player as Player;
   },
@@ -61,6 +61,10 @@ export const playerApi = {
     if (data.number !== undefined) updateData.number = data.number;
     if (data.name !== undefined) updateData.name = data.name;
     if (data.position !== undefined) updateData.position = data.position;
+    if (data.nameKana !== undefined) updateData.name_kana = data.nameKana;
+    if (data.grade !== undefined) updateData.grade = data.grade;
+    if (data.isCaptain !== undefined) updateData.is_captain = data.isCaptain;
+    if (data.notes !== undefined) updateData.notes = data.notes;
 
     const { data: player, error } = await supabase
       .from('players')

@@ -344,25 +344,6 @@ export const matchApi = {
     }
   },
 
-  // 日程自動生成（予選リーグ）- Supabase Edge Functionが必要
-  generateSchedule: async (_data: { tournamentId: number; groupId?: string }): Promise<{ created: number }> => {
-    // 今後実装: Supabase Edge Functionで処理
-    console.warn('generateSchedule: Supabase Edge Function not implemented yet');
-    return { created: 0 };
-  },
-
-  // 研修試合生成
-  generateTrainingMatches: async (_tournamentId: number): Promise<{ created: number }> => {
-    console.warn('generateTrainingMatches: Supabase Edge Function not implemented yet');
-    return { created: 0 };
-  },
-
-  // 決勝トーナメント生成
-  generateFinals: async (_tournamentId: number): Promise<{ created: number }> => {
-    console.warn('generateFinals: Supabase Edge Function not implemented yet');
-    return { created: 0 };
-  },
-
   // 承認
   approve: async (id: number): Promise<Match> => {
     const { data: { user } } = await supabase.auth.getUser();

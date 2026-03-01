@@ -1,14 +1,12 @@
 /**
- * 浦和カップ トーナメント管理システム - PWAフック（無効化版）
- *
- * PWA機能は一時的に無効化されています。
- * スタブ実装を提供してビルドエラーを防止します。
+ * 浦和カップ トーナメント管理システム - PWAフック
  */
 
 import { useState, useEffect } from 'react';
+import { useRegisterSW } from 'virtual:pwa-register/react';
 
 // ============================================
-// Service Worker登録フック（スタブ）
+// Service Worker登録フック
 // ============================================
 
 interface UseServiceWorkerResult {
@@ -19,14 +17,32 @@ interface UseServiceWorkerResult {
 }
 
 /**
- * Service Workerの登録と更新を管理するフック（無効化版）
+ * Service Workerの登録と更新を管理するフック
  */
 export function useServiceWorker(): UseServiceWorkerResult {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    offlineReady: [offlineReady],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      if (r) {
+        // 1時間ごとに更新チェック
+        setInterval(() => r.update(), 60 * 60 * 1000);
+      }
+    },
+    onRegisterError(error) {
+      console.error('[SW] Registration error:', error);
+    },
+  });
+
   return {
-    needRefresh: false,
-    offlineReady: false,
-    updateServiceWorker: async () => {},
-    skipWaiting: () => {},
+    needRefresh,
+    offlineReady,
+    updateServiceWorker: async () => {
+      await updateServiceWorker(true);
+    },
+    skipWaiting: () => setNeedRefresh(false),
   };
 }
 
@@ -59,8 +75,13 @@ export function useOnlineStatus(): boolean {
 }
 
 // ============================================
-// インストールプロンプトフック（スタブ）
+// インストールプロンプトフック
 // ============================================
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 interface UseInstallPromptResult {
   canInstall: boolean;
@@ -69,13 +90,46 @@ interface UseInstallPromptResult {
 }
 
 /**
- * PWAインストールプロンプトを管理するフック（無効化版）
+ * PWAインストールプロンプトを管理するフック
  */
 export function useInstallPrompt(): UseInstallPromptResult {
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    const installedHandler = () => setIsInstalled(true);
+
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', installedHandler);
+
+    // standalone モードなら既にインストール済み
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', installedHandler);
+    };
+  }, []);
+
+  const promptInstall = async (): Promise<boolean> => {
+    if (!deferredPrompt) return false;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+    return outcome === 'accepted';
+  };
+
   return {
-    canInstall: false,
-    isInstalled: false,
-    promptInstall: async () => false,
+    canInstall: !!deferredPrompt,
+    isInstalled,
+    promptInstall,
   };
 }
 
@@ -96,7 +150,7 @@ interface UseSyncStateResult extends SyncState {
 }
 
 /**
- * オフライン同期状態を監視するフック（無効化版）
+ * オフライン同期状態フック（スタブ — オフライン同期は削除済み）
  */
 export function useSyncState(): UseSyncStateResult {
   return {

@@ -22,7 +22,8 @@ applyPlugin(jsPDF);
 import type { ReportGenerateInput, ReportJob, ReportRecipient, SenderSettings, SenderSettingsUpdate } from './types';
 
 // バックエンドAPI URL（PDF生成・日程生成サーバー）
-const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || '';
+const IS_DEV = import.meta.env.DEV;
 
 // jsPDF autotable型定義
 interface AutoTableOptions {
@@ -242,9 +243,9 @@ export const reportApi = {
     const matches = matchesData as Match[] | null;
 
     // デバッグ: 試合データと会場情報を確認
-    console.log('[downloadPdf] Matches count:', matches?.length || 0);
+    IS_DEV && console.log('[downloadPdf] Matches count:', matches?.length || 0);
     if (matches && matches.length > 0) {
-      console.log('[downloadPdf] First match venue data:', {
+      IS_DEV && console.log('[downloadPdf] First match venue data:', {
         venue_id: matches[0].venue_id,
         venue: matches[0].venue,
         raw: JSON.stringify(matches[0]).substring(0, 500)
@@ -314,13 +315,17 @@ export const reportApi = {
     }
 
     // デバッグ: 会場別グループ化結果
-    console.log('[downloadPdf] Venues found:', Object.keys(matchesByVenue));
-    console.log('[downloadPdf] Matches per venue:', Object.fromEntries(
+    IS_DEV && console.log('[downloadPdf] Venues found:', Object.keys(matchesByVenue));
+    IS_DEV && console.log('[downloadPdf] Matches per venue:', Object.fromEntries(
       Object.entries(matchesByVenue).map(([k, v]) => [k, v.length])
     ));
 
-    // バックエンドAPIを呼び出し
+    // バックエンドAPIを呼び出し（未設定時はフォールバックへ）
+    if (!CORE_API_URL) {
+      console.warn('[downloadPdf] VITE_CORE_API_URL not set, using local fallback');
+    }
     try {
+      if (!CORE_API_URL) throw new Error('CORE_API_URL not configured');
       const response = await fetch(`${CORE_API_URL}/daily-report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -337,7 +342,7 @@ export const reportApi = {
       });
 
       if (response.ok) {
-        console.log('[downloadPdf] Backend API success');
+        IS_DEV && console.log('[downloadPdf] Backend API success');
         return { blob: await response.blob(), usedFallback: false };
       }
       console.warn('[downloadPdf] Backend API failed (status:', response.status, '), falling back to local generation');
@@ -439,7 +444,7 @@ export const reportApi = {
       doc.text('該当する試合データがありません', 14, 35);
     }
 
-    console.log('[downloadPdf] Using fallback PDF generation');
+    IS_DEV && console.log('[downloadPdf] Using fallback PDF generation');
     return { blob: doc.output('blob'), usedFallback: true };
   },
 
@@ -632,8 +637,12 @@ export const reportApi = {
       groups,
     };
 
-    // バックエンドAPI（日本語フォント対応）を試行
+    // バックエンドAPI（日本語フォント対応）を試行（未設定時はフォールバックへ）
+    if (!CORE_API_URL) {
+      console.warn('[downloadGroupStandings] VITE_CORE_API_URL not set, using local fallback');
+    }
     try {
+      if (!CORE_API_URL) throw new Error('CORE_API_URL not configured');
       const response = await fetch(`${CORE_API_URL}/standings-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -641,7 +650,7 @@ export const reportApi = {
       });
 
       if (response.ok) {
-        console.log('[downloadGroupStandings] Backend API success');
+        IS_DEV && console.log('[downloadGroupStandings] Backend API success');
         return { blob: await response.blob(), usedFallback: false };
       }
       console.warn('[downloadGroupStandings] Backend API failed:', response.status);
@@ -986,7 +995,7 @@ export const reportApi = {
 
   // 最終日結果データを取得（印刷ビュー用）
   getFinalResultData: async (tournamentId: number): Promise<FinalResultData> => {
-    console.log('getFinalResultData: Starting for tournament', tournamentId);
+    IS_DEV && console.log('getFinalResultData: Starting for tournament', tournamentId);
 
     // 大会情報を取得
     const { data: tournamentData, error: tournamentError } = await supabase
@@ -1000,7 +1009,7 @@ export const reportApi = {
     if (tournamentError) {
       console.error('Failed to fetch tournament:', tournamentError);
     }
-    console.log('Tournament:', tournament);
+    IS_DEV && console.log('Tournament:', tournament);
 
     // 決勝トーナメントの試合を取得
     const { data: tournamentMatches, error: matchError } = await supabase
@@ -1019,7 +1028,7 @@ export const reportApi = {
     if (matchError) {
       console.error('Failed to fetch tournament matches:', matchError);
     }
-    console.log('Tournament matches:', tournamentMatches?.length || 0);
+    IS_DEV && console.log('Tournament matches:', tournamentMatches?.length || 0);
 
     // 研修試合を取得
     const { data: trainingMatches, error: trainingError } = await supabase
@@ -1039,7 +1048,7 @@ export const reportApi = {
     if (trainingError) {
       console.error('Failed to fetch training matches:', trainingError);
     }
-    console.log('Training matches:', trainingMatches?.length || 0);
+    IS_DEV && console.log('Training matches:', trainingMatches?.length || 0);
 
     // 順位を計算
     const ranking: (Team | null)[] = [null, null, null, null];
@@ -1047,8 +1056,8 @@ export const reportApi = {
     const finalMatch = typedTournamentMatches.find((m) => m.stage === 'final');
     const thirdMatch = typedTournamentMatches.find((m) => m.stage === 'third_place');
 
-    console.log('Final match:', finalMatch?.id, 'status:', finalMatch?.status);
-    console.log('Third match:', thirdMatch?.id, 'status:', thirdMatch?.status);
+    IS_DEV && console.log('Final match:', finalMatch?.id, 'status:', finalMatch?.status);
+    IS_DEV && console.log('Third match:', thirdMatch?.id, 'status:', thirdMatch?.status);
 
     if (finalMatch && finalMatch.status === 'completed') {
       const homeTotal = finalMatch.home_score_total ?? 0;
@@ -1107,7 +1116,7 @@ export const reportApi = {
       ranking[3] = fourth;
     }
 
-    console.log('Ranking:', ranking.map(r => r?.name || 'null'));
+    IS_DEV && console.log('Ranking:', ranking.map(r => r?.name || 'null'));
 
     // 優秀選手データを取得
     const { data: outstandingPlayersData, error: playersError } = await supabase
@@ -1123,7 +1132,7 @@ export const reportApi = {
     if (playersError) {
       console.error('Failed to fetch outstanding players:', playersError);
     }
-    console.log('Outstanding players:', outstandingPlayersData?.length || 0);
+    IS_DEV && console.log('Outstanding players:', outstandingPlayersData?.length || 0);
 
     const outstandingPlayers: OutstandingPlayerData[] = (outstandingPlayersData || []).map((p: OutstandingPlayerApiResponse) => ({
       id: p.id,
@@ -1141,7 +1150,7 @@ export const reportApi = {
       team: p.team_name || p.team?.short_name || p.team?.name || '',
     }));
 
-    console.log('Players for display:', players.length);
+    IS_DEV && console.log('Players for display:', players.length);
 
     return {
       tournamentName: tournament?.name || '浦和カップ',
@@ -1156,7 +1165,7 @@ export const reportApi = {
 
   // 最終日組み合わせデータを取得（印刷ビュー用）
   getFinalScheduleData: async (tournamentId: number, date?: string): Promise<FinalScheduleData> => {
-    console.log('getFinalScheduleData: Starting for tournament', tournamentId);
+    IS_DEV && console.log('getFinalScheduleData: Starting for tournament', tournamentId);
 
     // 大会情報を取得
     const { data: tournamentData, error: tournamentError } = await supabase
@@ -1170,7 +1179,7 @@ export const reportApi = {
     if (tournamentError) {
       console.error('Failed to fetch tournament:', tournamentError);
     }
-    console.log('Tournament:', tournament);
+    IS_DEV && console.log('Tournament:', tournament);
 
     const useGroupSystem = tournament?.use_group_system !== false;
 
@@ -1190,7 +1199,7 @@ export const reportApi = {
       if (groupsError) {
         console.error('Failed to fetch groups:', groupsError);
       }
-      console.log('Groups:', groups?.length || 0, groups);
+      IS_DEV && console.log('Groups:', groups?.length || 0, groups);
 
       for (const group of groups || []) {
         const { data: groupStandings, error: standingsError } = await supabase
@@ -1203,7 +1212,7 @@ export const reportApi = {
         if (standingsError) {
           console.error(`Failed to fetch standings for group ${group.id}:`, standingsError);
         }
-        console.log(`Group ${group.id} standings:`, groupStandings?.length || 0);
+        IS_DEV && console.log(`Group ${group.id} standings:`, groupStandings?.length || 0);
 
         standings.push({
           groupId: group.id,
@@ -1221,7 +1230,7 @@ export const reportApi = {
       if (standingsError) {
         console.error('Failed to fetch standings:', standingsError);
       }
-      console.log('Single league standings:', allStandings?.length || 0);
+      IS_DEV && console.log('Single league standings:', allStandings?.length || 0);
 
       standings.push({
         groupId: 'all',
@@ -1286,7 +1295,7 @@ export const reportApi = {
     if (groupMatchError) {
       console.error('Failed to fetch group matches:', groupMatchError);
     }
-    console.log('Group matches:', groupMatches?.length || 0);
+    IS_DEV && console.log('Group matches:', groupMatches?.length || 0);
 
     // 優秀選手データを取得
     const { data: outstandingPlayersData, error: playersError } = await supabase

@@ -1,246 +1,143 @@
 /**
  * リアルタイム更新フック
  *
- * WebSocketとReact Queryを連携し、サーバーからの更新通知を
- * 受信したときに自動的にデータを再取得する
+ * Supabase Realtime の postgres_changes を購読し、
+ * 変更を検知したら React Query キャッシュを invalidate する
  */
 
-import { useCallback, useEffect } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import {
-  useWebSocket,
-  WebSocketMessage,
-  MatchUpdatePayload,
-  StandingUpdatePayload,
-  ApprovalUpdatePayload,
-  ConnectionState,
-} from './useWebSocket';
+import { realtimeApi } from '@/lib/api';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
-// トースト通知の設定
 const TOAST_DURATION = 4000;
 
-// 通知メッセージの生成
-function getMatchUpdateMessage(payload: MatchUpdatePayload): string {
-  switch (payload.action) {
-    case 'score_updated':
-      return `試合結果が更新されました (試合ID: ${payload.match_id})`;
-    case 'approved':
-      return `試合結果が承認されました (試合ID: ${payload.match_id})`;
-    case 'rejected':
-      return `試合結果が却下されました (試合ID: ${payload.match_id})`;
-    case 'created':
-      return `新しい試合が作成されました`;
-    case 'deleted':
-      return `試合が削除されました`;
-    default:
-      return `試合情報が更新されました`;
-  }
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+
+// モジュールスコープで接続状態を共有（useConnectionStatus から参照）
+let sharedConnectionState: ConnectionState = 'disconnected';
+const stateListeners = new Set<() => void>();
+function setSharedState(state: ConnectionState) {
+  sharedConnectionState = state;
+  stateListeners.forEach((fn) => fn());
 }
 
-function getStandingUpdateMessage(payload: StandingUpdatePayload): string {
-  return `順位表が更新されました (グループ${payload.group_id})`;
-}
-
-function getApprovalUpdateMessage(payload: ApprovalUpdatePayload): string {
-  switch (payload.approval_status) {
-    case 'approved':
-      return `試合結果が${payload.approved_by_name || '管理者'}により承認されました`;
-    case 'rejected':
-      return `試合結果が却下されました。修正が必要です`;
-    case 'pending':
-      return `試合結果が承認待ちになりました`;
-    default:
-      return `承認状態が更新されました`;
-  }
-}
-
-// フックのオプション
 export interface UseRealtimeUpdatesOptions {
-  // 通知を表示するかどうか
   showNotifications?: boolean;
-  // 特定の大会のみを監視
   tournamentId?: number;
-  // 特定のグループのみを監視
   groupId?: string;
 }
 
-// フックの戻り値
 export interface UseRealtimeUpdatesReturn {
   connectionState: ConnectionState;
-  connectionCount: number;
-  reconnect: () => void;
 }
 
 /**
  * リアルタイム更新フック
  *
  * @param options オプション設定
- * @returns 接続状態と制御関数
+ * @returns 接続状態
  */
 export function useRealtimeUpdates(
   options: UseRealtimeUpdatesOptions = {}
 ): UseRealtimeUpdatesReturn {
-  const { showNotifications = true, tournamentId, groupId } = options;
+  const { showNotifications = true, tournamentId } = options;
   const queryClient = useQueryClient();
+  const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
+  const channelsRef = useRef<RealtimeChannel[]>([]);
 
-  // WebSocketメッセージ受信時の処理
-  const handleMessage = useCallback(
-    (message: WebSocketMessage) => {
-      switch (message.type) {
-        case 'CONNECTED':
-          console.log('リアルタイム接続確立:', message.payload.message);
-          break;
-
-        case 'MATCH_UPDATE': {
-          const matchPayload = message.payload as MatchUpdatePayload;
-
-          // フィルタリング（指定された場合）
-          if (tournamentId && matchPayload.tournament_id !== tournamentId) {
-            return;
-          }
-
-          // React Queryのキャッシュを無効化（特定のクエリのみ、即時再取得しない）
-          queryClient.invalidateQueries({
-            queryKey: ['matches', matchPayload.tournament_id],
-            refetchType: 'none', // staleにするだけで即座に再取得しない
-          });
-          queryClient.invalidateQueries({
-            queryKey: ['match', matchPayload.match_id],
-            exact: true,
-          });
-
-          // 順位表も更新（予選リーグの場合）
-          if (matchPayload.group_id) {
-            queryClient.invalidateQueries({
-              queryKey: ['standings', matchPayload.tournament_id],
-              exact: true,
-              refetchType: 'active', // アクティブなクエリのみ再取得
-            });
-          }
-
-          // 通知を表示
-          if (showNotifications) {
-            toast.success(getMatchUpdateMessage(matchPayload), {
-              duration: TOAST_DURATION,
-              icon: '⚽',
-            });
-          }
-          break;
-        }
-
-        case 'STANDING_UPDATE': {
-          const standingPayload = message.payload as StandingUpdatePayload;
-
-          // フィルタリング（指定された場合）
-          if (tournamentId && standingPayload.tournament_id !== tournamentId) {
-            return;
-          }
-          if (groupId && standingPayload.group_id !== groupId) {
-            return;
-          }
-
-          // React Queryのキャッシュを無効化（アクティブなクエリのみ）
-          queryClient.invalidateQueries({
-            queryKey: ['standings', standingPayload.tournament_id],
-            exact: true,
-            refetchType: 'active',
-          });
-
-          // 通知を表示
-          if (showNotifications) {
-            toast.success(getStandingUpdateMessage(standingPayload), {
-              duration: TOAST_DURATION,
-              icon: '📊',
-            });
-          }
-          break;
-        }
-
-        case 'APPROVAL_UPDATE': {
-          const approvalPayload = message.payload as ApprovalUpdatePayload;
-
-          // フィルタリング（指定された場合）
-          if (tournamentId && approvalPayload.tournament_id !== tournamentId) {
-            return;
-          }
-
-          // React Queryのキャッシュを無効化（特定のクエリのみ）
-          queryClient.invalidateQueries({
-            queryKey: ['match', approvalPayload.match_id],
-            exact: true,
-          });
-          queryClient.invalidateQueries({
-            queryKey: ['pending-matches'],
-            exact: true,
-            refetchType: 'active',
-          });
-
-          // 通知を表示
-          if (showNotifications) {
-            const toastFn =
-              approvalPayload.approval_status === 'rejected' ? toast.error : toast.success;
-            toastFn(getApprovalUpdateMessage(approvalPayload), {
-              duration: TOAST_DURATION,
-              icon: approvalPayload.approval_status === 'approved' ? '✅' : '⚠️',
-            });
-          }
-          break;
-        }
-
-        case 'MATCH_LOCKED': {
-          // 試合のロック通知（オプション）
-          console.log('試合がロックされました:', message.payload);
-          queryClient.invalidateQueries({ queryKey: ['match', message.payload.match_id] });
-          break;
-        }
-
-        case 'MATCH_UNLOCKED': {
-          // 試合のロック解除通知（オプション）
-          console.log('試合のロックが解除されました:', message.payload);
-          queryClient.invalidateQueries({ queryKey: ['match', message.payload.match_id] });
-          break;
-        }
-
-        default:
-          console.log('未知のWebSocketメッセージ:', message);
-      }
-    },
-    [queryClient, showNotifications, tournamentId, groupId]
-  );
-
-  // WebSocket接続
-  const { connectionState, connectionCount, reconnect } = useWebSocket(handleMessage);
-
-  // 接続状態の変化をログ
   useEffect(() => {
-    if (connectionState === 'connected') {
-      console.log(`リアルタイム更新: 接続中 (${connectionCount}クライアント接続)`);
-    } else if (connectionState === 'disconnected') {
-      console.log('リアルタイム更新: 切断');
-    } else if (connectionState === 'reconnecting') {
-      console.log('リアルタイム更新: 再接続中...');
-    }
-  }, [connectionState, connectionCount]);
+    if (!tournamentId) return;
 
-  return {
-    connectionState,
-    connectionCount,
-    reconnect,
-  };
+    setConnectionState('connecting');
+    setSharedState('connecting');
+    const channels: RealtimeChannel[] = [];
+
+    // matches テーブルの変更を購読
+    const matchChannel = realtimeApi.subscribeToMatches(tournamentId, (payload) => {
+      queryClient.invalidateQueries({
+        queryKey: ['matches', tournamentId],
+        refetchType: 'none',
+      });
+
+      const newRecord = payload.new as Record<string, unknown> | undefined;
+      if (newRecord?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['match', newRecord.id],
+          exact: true,
+        });
+      }
+
+      // 順位表も invalidate
+      queryClient.invalidateQueries({
+        queryKey: ['standings', tournamentId],
+        refetchType: 'active',
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['pending-matches'],
+        refetchType: 'active',
+      });
+
+      if (showNotifications) {
+        toast.success('試合情報が更新されました', {
+          duration: TOAST_DURATION,
+          icon: '⚽',
+        });
+      }
+    });
+    channels.push(matchChannel);
+
+    // standings テーブルの変更を購読
+    const standingsChannel = realtimeApi.subscribeToStandings(tournamentId, () => {
+      queryClient.invalidateQueries({
+        queryKey: ['standings', tournamentId],
+        refetchType: 'active',
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['public-standings'],
+      });
+
+      if (showNotifications) {
+        toast.success('順位表が更新されました', {
+          duration: TOAST_DURATION,
+          icon: '📊',
+        });
+      }
+    });
+    channels.push(standingsChannel);
+
+    channelsRef.current = channels;
+    setConnectionState('connected');
+    setSharedState('connected');
+
+    return () => {
+      for (const channel of channels) {
+        realtimeApi.unsubscribe(channel);
+      }
+      channelsRef.current = [];
+      setConnectionState('disconnected');
+      setSharedState('disconnected');
+    };
+  }, [tournamentId, queryClient, showNotifications]);
+
+  return { connectionState };
 }
 
 /**
- * 接続状態インジケーターコンポーネント用のフック
+ * 接続状態インジケーター用フック
+ * useRealtimeUpdates が管理する実際の接続状態を反映する
  */
 export function useConnectionStatus() {
-  const { connectionState, connectionCount, reconnect } = useWebSocket();
-
+  const state = useSyncExternalStore(
+    (cb) => { stateListeners.add(cb); return () => stateListeners.delete(cb); },
+    () => sharedConnectionState,
+  );
   return {
-    isConnected: connectionState === 'connected',
-    isConnecting: connectionState === 'connecting',
-    isReconnecting: connectionState === 'reconnecting',
-    connectionCount,
-    reconnect,
+    isConnected: state === 'connected',
+    isConnecting: state === 'connecting',
+    isReconnecting: state === 'reconnecting',
+    connectionCount: state === 'connected' ? 1 : 0,
+    reconnect: () => {},
   };
 }

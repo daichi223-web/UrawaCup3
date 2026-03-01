@@ -21,9 +21,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner'
 import {
   useVenueAssignments,
   useAutoGenerateVenueAssignments,
-  useCreateVenueAssignment,
   useUpdateVenueAssignment,
-  useDeleteVenueAssignment,
 } from '@/features/venue-assignments/hooks'
 import { useTeams } from '@/features/teams/hooks'
 import { useVenuesByTournament } from '@/features/venues/hooks'
@@ -246,9 +244,6 @@ function VenueAssignment() {
   const [activeDay, setActiveDay] = useState<DayTab>(1)
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null)
   const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false)
-  const [_pendingChanges, _setPendingChanges] = useState<Map<number, { venueId: number; slotOrder: number }>>(new Map())
-  void _pendingChanges; void _setPendingChanges // Reserved for future use
-
   // データ取得
   const { data: tournament, isLoading: isLoadingTournament } = useTournament(tournamentId)
   const { data: teamsData, isLoading: isLoadingTeams } = useTeams(tournamentId)
@@ -288,11 +283,7 @@ function VenueAssignment() {
 
   // Mutations
   const autoGenerateMutation = useAutoGenerateVenueAssignments()
-  const createMutation = useCreateVenueAssignment()
   const updateMutation = useUpdateVenueAssignment()
-  const _deleteMutation = useDeleteVenueAssignment()
-  void _deleteMutation // Reserved for future use
-
   // 選択解除
   const clearSelection = useCallback(() => {
     setSelectedTeam(null)
@@ -347,30 +338,6 @@ function VenueAssignment() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeam, clearSelection])
-
-  // 空スロットクリック処理
-  const _handleEmptySlotClick = useCallback((venueId: number, slotOrder: number) => {
-    if (!selectedTeam || selectedTeam.venueId !== null) return
-
-    // 未配置チームを配置
-    createMutation.mutate({
-      tournamentId,
-      venueId,
-      teamId: selectedTeam.teamId,
-      matchDay: activeDay,
-      slotOrder,
-    }, {
-      onSuccess: () => {
-        toast.success(`${selectedTeam.teamName}を配置しました`)
-        clearSelection()
-        queryClient.invalidateQueries({ queryKey: ['venue-assignments'] })
-      },
-      onError: (error) => {
-        toast.error(`配置に失敗しました: ${error.message}`)
-      },
-    })
-  }, [selectedTeam, tournamentId, activeDay, createMutation, queryClient, clearSelection])
-  void _handleEmptySlotClick // Reserved for future use
 
   // チーム入れ替え処理
   const handleSwapTeams = useCallback(async (

@@ -26,32 +26,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-import os
-
-# 日本語フォント登録
-def register_japanese_font():
-    font_candidates = [
-        ('YuGothic', r'C:\Windows\Fonts\YuGothR.ttc', 0),
-        ('MSGothic', r'C:\Windows\Fonts\msgothic.ttc', 0),
-        ('Meiryo', r'C:\Windows\Fonts\meiryo.ttc', 0),
-        ('MSMincho', r'C:\Windows\Fonts\msmincho.ttc', 0),
-    ]
-    for font_name, font_path, subfont_index in font_candidates:
-        if os.path.exists(font_path):
-            try:
-                pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=subfont_index))
-                return font_name
-            except Exception:
-                continue
-    try:
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-        pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
-        return 'HeiseiKakuGo-W5'
-    except Exception:
-        pass
-    return 'Helvetica'
+from pdf_utils import register_japanese_font
 
 FONT = register_japanese_font()
 

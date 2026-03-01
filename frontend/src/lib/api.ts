@@ -902,7 +902,7 @@ type RealtimePayload<T extends Record<string, unknown> = Record<string, unknown>
 export const realtimeApi = {
   subscribeToMatches(tournamentId: number, callback: (payload: RealtimePayload) => void) {
     return supabase
-      .channel('matches-changes')
+      .channel(`matches-changes-${tournamentId}`)
       .on(
         'postgres_changes',
         {
@@ -933,7 +933,7 @@ export const realtimeApi = {
 
   subscribeToStandings(tournamentId: number, callback: (payload: RealtimePayload) => void) {
     return supabase
-      .channel('standings-changes')
+      .channel(`standings-changes-${tournamentId}`)
       .on(
         'postgres_changes',
         {

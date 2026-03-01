@@ -7,7 +7,6 @@ from enum import Enum
 from fastapi.staticfiles import StaticFiles
 
 from api.scheduling import endpoints as scheduling_endpoints
-from api.venues import endpoints as venues_endpoints
 from api.standings import endpoints as standings_endpoints
 from api.reports import endpoints as reports_endpoints
 from api.matches import endpoints as matches_endpoints
@@ -19,7 +18,6 @@ app = FastAPI(
 )
 
 app.include_router(scheduling_endpoints.router, tags=["scheduling"])
-app.include_router(venues_endpoints.router, tags=["venues"])
 app.include_router(standings_endpoints.router, tags=["standings"])
 app.include_router(reports_endpoints.router, tags=["reports"])
 app.include_router(matches_endpoints.router, tags=["matches"])

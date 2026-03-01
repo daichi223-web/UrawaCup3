@@ -514,12 +514,16 @@ export function useMatchSchedule() {
     onError: (error: MutationError) => toast.error(error.message || '削除に失敗しました'),
   })
 
-  // 組み合わせ更新
+  // 組み合わせ更新（準決勝結果から3位決定戦・決勝を更新）
   const updateBracketMutation = useMutation({
     mutationFn: async () => {
-      toast.error('組み合わせ更新はSupabase版では未サポートです')
-      throw new Error('未サポート')
+      return await finalDayApi.updateFinalsBracket(tournamentId)
     },
+    onSuccess: () => {
+      toast.success('組み合わせを更新しました')
+      queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
+    },
+    onError: (error: MutationError) => toast.error(error?.message || '組み合わせ更新に失敗しました'),
   })
 
   // 試合情報更新

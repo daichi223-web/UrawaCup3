@@ -201,13 +201,7 @@ export async function withRateLimitProtection<T>(
 /**
  * 405対策: 未実装機能の警告
  */
-const UNIMPLEMENTED_FEATURES = new Set([
-  'generateSchedule',
-  'generateTrainingMatches',
-  'generateFinalTournament',
-  'generateFinalDaySchedule',
-  'generateReport',
-])
+const UNIMPLEMENTED_FEATURES = new Set<string>([])
 
 export function warnIfUnimplemented(featureName: string): boolean {
   if (UNIMPLEMENTED_FEATURES.has(featureName)) {

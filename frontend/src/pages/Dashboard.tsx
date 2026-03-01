@@ -15,9 +15,9 @@ function Dashboard() {
   const { user } = useAuthStore();
   const isViewer = user?.role === 'viewer';
   const [stats, setStats] = useState({
-    totalTeams: 24,
+    totalTeams: 0,
     registeredTeams: 0,
-    totalMatches: 48 + 4, // 予選48 + 決勝T4 (目安)
+    totalMatches: 0,
     completedMatches: 0,
     pendingReports: 0,
   });
@@ -39,7 +39,7 @@ function Dashboard() {
         const matches = matchesData.matches;
 
         setStats({
-          totalTeams: 24,
+          totalTeams: teamsData.teams.length,
           registeredTeams: teamsData.teams.length,
           totalMatches: matches.length,
           completedMatches: matches.filter((m: { status?: string }) => m.status === 'completed').length,

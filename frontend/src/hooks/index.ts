@@ -5,6 +5,6 @@
 // PWA関連
 export * from './usePWA';
 
-// WebSocket / リアルタイム更新
-export * from './useWebSocket';
+// リアルタイム更新
+export type { ConnectionState } from './useRealtimeUpdates';
 export * from './useRealtimeUpdates';

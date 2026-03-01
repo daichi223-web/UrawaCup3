@@ -1,3 +1,7 @@
+# DEPRECATED: このエンドポイントは使用されていません。
+# フロントエンドは Supabase 直接アクセスで完全代替済み。
+# server.py からのルーターマウントは削除済み (2026-03-01)。
+
 from fastapi import APIRouter, HTTPException, Body, Query
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List

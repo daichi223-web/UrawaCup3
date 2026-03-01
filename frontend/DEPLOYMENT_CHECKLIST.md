@@ -103,32 +103,29 @@ Supabase Dashboard → Database → Replication
 
 ---
 
-## 🔵 未実装機能（Edge Functions）
+## 🔵 実装状況（2026-03-02 更新）
 
-以下の機能は `console.warn` のスタブのみで、サーバーサイドロジックが未実装：
+以下の機能はすべて実装済み：
 
-| 機能 | 必要性 | 代替案 |
-|------|--------|--------|
-| 日程自動生成 | 高 | 手動で日程作成 |
-| 研修試合生成 | 中 | 手動で作成 |
-| 決勝T生成 | 高 | 手動で作成 |
-| 最終日スケジュール | 高 | 手動で作成 |
-| 報告書生成API | 低 | クライアント側PDF生成は実装済み |
+| 機能 | 状態 | 実装方式 |
+|------|------|----------|
+| 日程自動生成 | ✅ 実装済み | FastAPI バックエンド + フロントエンド Anchor-Pod CP |
+| 研修試合生成 | ✅ 実装済み | フロントエンド final-day/api.ts |
+| 決勝T生成 | ✅ 実装済み | フロントエンド final-day/api.ts（PK戦対応含む） |
+| 報告書生成API | ✅ 実装済み | FastAPI ReportLab（日本語フォント対応）+ jsPDF フォールバック |
+| Realtime更新 | ✅ 実装済み | Supabase postgres_changes → React Query invalidation |
 
 ---
 
-## ⚪ コード品質（推奨）
+## ⚪ コード品質（2026-03-02 更新）
 
-### DEPRECATEDコード削除
-- [ ] `stores/teamStore.ts` - 削除またはSupabase移行
-- [ ] `stores/standingStore.ts` - 削除またはSupabase移行
-- [ ] `hooks/useApi.ts` - 削除
-- [ ] `core/sync/queue.ts` - 削除
-- [ ] `core/auth/manager.ts` - authStoreと統合
-
-### Realtime統合
-- [ ] `hooks/useWebSocket.ts` → Supabase Realtime に置き換え
-- [ ] `hooks/useRealtimeUpdates.ts` → postgres_changes 使用に変更
+### 完了済みクリーンアップ
+- [x] `hooks/useWebSocket.ts` → 削除済み（Supabase Realtime に置換）
+- [x] `hooks/useRealtimeUpdates.ts` → postgres_changes 使用に変更済み
+- [x] `lib/syncService.ts`, `lib/db.ts`, `utils/offlineQueue.ts` → 削除済み（オフライン同期廃止）
+- [x] `components/pwa/ConflictResolver.tsx` → 削除済み
+- [x] PDF日本語フォント → `backend/pdf_utils.py` に共通化済み
+- [x] venues エンドポイント → アンマウント済み（フロントエンドが Supabase 直接アクセス）
 
 ---
 
