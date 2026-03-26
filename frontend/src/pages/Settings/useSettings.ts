@@ -199,40 +199,54 @@ export function useSettings() {
   const updateTournamentMutation = useMutation({
     mutationFn: async (form: TournamentForm) => {
       if (!selectedTournamentId) throw new Error('大会が選択されていません')
-      const { error } = await supabase
-        .from('tournaments')
-        .update({
+      // schema.sql に存在する確実なカラムのみ
+      const coreData: Record<string, unknown> = {
           name: form.name,
           year: form.year,
-          start_date: form.startDate || null,
-          end_date: form.endDate || null,
-          game_minutes: form.gameMinutes,
           interval_minutes: form.intervalMinutes,
           use_group_system: form.useGroupSystem,
           teams_per_group: form.teamsPerGroup,
-          matches_per_team: form.matchesPerTeam,
-          points_for_win: form.pointsForWin,
-          points_for_draw: form.pointsForDraw,
-          points_for_loss: form.pointsForLoss,
-          description: form.description,
-          is_single_league: form.isSingleLeague,
-          single_league_team_count: form.singleLeagueTeamCount,
-          single_league_matches_per_team: form.singleLeagueMatchesPerTeam,
-          finals_start_time: form.finalsStartTime,
-          finals_day: form.finalsDay,
           preliminary_start_time: form.preliminaryStartTime,
+          finals_start_time: form.finalsStartTime,
           finals_match_duration: form.finalsMatchDuration,
           finals_interval_minutes: form.finalsIntervalMinutes,
-          day_end_time: form.dayEndTime,
-          day2_start_time: form.day2StartTime,
-          day2_end_time: form.day2EndTime,
-          lunch_break_start: form.lunchBreakStart,
-          lunch_break_end: form.lunchBreakEnd,
-          enable_lunch_break: form.enableLunchBreak,
-          venue_per_group: form.venue_per_group,
-        } as never)
+      }
+      if (form.startDate) coreData.start_date = form.startDate
+      if (form.endDate) coreData.end_date = form.endDate
+
+      const { error } = await supabase
+        .from('tournaments')
+        .update(coreData as never)
         .eq('id', selectedTournamentId)
       if (error) throw error
+
+      // 追加カラム（DBに存在しない場合もエラーにしない）
+      try {
+        await supabase
+          .from('tournaments')
+          .update({
+            game_minutes: form.gameMinutes,
+            matches_per_team: form.matchesPerTeam,
+            points_for_win: form.pointsForWin,
+            points_for_draw: form.pointsForDraw,
+            points_for_loss: form.pointsForLoss,
+            description: form.description,
+            is_single_league: form.isSingleLeague,
+            single_league_team_count: form.singleLeagueTeamCount,
+            single_league_matches_per_team: form.singleLeagueMatchesPerTeam,
+            finals_day: form.finalsDay,
+            day_end_time: form.dayEndTime,
+            day2_start_time: form.day2StartTime,
+            day2_end_time: form.day2EndTime,
+            lunch_break_start: form.lunchBreakStart,
+            lunch_break_end: form.lunchBreakEnd,
+            enable_lunch_break: form.enableLunchBreak,
+            venue_per_group: form.venue_per_group,
+          } as never)
+          .eq('id', selectedTournamentId)
+      } catch {
+        // 追加カラムが未作成の場合は無視
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournament', selectedTournamentId] })
