@@ -1,7 +1,7 @@
 // src/pages/TeamManagement/hooks/useTeamManagement.ts
 
 import { useState, useEffect, useMemo } from 'react'
-import { teamsApi, venuesApi, leaguesApi } from '@/lib/api'
+import { teamsApi, venuesApi, leaguesApi, playersApi } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { useAppStore } from '@/stores/appStore'
 import type { Team, League, Venue, EditFormState, DeleteAllValidation } from '../types'
@@ -19,6 +19,7 @@ export function useTeamManagement() {
   const [showBulkModal, setShowBulkModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null)
+  const [showCsvImportModal, setShowCsvImportModal] = useState(false)
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false)
   const [deleteAllValidation, setDeleteAllValidation] = useState<DeleteAllValidation | null>(null)
   const [editForm, setEditForm] = useState<EditFormState>({
@@ -271,6 +272,94 @@ export function useTeamManagement() {
     }
   }
 
+  // CSVインポート処理
+  const handleCsvImport = async (teamsCsv: string, playersCsv: string | null) => {
+    if (!tournamentId) return
+    setSaving(true)
+    try {
+      // チームCSV解析
+      const teamsLines = teamsCsv.trim().split('\n').slice(1) // ヘッダー除去
+      const teamMap: Record<string, number> = {} // 略称 → ID
+      let teamSuccess = 0
+
+      for (const line of teamsLines) {
+        const cols = line.split(',').map(c => c.trim())
+        const [name, shortName, teamType, prefecture] = cols
+        if (!name) continue
+
+        try {
+          const data = await teamsApi.create({
+            name,
+            short_name: shortName || null,
+            tournament_id: tournamentId,
+            group_id: null,
+            team_type: (teamType === 'local' ? 'local' : 'invited') as 'local' | 'invited',
+            is_venue_host: false,
+            region: null,
+            notes: null,
+            group_order: null,
+            prefecture: prefecture || null,
+          })
+          const created = data as { id: number; short_name?: string; name: string }
+          teamMap[shortName || name] = created.id
+          teamSuccess++
+        } catch (e) {
+          console.warn(`チーム登録失敗: ${name}`, e)
+        }
+      }
+
+      toast.success(`${teamSuccess}チームを登録しました`)
+
+      // 選手CSV解析
+      if (playersCsv) {
+        const playersLines = playersCsv.trim().split('\n').slice(1)
+        let playerSuccess = 0
+        let playerErrors = 0
+
+        for (const line of playersLines) {
+          const cols = line.split(',').map(c => c.trim())
+          const [teamShort, numberStr, position, playerName, , , gradeStr] = cols
+          if (!playerName || !teamShort) continue
+
+          const teamId = teamMap[teamShort]
+          if (!teamId) {
+            playerErrors++
+            continue
+          }
+
+          try {
+            await playersApi.create({
+              team_id: teamId,
+              number: numberStr ? parseInt(numberStr) : null,
+              name: playerName,
+              position: position || null,
+              grade: gradeStr ? parseInt(gradeStr) : null,
+              is_captain: false,
+              name_kana: null,
+              notes: null,
+            })
+            playerSuccess++
+          } catch {
+            playerErrors++
+          }
+        }
+
+        if (playerSuccess > 0) toast.success(`${playerSuccess}選手を登録しました`)
+        if (playerErrors > 0) toast.error(`${playerErrors}件の選手登録に失敗`)
+      }
+
+      // チーム一覧を再取得
+      const response = await teamsApi.getAll(tournamentId)
+      setTeams(response.teams as Team[])
+      setShowCsvImportModal(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'インポートに失敗しました'
+      toast.error(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // 関連データ（試合・得点・順位）を削除
   const handleDeleteRelatedData = async () => {
     if (!tournamentId) return
@@ -320,6 +409,7 @@ export function useTeamManagement() {
     showBulkModal,
     showDeleteModal,
     teamToDelete,
+    showCsvImportModal,
     showDeleteAllModal,
     deleteAllValidation,
     editForm,
@@ -337,6 +427,7 @@ export function useTeamManagement() {
     setShowAddModal,
     setShowBulkModal,
     setShowDeleteModal,
+    setShowCsvImportModal,
     setShowDeleteAllModal,
     setDeleteAllValidation,
     setEditForm,
@@ -355,5 +446,6 @@ export function useTeamManagement() {
     openDeleteAllModal,
     handleDeleteAllTeams,
     handleDeleteRelatedData,
+    handleCsvImport,
   }
 }

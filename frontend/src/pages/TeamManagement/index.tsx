@@ -10,6 +10,7 @@ import {
   TeamBulkAddModal,
   TeamDeleteModal,
   TeamDeleteAllModal,
+  CsvImportModal,
 } from './components'
 import { GROUP_TABS } from './constants'
 
@@ -57,6 +58,9 @@ export default function TeamManagement() {
     openDeleteAllModal,
     handleDeleteAllTeams,
     handleDeleteRelatedData,
+    handleCsvImport,
+    showCsvImportModal,
+    setShowCsvImportModal,
   } = useTeamManagement()
 
   if (!tournamentId) {
@@ -80,6 +84,12 @@ export default function TeamManagement() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button
+            className="btn-primary bg-indigo-600 hover:bg-indigo-700"
+            onClick={() => setShowCsvImportModal(true)}
+          >
+            CSVインポート
+          </button>
           <button
             className="btn-primary bg-purple-600 hover:bg-purple-700"
             onClick={() => setShowBulkModal(true)}
@@ -186,6 +196,13 @@ export default function TeamManagement() {
         team={teamToDelete}
         saving={saving}
         onDelete={handleDeleteTeam}
+      />
+
+      <CsvImportModal
+        isOpen={showCsvImportModal}
+        onClose={() => setShowCsvImportModal(false)}
+        onImport={handleCsvImport}
+        saving={saving}
       />
 
       <TeamDeleteAllModal
