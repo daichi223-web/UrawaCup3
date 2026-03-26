@@ -15,6 +15,8 @@ export const GROUPS = ['A', 'B', 'C', 'D'] as const
 export const DEFAULT_TOURNAMENT_FORM = {
   name: '',
   year: new Date().getFullYear(),
+  startDate: '',
+  endDate: '',
   gameMinutes: 20,
   intervalMinutes: 5,
   useGroupSystem: true,

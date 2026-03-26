@@ -32,6 +32,8 @@ function tournamentToForm(tournament: Tournament): TournamentForm {
   return {
     name: tournament.name || '',
     year: tournament.year || new Date().getFullYear(),
+    startDate: tournament.start_date || '',
+    endDate: tournament.end_date || '',
     gameMinutes: tournament.game_minutes ?? 20,
     intervalMinutes: tournament.interval_minutes ?? 5,
     useGroupSystem: tournament.use_group_system ?? true,
@@ -202,6 +204,8 @@ export function useSettings() {
         .update({
           name: form.name,
           year: form.year,
+          start_date: form.startDate || null,
+          end_date: form.endDate || null,
           game_minutes: form.gameMinutes,
           interval_minutes: form.intervalMinutes,
           use_group_system: form.useGroupSystem,

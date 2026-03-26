@@ -6,6 +6,8 @@
 export interface TournamentForm {
   name: string
   year: number
+  startDate: string
+  endDate: string
   gameMinutes: number
   intervalMinutes: number
   useGroupSystem: boolean
@@ -102,6 +104,8 @@ export interface Tournament {
   id: number
   name: string
   year: number
+  start_date: string
+  end_date: string
   game_minutes: number
   interval_minutes: number
   use_group_system: boolean
