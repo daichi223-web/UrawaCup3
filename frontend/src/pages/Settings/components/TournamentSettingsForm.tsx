@@ -22,6 +22,15 @@ export function TournamentSettingsForm({
   setSelectedTournamentId,
   onNewTournament,
 }: Props) {
+  // 開始日・終了日から大会日数を算出（未設定なら3日）
+  const totalDays = (() => {
+    if (form.startDate && form.endDate) {
+      const diff = Math.round((new Date(form.endDate).getTime() - new Date(form.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+      return Math.max(diff, 1)
+    }
+    return 3
+  })()
+
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-6">
@@ -381,8 +390,9 @@ export function TournamentSettingsForm({
                     setForm((prev) => ({ ...prev, finalsDay: parseInt(e.target.value) }))
                   }
                 >
-                  <option value={1}>1日目</option>
-                  <option value={2}>2日目</option>
+                  {Array.from({ length: totalDays }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>{i + 1}日目{i + 1 === totalDays ? '（最終日）' : ''}</option>
+                  ))}
                 </select>
               </div>
               <div>
