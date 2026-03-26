@@ -270,20 +270,20 @@ export function useSettings() {
         .update({
           name: form.name,
           address: form.address,
-          capacity: form.capacity,
-          ground_name: form.groundName || null,
-          ground_name_day2: form.groundNameDay2 || null,
           notes: form.notes,
-          assigned_group: form.assigned_group || null,
+          group_id: form.assigned_group || null,
         } as never)
         .eq('id', form.id)
       if (error) throw error
 
-      // 用途フィールド（カラムが存在しなくてもモーダルは閉じる）
+      // 追加フィールド（カラムが存在しなくてもモーダルは閉じる）
       try {
         await supabase
           .from('venues')
           .update({
+            capacity: form.capacity,
+            ground_name: form.groundName || null,
+            ground_name_day2: form.groundNameDay2 || null,
             for_preliminary: form.forPreliminary,
             for_final_day: form.forFinalDay,
             is_finals_venue: form.isFinalsVenue,
@@ -292,7 +292,7 @@ export function useSettings() {
           } as never)
           .eq('id', form.id)
       } catch (e) {
-        console.warn('用途フィールドの保存に失敗（カラム未作成の可能性）:', e)
+        console.warn('追加フィールドの保存に失敗（カラム未作成の可能性）:', e)
       }
     },
     onSuccess: () => {
