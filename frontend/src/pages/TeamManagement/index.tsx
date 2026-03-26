@@ -56,6 +56,7 @@ export default function TeamManagement() {
     handleDeleteTeam,
     openDeleteAllModal,
     handleDeleteAllTeams,
+    handleDeleteRelatedData,
   } = useTeamManagement()
 
   if (!tournamentId) {
@@ -197,6 +198,7 @@ export default function TeamManagement() {
         validation={deleteAllValidation}
         saving={saving}
         onDeleteAll={handleDeleteAllTeams}
+        onDeleteRelatedData={handleDeleteRelatedData}
       />
     </div>
   )

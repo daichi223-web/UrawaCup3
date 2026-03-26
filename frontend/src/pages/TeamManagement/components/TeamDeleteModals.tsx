@@ -53,6 +53,7 @@ interface TeamDeleteAllModalProps {
   validation: DeleteAllValidation | null
   saving: boolean
   onDeleteAll: () => void
+  onDeleteRelatedData?: () => void
 }
 
 export function TeamDeleteAllModal({
@@ -62,6 +63,7 @@ export function TeamDeleteAllModal({
   validation,
   saving,
   onDeleteAll,
+  onDeleteRelatedData,
 }: TeamDeleteAllModalProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="全チーム削除の確認">
@@ -82,10 +84,26 @@ export function TeamDeleteAllModal({
                 )}
               </ul>
             </div>
-            <div className="flex justify-end pt-4">
+            {onDeleteRelatedData && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <p className="text-orange-800 text-sm">
+                  関連する試合・得点・順位データを先に削除しますか？
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-3 pt-4">
               <button className="btn-secondary" onClick={onClose}>
-                閉じる
+                キャンセル
               </button>
+              {onDeleteRelatedData && (
+                <button
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                  onClick={onDeleteRelatedData}
+                  disabled={saving}
+                >
+                  {saving ? '削除中...' : '試合データを削除'}
+                </button>
+              )}
             </div>
           </>
         ) : (

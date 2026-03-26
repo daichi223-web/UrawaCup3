@@ -271,6 +271,24 @@ export function useTeamManagement() {
     }
   }
 
+  // 関連データ（試合・得点・順位）を削除
+  const handleDeleteRelatedData = async () => {
+    if (!tournamentId) return
+    setSaving(true)
+    try {
+      await teamsApi.deleteRelatedData(tournamentId)
+      toast.success('試合・得点・順位データを削除しました')
+      // 再バリデーション
+      const validation = await teamsApi.validateDeleteAll(tournamentId)
+      setDeleteAllValidation(validation)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '削除に失敗しました'
+      toast.error(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   // 全チーム一括削除処理
   const handleDeleteAllTeams = async () => {
     if (!tournamentId) return
@@ -336,5 +354,6 @@ export function useTeamManagement() {
     handleDeleteTeam,
     openDeleteAllModal,
     handleDeleteAllTeams,
+    handleDeleteRelatedData,
   }
 }

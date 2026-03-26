@@ -340,6 +340,41 @@ export const teamsApi = {
     }
   },
 
+  // 大会の試合・得点データを一括削除
+  async deleteRelatedData(tournamentId: number) {
+    await ensureValidSession()
+    validateId(tournamentId, '大会ID')
+
+    // 得点データ削除（試合経由）
+    const { data: matches } = await supabase
+      .from('matches')
+      .select('id')
+      .eq('tournament_id', tournamentId)
+
+    if (matches && matches.length > 0) {
+      const matchIds = matches.map((m: { id: number }) => m.id)
+      const { error: goalsError } = await supabase
+        .from('goals')
+        .delete()
+        .in('match_id', matchIds)
+      if (goalsError) handleSupabaseError(goalsError)
+    }
+
+    // 順位データ削除
+    const { error: standingsError } = await supabase
+      .from('standings')
+      .delete()
+      .eq('tournament_id', tournamentId)
+    if (standingsError) handleSupabaseError(standingsError)
+
+    // 試合データ削除
+    const { error: matchesError } = await supabase
+      .from('matches')
+      .delete()
+      .eq('tournament_id', tournamentId)
+    if (matchesError) handleSupabaseError(matchesError)
+  },
+
   // 全チーム一括削除
   async deleteAll(tournamentId: number) {
     await ensureValidSession()
