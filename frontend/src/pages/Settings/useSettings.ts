@@ -267,6 +267,8 @@ export function useSettings() {
           name: form.name,
           address: form.address,
           capacity: form.capacity,
+          ground_name: form.groundName || null,
+          ground_name_day2: form.groundNameDay2 || null,
           notes: form.notes,
           assigned_group: form.assigned_group || null,
         } as never)
@@ -413,6 +415,8 @@ export function useSettings() {
       name: venue.name,
       address: venue.address || '',
       capacity: venue.capacity,
+      groundName: venue.ground_name || '',
+      groundNameDay2: venue.ground_name_day2 || '',
       notes: venue.notes || '',
       assigned_group: venue.assigned_group || '',
       forPreliminary: venue.for_preliminary ?? true,

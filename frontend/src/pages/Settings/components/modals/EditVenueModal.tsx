@@ -43,26 +43,32 @@ export function EditVenueModal({
           />
         </div>
         <div>
+          <label className="block text-sm font-medium mb-1">グラウンド名（Day1）</label>
+          <input
+            type="text"
+            className="form-input w-full"
+            placeholder="例: 浦和南高G"
+            value={form.groundName}
+            onChange={(e) => setForm((prev) => ({ ...prev, groundName: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">グラウンド名（Day2）<span className="text-gray-400 text-xs ml-1">※Day1と異なる場合のみ</span></label>
+          <input
+            type="text"
+            className="form-input w-full"
+            placeholder="空欄ならDay1と同じ"
+            value={form.groundNameDay2}
+            onChange={(e) => setForm((prev) => ({ ...prev, groundNameDay2: e.target.value }))}
+          />
+        </div>
+        <div>
           <label className="block text-sm font-medium mb-1">住所</label>
           <input
             type="text"
             className="form-input w-full"
             value={form.address}
             onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">収容人数</label>
-          <input
-            type="number"
-            className="form-input w-full"
-            value={form.capacity || ''}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                capacity: e.target.value ? parseInt(e.target.value) : null,
-              }))
-            }
           />
         </div>
         <div>

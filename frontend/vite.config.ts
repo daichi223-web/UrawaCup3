@@ -57,4 +57,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+  },
 })

@@ -78,8 +78,8 @@ class DailyReportGenerator:
         # 設定取得
         report_config = data.get('reportConfig', {})
         recipient = report_config.get('recipient', '○○御中')
-        sender = report_config.get('sender', '県立浦和高校　森川大地')
-        contact = report_config.get('contact', '090-8519-7032')
+        sender = report_config.get('sender', '（未設定）')
+        contact = report_config.get('contact', '（未設定）')
         day = data.get('day', 1)
         date_str = data.get('dateStr', '2025年3月29日（土）')
         
@@ -323,8 +323,8 @@ def main():
                 'dateStr': '2025年3月29日（土）',
                 'reportConfig': {
                     'recipient': '埼玉県サッカー協会 御中',
-                    'sender': '県立浦和高校　森川大地',
-                    'contact': '090-8519-7032',
+                    'sender': '（未設定）',
+                    'contact': '（未設定）',
                 },
                 'matchData': day_data,
             }
@@ -348,8 +348,8 @@ def create_sample_data() -> dict:
         'dateStr': '2025年3月29日（土）',
         'reportConfig': {
             'recipient': '埼玉県サッカー協会 御中',
-            'sender': '県立浦和高校　森川大地',
-            'contact': '090-8519-7032',
+            'sender': '（未設定）',
+            'contact': '（未設定）',
         },
         'matchData': {
             '浦和南高G': [

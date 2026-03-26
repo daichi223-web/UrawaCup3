@@ -10,6 +10,8 @@ export interface Venue {
   pitchCount: number; // コート数
   hostTeamId: number | null; // 会場担当チーム（旧フィールド）
   managerTeamId: number | null; // 会場責任チームID
+  groundName: string | null; // グラウンド名（Day1）
+  groundNameDay2: string | null; // グラウンド名（Day2、nullならDay1と同じ）
   groupId: string | null;
   forPreliminary: boolean; // 予選リーグ会場
   forFinalDay: boolean; // 最終日の順位リーグ会場
@@ -29,6 +31,8 @@ export interface Venue {
   max_matches_per_day?: number;
   maxMatchesPerDay?: number;
   manager_team_id?: number | null;
+  ground_name?: string | null;
+  ground_name_day2?: string | null;
 
   // 結合データ
   hostTeam?: { id: number; name: string };

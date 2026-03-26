@@ -24,6 +24,7 @@ export function VenueSettingsTable({ venues, onEdit, onAdd }: Props) {
             <thead>
               <tr className="border-b">
                 <th className="text-left py-2 px-3 font-medium">会場名</th>
+                <th className="text-left py-2 px-3 font-medium">グラウンド</th>
                 <th className="text-left py-2 px-3 font-medium">グループ</th>
                 <th className="text-left py-2 px-3 font-medium">用途</th>
                 <th className="text-center py-2 px-3 font-medium">操作</th>
@@ -33,6 +34,12 @@ export function VenueSettingsTable({ venues, onEdit, onAdd }: Props) {
               {venues.map((venue) => (
                 <tr key={venue.id} className="border-b hover:bg-gray-50">
                   <td className="py-2 px-3">{venue.name}</td>
+                  <td className="py-2 px-3 text-sm text-gray-600">
+                    {venue.ground_name || '—'}
+                    {venue.ground_name_day2 && (
+                      <span className="block text-xs text-orange-600">Day2: {venue.ground_name_day2}</span>
+                    )}
+                  </td>
                   <td className="py-2 px-3">
                     {venue.assigned_group ? (
                       <span

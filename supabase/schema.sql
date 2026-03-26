@@ -114,6 +114,8 @@ CREATE TABLE IF NOT EXISTS venues (
     for_final_day BOOLEAN NOT NULL DEFAULT FALSE,
     is_finals_venue BOOLEAN NOT NULL DEFAULT FALSE,
     manager_team_id INTEGER,
+    ground_name VARCHAR(100),                              -- グラウンド名（Day1）
+    ground_name_day2 VARCHAR(100),                         -- グラウンド名（Day2、NULLならDay1と同じ）
     notes VARCHAR(500),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),

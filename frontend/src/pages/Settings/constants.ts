@@ -45,6 +45,8 @@ export const DEFAULT_VENUE_FORM = {
   name: '',
   address: '',
   capacity: null,
+  groundName: '',
+  groundNameDay2: '',
   notes: '',
   assigned_group: '',
   forPreliminary: true,

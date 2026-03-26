@@ -11,8 +11,8 @@ test_data = {
     'dateStr': '2025年3月29日（土）',
     'reportConfig': {
         'recipient': '埼玉県サッカー協会 御中',
-        'sender': '県立浦和高校　森川大地',
-        'contact': '090-8519-7032',
+        'sender': '（未設定）',
+        'contact': '（未設定）',
     },
     'matchData': {
         '浦和南高G（6試合）': [

@@ -36,6 +36,8 @@ export interface VenueForm {
   name: string
   address: string
   capacity: number | null
+  groundName: string
+  groundNameDay2: string
   notes: string
   assigned_group: string
   forPreliminary: boolean
@@ -63,6 +65,8 @@ export interface Venue {
   name: string
   address: string
   capacity: number | null
+  ground_name: string | null
+  ground_name_day2: string | null
   notes: string
   assigned_group: string | null
   for_preliminary?: boolean

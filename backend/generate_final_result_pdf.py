@@ -81,7 +81,7 @@ class FinalResultPDFGenerator:
         config = data.get('reportConfig', {})
         header_data = [
             ['日付', data.get('date', '2025年3月31日（月）最終日')],
-            ['発信元', config.get('sender', '県立浦和高校　森川大地')],
+            ['発信元', config.get('sender', '（未設定）')],
         ]
         header_table = Table(header_data, colWidths=[25*mm, 80*mm])
         header_table.setStyle(TableStyle([
@@ -286,7 +286,7 @@ def create_sample_data() -> dict:
     return {
         'date': '2025年3月31日（月）最終日',
         'reportConfig': {
-            'sender': '県立浦和高校　森川大地',
+            'sender': '（未設定）',
         },
         'ranking': [
             {'rank': 1, 'team': '浦和レッズユース'},

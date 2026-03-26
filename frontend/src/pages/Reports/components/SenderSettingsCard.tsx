@@ -83,7 +83,7 @@ export function SenderSettingsCard({
               <input
                 type="text"
                 className="form-input"
-                placeholder="例: 森川大地"
+                placeholder="例: 山田太郎"
                 value={senderForm.senderName}
                 onChange={(e) => onFormChange({ ...senderForm, senderName: e.target.value })}
               />
