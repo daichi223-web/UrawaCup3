@@ -675,29 +675,12 @@ export const standingsApi = {
     console.log(`[Standings] Found ${matches.length} completed+approved matches for group ${groupId || '(single league)'}`)
     console.log(`[Standings] Found ${teams.length} teams for group ${groupId || '(all teams)'}`)
 
-    // tournament_settings から得点設定とタイブレーカー設定を取得
-    // テーブルが未作成の場合は404になるためtry-catchで保護
-    interface TournamentSettingsRow {
-      points_for_win?: number | null
-      points_for_draw?: number | null
-      points_for_loss?: number | null
-      tiebreaker_rules?: string[] | null
-    }
-    let settings: TournamentSettingsRow | null = null
-    try {
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('tournament_settings')
-        .select('points_for_win, points_for_draw, points_for_loss, tiebreaker_rules')
-        .eq('tournament_id', tournamentId)
-        .single()
-      if (!settingsError) settings = settingsData as TournamentSettingsRow | null
-    } catch {
-      // テーブル未作成の場合はデフォルト値を使用
-    }
-    const pointsForWin = settings?.points_for_win ?? 3
-    const pointsForDraw = settings?.points_for_draw ?? 1
-    const pointsForLoss = settings?.points_for_loss ?? 0
-    const tiebreakerRules: string[] = settings?.tiebreaker_rules ?? ['points', 'goal_difference', 'goals_scored']
+    // 得点設定とタイブレーカー設定（デフォルト値を使用）
+    // 注: tournament_settingsテーブルが未作成のため、標準的なサッカーの得点方式を適用
+    const pointsForWin = 3
+    const pointsForDraw = 1
+    const pointsForLoss = 0
+    const tiebreakerRules: string[] = ['points', 'goal_difference', 'goals_scored']
 
     // チームごとの成績を計算
     const stats = new Map<number, {
