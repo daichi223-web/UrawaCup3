@@ -15,7 +15,8 @@ interface ExtendedGoal extends Goal {
 }
 import toast from 'react-hot-toast';
 import { playerApi, type PlayerSuggestion } from '@/features/players';
-import { Minus, Plus } from 'lucide-react';
+import { ChevronDown, Minus, Plus } from 'lucide-react';
+import type { Player } from '@/features/players/types';
 
 // 得点入力用の型
 interface GoalInput {
@@ -129,6 +130,9 @@ function MatchResult() {
   const [goals, setGoals] = useState<GoalInput[]>([]);
   const [suggestions, setSuggestions] = useState<PlayerSuggestion[]>([]);
   const [activeGoalId, setActiveGoalId] = useState<string | null>(null);
+  // 選手一覧ドロップダウン用
+  const [teamRosters, setTeamRosters] = useState<Record<number, Player[]>>({});
+  const [rosterDropdownGoalId, setRosterDropdownGoalId] = useState<string | null>(null);
 
   // 初回: 全試合を取得して日付・会場リストを抽出
   useEffect(() => {
@@ -229,7 +233,24 @@ function MatchResult() {
     setGoals(existingGoals);
     setSuggestions([]);
     setActiveGoalId(null);
+    setRosterDropdownGoalId(null);
     setShowModal(true);
+    // 両チームの選手一覧を事前ロード
+    const loadRosters = async () => {
+      const rosters: Record<number, Player[]> = {};
+      try {
+        if (match.homeTeamId) {
+          rosters[match.homeTeamId] = await playerApi.getByTeam(match.homeTeamId);
+        }
+        if (match.awayTeamId && match.awayTeamId !== match.homeTeamId) {
+          rosters[match.awayTeamId] = await playerApi.getByTeam(match.awayTeamId);
+        }
+      } catch (err) {
+        console.error('Failed to load rosters:', err);
+      }
+      setTeamRosters(rosters);
+    };
+    loadRosters();
   };
 
   // 得点を追加
@@ -643,7 +664,7 @@ function MatchResult() {
                         <option value={2}>後半</option>
                       </select>
                       <select className="form-input text-sm flex-1 min-w-[100px]" value={goal.teamType}
-                        onChange={(e) => updateGoal(goal.id, { teamType: e.target.value as 'home' | 'away' })}>
+                        onChange={(e) => { updateGoal(goal.id, { teamType: e.target.value as 'home' | 'away' }); setRosterDropdownGoalId(null); }}>
                         <option value="home">{selectedMatch?.homeTeam?.name}</option>
                         <option value="away">{selectedMatch?.awayTeam?.name}</option>
                       </select>
@@ -660,8 +681,9 @@ function MatchResult() {
                               const next = e.target.value.replace(/\D/g, '').slice(0, 3);
                               updateGoal(goal.id, { scorerNumber: next, playerId: null });
                               if (next) searchPlayers(goal.id, next);
+                              setRosterDropdownGoalId(null);
                             }}
-                            onFocus={(e) => e.target.select()}
+                            onFocus={(e) => { e.target.select(); setRosterDropdownGoalId(null); }}
                             placeholder="#"
                           />
                           {/* 得点者名入力 */}
@@ -671,18 +693,62 @@ function MatchResult() {
                             value={goal.scorerName}
                             onChange={(e) => {
                               updateGoal(goal.id, { scorerName: e.target.value, playerId: null });
-                              // 背番号が空の場合のみ名前で検索
                               if (!goal.scorerNumber) searchPlayers(goal.id, e.target.value);
+                              setRosterDropdownGoalId(null);
                             }}
+                            onFocus={() => setRosterDropdownGoalId(null)}
                             placeholder="得点者名"
                           />
+                          {/* 選手一覧ドロップダウン */}
+                          <button
+                            type="button"
+                            className="form-input text-sm w-8 flex items-center justify-center px-0 text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                            onClick={() => {
+                              setSuggestions([]);
+                              setActiveGoalId(null);
+                              setRosterDropdownGoalId(rosterDropdownGoalId === goal.id ? null : goal.id);
+                            }}
+                            title="選手一覧から選択"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
                         </div>
+                        {/* サジェスト（入力検索結果） */}
                         {activeGoalId === goal.id && suggestions.length > 0 && (
                           <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                             {suggestions.map((s) => (
                               <button key={s.id} type="button" className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
-                                onClick={() => selectSuggestion(goal.id, s)}>#{s.number} {s.name}</button>
+                                onClick={() => { selectSuggestion(goal.id, s); setRosterDropdownGoalId(null); }}>#{s.number} {s.name}</button>
                             ))}
+                          </div>
+                        )}
+                        {/* 選手一覧ドロップダウン */}
+                        {rosterDropdownGoalId === goal.id && (teamRosters[goal.teamId] || []).length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                            {(teamRosters[goal.teamId] || []).map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                className={`w-full px-3 py-1.5 text-left text-sm hover:bg-primary-50 flex items-center gap-2 ${goal.playerId === p.id ? 'bg-primary-100 font-medium' : ''}`}
+                                onClick={() => {
+                                  updateGoal(goal.id, {
+                                    scorerNumber: p.number ? String(p.number) : '',
+                                    scorerName: p.name,
+                                    playerId: p.id,
+                                  });
+                                  setRosterDropdownGoalId(null);
+                                }}
+                              >
+                                <span className="text-gray-400 w-8 text-right">{p.number ?? '-'}</span>
+                                <span>{p.name}</span>
+                                {p.position && <span className="text-xs text-gray-400 ml-auto">{p.position}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {rosterDropdownGoalId === goal.id && (teamRosters[goal.teamId] || []).length === 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-sm text-gray-500 text-center">
+                            選手が登録されていません
                           </div>
                         )}
                       </div>
