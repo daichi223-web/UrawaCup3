@@ -61,18 +61,22 @@ export function useMatchSchedule() {
   const [crossVenueSelectedTeam, setCrossVenueSelectedTeam] = useState<SelectedTeam | null>(null)
 
   // 大会情報を取得
+  // 注意: Settings ページと同じクエリキーを共有するため、
+  // キャッシュにsnake_case形式のデータが入っている可能性がある
   const { data: tournament, isLoading: isLoadingTournament } = useQuery({
     queryKey: ['tournament', tournamentId],
     queryFn: async () => {
       const data = await tournamentsApi.getById(tournamentId)
       if (!data) return null
+      // snake_case / camelCase 両方に対応（Settings ページとのキャッシュ共有時）
+      const raw = data as Record<string, unknown>
       return {
         ...data,
-        startDate: data.start_date,
-        endDate: data.end_date,
-        matchDuration: data.match_duration,
-        intervalMinutes: data.interval_minutes,
-        preliminaryStartTime: data.preliminary_start_time,
+        startDate: data.startDate || raw.start_date as string || '',
+        endDate: data.endDate || raw.end_date as string || '',
+        matchDuration: data.matchDuration || raw.match_duration as number || 50,
+        intervalMinutes: data.intervalMinutes || raw.interval_minutes as number || 15,
+        preliminaryStartTime: data.preliminaryStartTime || raw.preliminary_start_time as string || '09:00',
       } as Tournament
     },
     enabled: !!tournamentId,
@@ -353,12 +357,15 @@ export function useMatchSchedule() {
   // 予選リーグ日程生成ミューテーション
   const generatePreliminaryMutation = useMutation({
     mutationFn: async () => {
-      if (!tournament?.startDate) {
+      // snake_case / camelCase 両方をチェック（Settings ページとのキャッシュ共有対策）
+      const raw = tournament as Record<string, unknown> | undefined
+      const startDate = tournament?.startDate || (raw?.start_date as string) || ''
+      if (!startDate) {
         throw new Error('大会の開始日が設定されていません。大会設定を確認してください。')
       }
       const teamsResult = await teamsApi.getAll(tournamentId)
       const teams = teamsResult.teams || []
-      const day1Date = tournament.startDate
+      const day1Date = startDate
       const day2DateObj = new Date(day1Date)
       day2DateObj.setDate(day2DateObj.getDate() + 1)
       const day2Date = day2DateObj.toISOString().split('T')[0]

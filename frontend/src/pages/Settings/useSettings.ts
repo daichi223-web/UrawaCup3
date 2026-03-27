@@ -256,11 +256,16 @@ export function useSettings() {
 
   const createTournamentMutation = useMutation({
     mutationFn: async (form: NewTournamentForm) => {
+      if (!form.startDate || !form.endDate) {
+        throw new Error('開始日と終了日は必須です')
+      }
       const { data, error } = await supabase
         .from('tournaments')
         .insert({
           name: form.name,
           year: form.year,
+          start_date: form.startDate,
+          end_date: form.endDate,
           description: form.description,
         } as never)
         .select()

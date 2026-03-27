@@ -68,5 +68,7 @@ export const DEFAULT_ADD_VENUE_FORM = {
 export const DEFAULT_NEW_TOURNAMENT_FORM = {
   name: '',
   year: new Date().getFullYear(),
+  startDate: '',
+  endDate: '',
   description: '',
 }

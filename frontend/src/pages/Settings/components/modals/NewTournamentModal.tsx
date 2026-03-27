@@ -41,6 +41,26 @@ export function NewTournamentModal({
             onChange={(e) => setForm((prev) => ({ ...prev, year: parseInt(e.target.value) || new Date().getFullYear() }))}
           />
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">開始日</label>
+            <input
+              type="date"
+              className="form-input w-full"
+              value={form.startDate}
+              onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">終了日</label>
+            <input
+              type="date"
+              className="form-input w-full"
+              value={form.endDate}
+              onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))}
+            />
+          </div>
+        </div>
         <div>
           <label className="block text-sm font-medium mb-1">説明（任意）</label>
           <textarea
@@ -58,7 +78,7 @@ export function NewTournamentModal({
           <button
             className="btn-primary"
             onClick={onSubmit}
-            disabled={!form.name || isLoading}
+            disabled={!form.name || !form.startDate || !form.endDate || isLoading}
           >
             {isLoading ? '作成中...' : '作成'}
           </button>

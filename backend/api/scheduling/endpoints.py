@@ -69,6 +69,8 @@ async def generate_schedule(request: ScheduleGenerationRequest):
                 config.training_venues = request.config["trainingVenues"]
             if "kickoffTimes" in request.config:
                 config.kickoff_times = request.config["kickoffTimes"]
+            if "bracketMethod" in request.config:
+                config.bracket_method = request.config["bracketMethod"]
 
         # 日程生成
         generator = FinalDayGenerator(standings, played_pairs, config)

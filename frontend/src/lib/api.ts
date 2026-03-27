@@ -675,6 +675,25 @@ export const standingsApi = {
     console.log(`[Standings] Found ${matches.length} completed+approved matches for group ${groupId || '(single league)'}`)
     console.log(`[Standings] Found ${teams.length} teams for group ${groupId || '(all teams)'}`)
 
+    // tournament_settings から得点設定とタイブレーカー設定を取得
+    const { data: settingsData } = await supabase
+      .from('tournament_settings')
+      .select('points_for_win, points_for_draw, points_for_loss, tiebreaker_rules')
+      .eq('tournament_id', tournamentId)
+      .single()
+
+    interface TournamentSettingsRow {
+      points_for_win?: number | null
+      points_for_draw?: number | null
+      points_for_loss?: number | null
+      tiebreaker_rules?: string[] | null
+    }
+    const settings = settingsData as TournamentSettingsRow | null
+    const pointsForWin = settings?.points_for_win ?? 3
+    const pointsForDraw = settings?.points_for_draw ?? 1
+    const pointsForLoss = settings?.points_for_loss ?? 0
+    const tiebreakerRules: string[] = settings?.tiebreaker_rules ?? ['points', 'goal_difference', 'goals_scored']
+
     // チームごとの成績を計算
     const stats = new Map<number, {
       played: number; won: number; drawn: number; lost: number;
@@ -732,15 +751,26 @@ export const standingsApi = {
       goals_for: s.goals_for,
       goals_against: s.goals_against,
       goal_difference: s.goals_for - s.goals_against,
-      points: s.won * 3 + s.drawn,
+      points: s.won * pointsForWin + s.drawn * pointsForDraw + s.lost * pointsForLoss,
       rank: 0
     }))
 
-    // ソートして順位付け
+    // タイブレーカー設定に基づいてソートして順位付け
     standings.sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points
-      if (b.goal_difference !== a.goal_difference) return b.goal_difference - a.goal_difference
-      return b.goals_for - a.goals_for
+      for (const rule of tiebreakerRules) {
+        switch (rule) {
+          case 'points':
+            if (b.points !== a.points) return b.points - a.points
+            break
+          case 'goal_difference':
+            if (b.goal_difference !== a.goal_difference) return b.goal_difference - a.goal_difference
+            break
+          case 'goals_scored':
+            if (b.goals_for !== a.goals_for) return b.goals_for - a.goals_for
+            break
+        }
+      }
+      return 0
     })
 
     standings.forEach((s, i) => { s.rank = i + 1 })

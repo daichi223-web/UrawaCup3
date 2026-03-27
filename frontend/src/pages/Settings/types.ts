@@ -59,6 +59,8 @@ export interface AddVenueForm {
 export interface NewTournamentForm {
   name: string
   year: number
+  startDate: string
+  endDate: string
   description: string
 }
 

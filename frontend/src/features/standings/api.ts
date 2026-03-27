@@ -38,6 +38,11 @@ interface TournamentQualificationResult {
   qualification_rule?: string | null;
 }
 
+// Type for tournament_settings query result
+interface TournamentSettingsResult {
+  tiebreaker_rules?: string[] | null;
+}
+
 export const standingApi = {
   // グループ別順位表取得
   getByGroup: async (tournamentId: number, groupId: string): Promise<GroupStandings> => {
@@ -188,6 +193,15 @@ export const standingApi = {
       ? 4 // 総合順位ルールでは上位4チーム
       : (tournament?.advancing_teams || 1) * 4; // グループルールではグループ数 × 進出数
 
+    // tournament_settings からタイブレーカー設定を取得
+    const { data: settingsData } = await supabase
+      .from('tournament_settings')
+      .select('tiebreaker_rules')
+      .eq('tournament_id', tournamentId)
+      .single();
+
+    const tiebreakerRules: string[] = (settingsData as TournamentSettingsResult | null)?.tiebreaker_rules ?? ['points', 'goal_difference', 'goals_scored'];
+
     // エントリに変換（試合数 > 0 のチームのみ対象）
     const entries: OverallStandingEntry[] = (standings || [])
       .filter(s => s.played > 0) // 試合入力前のチームは除外
@@ -207,15 +221,22 @@ export const standingApi = {
         lost: s.lost,
       }));
 
-    // 総合順位でソート: 勝点 → 得失点差 → 総得点（グループ関係なく純粋に成績順）
+    // タイブレーカー設定に基づいて総合順位をソート
     entries.sort((a, b) => {
-      // 1. 勝点
-      if (a.points !== b.points) return b.points - a.points;
-      // 2. 得失点差
-      if (a.goalDifference !== b.goalDifference) return b.goalDifference - a.goalDifference;
-      // 3. 総得点
-      if (a.goalsFor !== b.goalsFor) return b.goalsFor - a.goalsFor;
-      // 同点の場合はグループID順（安定ソート）- null チェックを追加
+      for (const rule of tiebreakerRules) {
+        switch (rule) {
+          case 'points':
+            if (a.points !== b.points) return b.points - a.points;
+            break;
+          case 'goal_difference':
+            if (a.goalDifference !== b.goalDifference) return b.goalDifference - a.goalDifference;
+            break;
+          case 'goals_scored':
+            if (a.goalsFor !== b.goalsFor) return b.goalsFor - a.goalsFor;
+            break;
+        }
+      }
+      // 同点の場合はグループID順（安定ソート）
       const groupA = a.groupId || '';
       const groupB = b.groupId || '';
       return groupA.localeCompare(groupB);

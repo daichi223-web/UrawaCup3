@@ -76,10 +76,11 @@ class TournamentConfig:
     tournament_venue: str = "駒場スタジアム"  # 決勝T会場
     kickoff_times: List[str] = None        # キックオフ時刻一覧
     matches_per_team: int = 2              # 各チームの研修試合数
+    bracket_method: str = "seed_order"     # 組み合わせ方式: 'diagonal' or 'seed_order'
     
     def __post_init__(self):
         if self.training_venues is None:
-            self.training_venues = ["浦和南高G", "市立浦和高G", "浦和学院高G", "武南高G"]
+            self.training_venues = []  # 呼び出し元からDB設定値を渡す（空の場合は研修試合を生成しない）
         if self.kickoff_times is None:
             self.kickoff_times = ["9:30", "10:35", "11:40", "12:45", "13:50"]
     
@@ -170,11 +171,20 @@ class FinalDayGenerator:
             self.warnings.append(f"ℹ️ 3グループのため、1位の上位2チームで決勝を実施")
 
         elif num_groups == 4:
-            # 4グループ: A vs C, B vs D
+            # 4グループ: bracket_method に応じた組み合わせ
             a1 = self.standings[groups[0]][0]
             b1 = self.standings[groups[1]][0]
             c1 = self.standings[groups[2]][0]
             d1 = self.standings[groups[3]][0]
+
+            if self.config.bracket_method == 'diagonal':
+                # 対角線方式: A1 vs C1, B1 vs D1
+                sf1_home, sf1_away = a1, c1
+                sf2_home, sf2_away = b1, d1
+            else:
+                # シード順方式: A1 vs D1, B1 vs C1
+                sf1_home, sf1_away = a1, d1
+                sf2_home, sf2_away = b1, c1
 
             matches = [
                 Match(
@@ -182,8 +192,8 @@ class FinalDayGenerator:
                     match_type=MatchType.SEMIFINAL1,
                     venue=self.config.tournament_venue,
                     kickoff="9:30",
-                    home_team=a1,
-                    away_team=c1,
+                    home_team=sf1_home,
+                    away_team=sf1_away,
                     referee="派遣",
                 ),
                 Match(
@@ -191,8 +201,8 @@ class FinalDayGenerator:
                     match_type=MatchType.SEMIFINAL2,
                     venue=self.config.tournament_venue,
                     kickoff="9:30",
-                    home_team=b1,
-                    away_team=d1,
+                    home_team=sf2_home,
+                    away_team=sf2_away,
                     referee="派遣",
                 ),
                 Match(
@@ -272,10 +282,15 @@ class FinalDayGenerator:
     def _generate_training(self) -> List[Match]:
         """
         研修試合生成（各チーム2試合）
-        
+
         20チーム × 2試合 = 40試合枠
         → 40 / 2 = 20試合
         """
+        # 会場が設定されていない場合は空リストを返す
+        if not self.config.training_venues:
+            self.warnings.append("⚠️ 研修試合会場が設定されていません。会場を設定してから再生成してください。")
+            return []
+
         # 2〜6位のチームを取得
         training_teams = []
         for group in self.config.group_names:
@@ -573,6 +588,7 @@ def main():
         num_groups=4,
         teams_per_group=6,
         matches_per_team=2,
+        training_venues=["浦和南高G", "市立浦和高G", "浦和学院高G", "武南高G"],
     )
     
     print(f"\n【設定】")
