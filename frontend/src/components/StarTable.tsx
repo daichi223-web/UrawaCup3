@@ -342,10 +342,18 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                 const h2h = rowStats.headToHead.get(colStats.teamId)
                 const { symbol, className } = getResultSymbol(h2h?.result ?? null)
 
+                // 結果に応じた背景色
+                let cellBg = ''
+                if (h2h) {
+                  if (h2h.result === 'win') cellBg = 'bg-red-50'
+                  else if (h2h.result === 'draw') cellBg = 'bg-yellow-50'
+                  else if (h2h.result === 'loss') cellBg = 'bg-blue-50'
+                }
+
                 return (
                   <td
                     key={`cell-${rowStats.teamId}-${colStats.teamId}`}
-                    className={`border border-gray-300 ${padding} text-center`}
+                    className={`border border-gray-300 ${padding} text-center ${cellBg}`}
                     style={cellStyle}
                     title={h2h ? `${h2h.score}-${h2h.opponentScore}` : '未対戦'}
                   >
@@ -359,7 +367,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
                         </div>
                       )
                     ) : (
-                      <span className="text-gray-300">-</span>
+                      <span className="text-gray-400 text-xs">未</span>
                     )}
                   </td>
                 )
