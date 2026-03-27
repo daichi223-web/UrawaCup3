@@ -244,10 +244,34 @@ export const finalDayApi = {
     console.log('[Finals] 順位表の再計算完了');
 
     // 2. 決勝進出チームを取得
-    const qualifyingTeams = await getQualifyingTeams(tournamentId, qualificationRule);
+    let qualifyingTeams = await getQualifyingTeams(tournamentId, qualificationRule);
 
+    // 試合結果が不足している場合、チーム一覧から暫定的に補完
     if (qualifyingTeams.length < 4) {
-      throw new Error(`決勝進出チームが不足しています（${qualifyingTeams.length}/4チーム）`);
+      console.log(`[Finals] 決勝進出チーム ${qualifyingTeams.length}/4 - チーム一覧から暫定補完`);
+      const existingIds = new Set(qualifyingTeams.map(t => t.teamId));
+      const { data: allTeams } = await supabase
+        .from('teams')
+        .select('id, name, short_name, group_id')
+        .eq('tournament_id', tournamentId)
+        .order('group_id')
+        .order('id');
+      if (allTeams) {
+        for (const team of allTeams as Array<{ id: number; name: string; short_name?: string; group_id?: string }>) {
+          if (qualifyingTeams.length >= 4) break;
+          if (existingIds.has(team.id)) continue;
+          qualifyingTeams.push({
+            teamId: team.id,
+            teamName: team.short_name || team.name,
+            groupId: team.group_id || '',
+            rank: 1,
+          });
+          existingIds.add(team.id);
+        }
+      }
+      if (qualifyingTeams.length < 4) {
+        throw new Error(`チームが不足しています（${qualifyingTeams.length}/4チーム）。チームを登録してください。`);
+      }
     }
 
     // 3. 決勝会場を取得（複数会場対応）
