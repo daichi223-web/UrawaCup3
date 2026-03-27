@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { tournamentsApi, venuesApi, matchesApi, teamsApi } from '@/lib/api'
+import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/stores/appStore'
 import { venueAssignmentApi } from '@/features/venue-assignments/api'
 import { matchApi } from '@/features/matches/api'
@@ -645,14 +646,41 @@ export function useMatchSchedule() {
         )
       }
 
-      // 会場名→IDマップ
+      // 会場名→IDマップ（見つからない場合は自動作成）
       const venuesResult = await venuesApi.getAll(tournamentId)
       const venuesList = (venuesResult || []) as Array<{ id: number; name: string }>
+      const createdVenueNames: string[] = []
       const findVenue = (name: string) => {
         const n = name.trim()
         return venuesList.find(v =>
           v.name === n || v.name.includes(n) || n.includes(v.name)
         )
+      }
+      const findOrCreateVenue = async (name: string): Promise<{ id: number; name: string } | null> => {
+        const existing = findVenue(name)
+        if (existing) return existing
+        // 自動作成
+        try {
+          const { data, error } = await supabase
+            .from('venues')
+            .insert({
+              tournament_id: tournamentId,
+              name: name.trim(),
+              for_preliminary: true,
+              for_final_day: false,
+              is_finals_venue: false,
+              max_matches_per_day: 6,
+            } as never)
+            .select()
+            .single()
+          if (error) return null
+          const created = data as { id: number; name: string }
+          venuesList.push(created)
+          createdVenueNames.push(created.name)
+          return created
+        } catch {
+          return null
+        }
       }
 
       const errors: string[] = []
@@ -705,9 +733,9 @@ export function useMatchSchedule() {
           continue
         }
 
-        const venue = findVenue(venueName)
+        const venue = await findOrCreateVenue(venueName)
         if (!venue) {
-          errors.push(`${i + 2}行目: 会場「${venueName}」が見つかりません`)
+          errors.push(`${i + 2}行目: 会場「${venueName}」の作成に失敗しました`)
           continue
         }
 
@@ -753,14 +781,21 @@ export function useMatchSchedule() {
         await matchApi.bulkInsert(matchesToInsert)
       }
 
-      return { created: matchesToInsert.length, errors }
+      return { created: matchesToInsert.length, errors, createdVenues: createdVenueNames }
     },
     onSuccess: (data) => {
-      toast.success(`${data.created}試合をインポートしました`)
+      let msg = `${data.created}試合をインポートしました`
+      if (data.createdVenues.length > 0) {
+        msg += `\n会場を自動作成: ${data.createdVenues.join(', ')}`
+      }
+      toast.success(msg, { duration: 5000 })
       if (data.errors.length > 0) {
         toast.error(`${data.errors.length}件のエラー:\n${data.errors.slice(0, 5).join('\n')}`, { duration: 8000 })
       }
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
+      if (data.createdVenues.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ['venues', tournamentId] })
+      }
       setShowImportModal(false)
     },
     onError: (error: Error) => {

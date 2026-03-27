@@ -194,13 +194,20 @@ export const standingApi = {
       : (tournament?.advancing_teams || 1) * 4; // グループルールではグループ数 × 進出数
 
     // tournament_settings からタイブレーカー設定を取得
-    const { data: settingsData } = await supabase
-      .from('tournament_settings')
-      .select('tiebreaker_rules')
-      .eq('tournament_id', tournamentId)
-      .single();
-
-    const tiebreakerRules: string[] = (settingsData as TournamentSettingsResult | null)?.tiebreaker_rules ?? ['points', 'goal_difference', 'goals_scored'];
+    // テーブルが未作成の場合は404になるためtry-catchで保護
+    let tiebreakerRules: string[] = ['points', 'goal_difference', 'goals_scored'];
+    try {
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('tournament_settings')
+        .select('tiebreaker_rules')
+        .eq('tournament_id', tournamentId)
+        .single();
+      if (!settingsError && settingsData) {
+        tiebreakerRules = (settingsData as TournamentSettingsResult).tiebreaker_rules ?? tiebreakerRules;
+      }
+    } catch {
+      // テーブル未作成の場合はデフォルト値を使用
+    }
 
     // エントリに変換（試合数 > 0 のチームのみ対象）
     const entries: OverallStandingEntry[] = (standings || [])

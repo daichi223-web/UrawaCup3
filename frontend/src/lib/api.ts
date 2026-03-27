@@ -676,19 +676,24 @@ export const standingsApi = {
     console.log(`[Standings] Found ${teams.length} teams for group ${groupId || '(all teams)'}`)
 
     // tournament_settings から得点設定とタイブレーカー設定を取得
-    const { data: settingsData } = await supabase
-      .from('tournament_settings')
-      .select('points_for_win, points_for_draw, points_for_loss, tiebreaker_rules')
-      .eq('tournament_id', tournamentId)
-      .single()
-
+    // テーブルが未作成の場合は404になるためtry-catchで保護
     interface TournamentSettingsRow {
       points_for_win?: number | null
       points_for_draw?: number | null
       points_for_loss?: number | null
       tiebreaker_rules?: string[] | null
     }
-    const settings = settingsData as TournamentSettingsRow | null
+    let settings: TournamentSettingsRow | null = null
+    try {
+      const { data: settingsData, error: settingsError } = await supabase
+        .from('tournament_settings')
+        .select('points_for_win, points_for_draw, points_for_loss, tiebreaker_rules')
+        .eq('tournament_id', tournamentId)
+        .single()
+      if (!settingsError) settings = settingsData as TournamentSettingsRow | null
+    } catch {
+      // テーブル未作成の場合はデフォルト値を使用
+    }
     const pointsForWin = settings?.points_for_win ?? 3
     const pointsForDraw = settings?.points_for_draw ?? 1
     const pointsForLoss = settings?.points_for_loss ?? 0

@@ -144,8 +144,8 @@ export function MatchImportModal({
                     <tr key={i} className="border-b border-gray-200">
                       <td className="py-0.5 pr-2">{row.date}</td>
                       <td className="py-0.5 pr-2">{row.time}</td>
-                      <td className={`py-0.5 pr-2 ${venueOk ? '' : 'text-red-600 font-bold'}`}>
-                        {row.venue}{!venueOk && ' ?'}
+                      <td className={`py-0.5 pr-2 ${venueOk ? '' : 'text-blue-600 font-bold'}`}>
+                        {row.venue}{!venueOk && ' (新規)'}
                       </td>
                       <td className={`py-0.5 pr-2 ${homeOk ? '' : 'text-red-600 font-bold'}`}>
                         {row.home}{!homeOk && ' ?'}
