@@ -73,7 +73,7 @@ function PublicLayout() {
                         to="/public/scorers"
                         isActive={location.pathname === '/public/scorers'}
                         icon={Award}
-                        label="得点王"
+                        label="得点者"
                     />
                 </div>
             </nav>
