@@ -46,6 +46,7 @@ export function MatchImportModal({
       home: cols[3] || '',
       away: cols[4] || '',
       group: cols[5] || '',
+      bMatch: (cols[6] || '').trim().toUpperCase(),
     }
   })
 
@@ -60,10 +61,10 @@ export function MatchImportModal({
       <div className="space-y-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
           <p className="font-bold mb-1">CSV形式（ヘッダー行必須）</p>
-          <p className="font-mono text-xs">日付,時間,会場名,ホーム,アウェイ,グループ</p>
+          <p className="font-mono text-xs">日付,時間,会場名,ホーム,アウェイ,グループ,B戦</p>
           <p className="mt-1 text-xs">例:</p>
-          <p className="font-mono text-xs text-blue-600">2026-08-01,09:30,浦和南高G,浦和南,市立浦和,A</p>
-          <p className="font-mono text-xs text-blue-600">2026-08-01,10:45,浦和南高G,浦和学院,武南,A</p>
+          <p className="font-mono text-xs text-blue-600">2026-08-01,09:30,浦和南高G,浦和南,市立浦和,A,</p>
+          <p className="font-mono text-xs text-blue-600">2026-08-01,12:00,浦和南高G,浦和学院,武南,A,B</p>
           <details className="mt-2">
             <summary className="cursor-pointer text-xs font-medium">詳細仕様</summary>
             <ul className="mt-1 text-xs space-y-0.5 list-disc list-inside">
@@ -72,6 +73,7 @@ export function MatchImportModal({
               <li>会場名: 登録済みの会場名（部分一致可）</li>
               <li>ホーム/アウェイ: チーム名または略称（部分一致可）</li>
               <li>グループ: A, B, C, D 等（省略可 - チームのグループを自動使用）</li>
+              <li>B戦: 「B」と記入でB戦（順位計算対象外）。省略で通常試合</li>
             </ul>
           </details>
         </div>
@@ -129,7 +131,8 @@ export function MatchImportModal({
                   <th className="pb-1 pr-2">会場</th>
                   <th className="pb-1 pr-2">ホーム</th>
                   <th className="pb-1 pr-2">アウェイ</th>
-                  <th className="pb-1">G</th>
+                  <th className="pb-1 pr-2">G</th>
+                  <th className="pb-1">B戦</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,7 +153,10 @@ export function MatchImportModal({
                       <td className={`py-0.5 pr-2 ${awayOk ? '' : 'text-red-600 font-bold'}`}>
                         {row.away}{!awayOk && ' ?'}
                       </td>
-                      <td className="py-0.5">{row.group}</td>
+                      <td className="py-0.5 pr-2">{row.group}</td>
+                      <td className={`py-0.5 ${row.bMatch === 'B' ? 'text-orange-600 font-bold' : ''}`}>
+                        {row.bMatch === 'B' ? 'B' : ''}
+                      </td>
                     </tr>
                   )
                 })}

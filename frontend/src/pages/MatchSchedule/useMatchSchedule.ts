@@ -667,6 +667,7 @@ export function useMatchSchedule() {
         match_order: number
         stage: string
         status: string
+        is_b_match?: boolean
       }> = []
 
       // 会場+日付ごとの試合順序カウンター
@@ -684,6 +685,8 @@ export function useMatchSchedule() {
 
         const [dateStr, timeStr, venueName, homeName, awayName] = cols
         const groupId = cols[5] || ''
+        const bMatchFlag = (cols[6] || '').trim().toUpperCase()
+        const isBMatch = bMatchFlag === 'B' || bMatchFlag === '1' || bMatchFlag === 'TRUE' || bMatchFlag === 'B戦'
 
         // 日付バリデーション
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -724,8 +727,8 @@ export function useMatchSchedule() {
         const orderKey = `${venue.id}-${dateStr}`
         orderCounters[orderKey] = (orderCounters[orderKey] || 0) + 1
 
-        // グループID: CSV指定 > チームのgroup_id
-        const resolvedGroup = groupId || homeTeam.group_id || null
+        // グループID: CSV指定（1文字のみ有効） > チームのgroup_id
+        const resolvedGroup = (groupId.length === 1 ? groupId : '') || homeTeam.group_id || null
 
         matchesToInsert.push({
           tournament_id: tournamentId,
@@ -738,6 +741,7 @@ export function useMatchSchedule() {
           match_order: orderCounters[orderKey],
           stage: 'preliminary',
           status: 'scheduled',
+          is_b_match: isBMatch,
         })
       }
 
