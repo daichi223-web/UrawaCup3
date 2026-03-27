@@ -623,8 +623,150 @@ export function useMatchSchedule() {
 
   const getVenueName = (venueId: number) => venues.find(v => v.id === venueId)?.name || `会場${venueId}`
 
+  // 組み合わせインポート
+  const [showImportModal, setShowImportModal] = useState(false)
+
+  const importMatchesMutation = useMutation({
+    mutationFn: async (csv: string) => {
+      const lines = csv.trim().split('\n')
+      if (lines.length < 2) throw new Error('データ行がありません')
+
+      // チーム名→IDマップ（名前・略称の両方で検索可能に）
+      const teamsResult = await teamsApi.getAll(tournamentId)
+      const teams = (teamsResult.teams || []) as Array<{
+        id: number; name: string; short_name?: string | null; group_id?: string | null
+      }>
+      const findTeam = (name: string) => {
+        const n = name.trim()
+        return teams.find(t =>
+          t.name === n || t.short_name === n ||
+          t.name.includes(n) || n.includes(t.name) ||
+          (t.short_name && (t.short_name.includes(n) || n.includes(t.short_name)))
+        )
+      }
+
+      // 会場名→IDマップ
+      const venuesResult = await venuesApi.getAll(tournamentId)
+      const venuesList = (venuesResult || []) as Array<{ id: number; name: string }>
+      const findVenue = (name: string) => {
+        const n = name.trim()
+        return venuesList.find(v =>
+          v.name === n || v.name.includes(n) || n.includes(v.name)
+        )
+      }
+
+      const errors: string[] = []
+      const matchesToInsert: Array<{
+        tournament_id: number
+        group_id?: string | null
+        home_team_id: number
+        away_team_id: number
+        venue_id: number
+        match_date: string
+        match_time: string
+        match_order: number
+        stage: string
+        status: string
+      }> = []
+
+      // 会場+日付ごとの試合順序カウンター
+      const orderCounters: Record<string, number> = {}
+
+      const dataLines = lines.slice(1)
+      for (let i = 0; i < dataLines.length; i++) {
+        const line = dataLines[i].trim()
+        if (!line) continue
+        const cols = line.split(',').map(c => c.trim())
+        if (cols.length < 5) {
+          errors.push(`${i + 2}行目: カラム不足（${cols.length}列、5列以上必要）`)
+          continue
+        }
+
+        const [dateStr, timeStr, venueName, homeName, awayName] = cols
+        const groupId = cols[5] || ''
+
+        // 日付バリデーション
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          errors.push(`${i + 2}行目: 日付形式が不正「${dateStr}」(YYYY-MM-DD)`)
+          continue
+        }
+
+        // 時間正規化
+        let matchTime = timeStr
+        if (/^\d{1,2}:\d{2}$/.test(matchTime)) {
+          const [h, m] = matchTime.split(':')
+          matchTime = `${h.padStart(2, '0')}:${m}`
+        }
+        if (!/^\d{2}:\d{2}/.test(matchTime)) {
+          errors.push(`${i + 2}行目: 時間形式が不正「${timeStr}」(HH:mm)`)
+          continue
+        }
+
+        const venue = findVenue(venueName)
+        if (!venue) {
+          errors.push(`${i + 2}行目: 会場「${venueName}」が見つかりません`)
+          continue
+        }
+
+        const homeTeam = findTeam(homeName)
+        if (!homeTeam) {
+          errors.push(`${i + 2}行目: ホームチーム「${homeName}」が見つかりません`)
+          continue
+        }
+
+        const awayTeam = findTeam(awayName)
+        if (!awayTeam) {
+          errors.push(`${i + 2}行目: アウェイチーム「${awayName}」が見つかりません`)
+          continue
+        }
+
+        // match_order: 会場+日付ごとに連番
+        const orderKey = `${venue.id}-${dateStr}`
+        orderCounters[orderKey] = (orderCounters[orderKey] || 0) + 1
+
+        // グループID: CSV指定 > チームのgroup_id
+        const resolvedGroup = groupId || homeTeam.group_id || null
+
+        matchesToInsert.push({
+          tournament_id: tournamentId,
+          group_id: resolvedGroup,
+          home_team_id: homeTeam.id,
+          away_team_id: awayTeam.id,
+          venue_id: venue.id,
+          match_date: dateStr,
+          match_time: matchTime,
+          match_order: orderCounters[orderKey],
+          stage: 'preliminary',
+          status: 'scheduled',
+        })
+      }
+
+      if (errors.length > 0 && matchesToInsert.length === 0) {
+        throw new Error(`全行エラー:\n${errors.join('\n')}`)
+      }
+
+      if (matchesToInsert.length > 0) {
+        await matchApi.bulkInsert(matchesToInsert)
+      }
+
+      return { created: matchesToInsert.length, errors }
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.created}試合をインポートしました`)
+      if (data.errors.length > 0) {
+        toast.error(`${data.errors.length}件のエラー:\n${data.errors.slice(0, 5).join('\n')}`, { duration: 8000 })
+      }
+      queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] })
+      setShowImportModal(false)
+    },
+    onError: (error: Error) => {
+      toast.error(`インポート失敗: ${error.message}`)
+    },
+  })
+
   const isGenerating = generatePreliminaryMutation.isPending || generateFinalsMutation.isPending || generateTrainingMutation.isPending
   const isDeleting = deleteMatchesMutation.isPending
+  const isImporting = importMatchesMutation.isPending
   const isLoading = isLoadingTournament || isLoadingMatches
 
   return {
@@ -639,6 +781,7 @@ export function useMatchSchedule() {
     editForm, setEditForm,
     isEditMode, setIsEditMode,
     crossVenueSelectedTeam, setCrossVenueSelectedTeam,
+    showImportModal, setShowImportModal,
 
     // Data
     tournament, tournamentId,
@@ -653,7 +796,7 @@ export function useMatchSchedule() {
     hasPreliminaryMatches, hasFinalsMatches, hasTrainingMatches,
 
     // Status
-    isLoading, isGenerating, isDeleting,
+    isLoading, isGenerating, isDeleting, isImporting,
     isUpdatingMatch: updateMatchMutation.isPending,
     isUpdatingBracket: updateBracketMutation.isPending,
     isBulkUpdating: bulkUpdateMatchesMutation.isPending,
@@ -663,6 +806,7 @@ export function useMatchSchedule() {
     startEditing, saveEdit,
     openGenerateModal, openDeleteModal,
     handleDelete, handleGenerate,
+    handleImportMatches: (csv: string) => importMatchesMutation.mutate(csv),
     getVenueName, getDateString,
   }
 }

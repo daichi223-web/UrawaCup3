@@ -15,6 +15,7 @@ interface GenerateButtonsProps {
   onDeletePreliminary: () => void
   onDeleteFinals: () => void
   onDeleteTraining: () => void
+  onImportMatches?: () => void
 }
 
 export function GenerateButtons({
@@ -30,6 +31,7 @@ export function GenerateButtons({
   onDeletePreliminary,
   onDeleteFinals,
   onDeleteTraining,
+  onImportMatches,
 }: GenerateButtonsProps) {
   const buttons = []
 
@@ -44,6 +46,18 @@ export function GenerateButtons({
         予選リーグ日程を生成
       </button>
     )
+    if (onImportMatches) {
+      buttons.push(
+        <button
+          key="preliminary-import"
+          className="btn-secondary"
+          onClick={onImportMatches}
+          disabled={isGenerating || isDeleting}
+        >
+          CSVインポート
+        </button>
+      )
+    }
     if (hasPreliminaryMatches) {
       buttons.push(
         <button

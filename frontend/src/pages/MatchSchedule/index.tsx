@@ -20,6 +20,7 @@ import {
   DeleteModal,
   MatchDetailModal,
   EditMatchModal,
+  MatchImportModal,
 } from './components'
 
 function MatchSchedule() {
@@ -35,6 +36,7 @@ function MatchSchedule() {
     editForm, setEditForm,
     isEditMode, setIsEditMode,
     crossVenueSelectedTeam, setCrossVenueSelectedTeam,
+    showImportModal, setShowImportModal,
 
     // Data
     tournament, venues, allTeams, allMatches,
@@ -48,7 +50,7 @@ function MatchSchedule() {
     hasPreliminaryMatches, hasFinalsMatches, hasTrainingMatches,
 
     // Status
-    isLoading, isGenerating, isDeleting,
+    isLoading, isGenerating, isDeleting, isImporting,
     isUpdatingMatch, isUpdatingBracket, isBulkUpdating,
 
     // Handlers
@@ -56,6 +58,7 @@ function MatchSchedule() {
     startEditing, saveEdit,
     openGenerateModal, openDeleteModal,
     handleDelete, handleGenerate,
+    handleImportMatches,
     getVenueName, getDateString,
   } = useMatchSchedule()
 
@@ -104,6 +107,7 @@ function MatchSchedule() {
             onDeletePreliminary={() => openDeleteModal('preliminary')}
             onDeleteFinals={() => openDeleteModal('finals')}
             onDeleteTraining={() => openDeleteModal('training')}
+            onImportMatches={() => setShowImportModal(true)}
           />
 
           {/* 編集モードトグル */}
@@ -254,6 +258,15 @@ function MatchSchedule() {
         onClose={() => { setEditingMatch(null); setEditForm(null) }}
         onFormChange={setEditForm}
         onSave={saveEdit}
+      />
+
+      <MatchImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={handleImportMatches}
+        isImporting={isImporting}
+        teamNames={allTeams.flatMap(t => [t.name, t.shortName].filter(Boolean) as string[])}
+        venueNames={venues.map(v => v.name || '').filter(Boolean)}
       />
     </div>
   )
