@@ -7,10 +7,10 @@ import os
 import uuid
 
 # Import the generator classes
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from ....generate_daily_report_pdf import DailyReportGenerator, create_sample_data as create_daily_sample
-from ....generate_final_result_pdf import FinalResultPDFGenerator, create_sample_data as create_final_sample
-from ....generate_standings_pdf import StandingsPDFGenerator
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+from generate_daily_report_pdf import DailyReportGenerator, create_sample_data as create_daily_sample
+from generate_final_result_pdf import FinalResultPDFGenerator, create_sample_data as create_final_sample
+from generate_standings_pdf import StandingsPDFGenerator
 
 router = APIRouter()
 

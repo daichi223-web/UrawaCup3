@@ -5,8 +5,8 @@ import sys
 import os
 
 # Import the generator classes
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from ....final_day_generator_v2 import FinalDayGenerator, Team, TournamentConfig
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+from final_day_generator_v2 import FinalDayGenerator, Team, TournamentConfig
 
 router = APIRouter()
 
