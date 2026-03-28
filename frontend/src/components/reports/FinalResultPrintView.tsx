@@ -185,14 +185,22 @@ const FinalResultPrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                 </div>
 
                 {/* 得点者 */}
-                {match.goals && match.goals.length > 0 && (
+                {match.goals && match.goals.length > 0 && (() => {
+                  const goalCount = match.goals.length;
+                  // 得点者数に応じてフォントサイズを調整
+                  const textSize = goalCount > 8 ? 'text-[9px] leading-tight' : goalCount > 5 ? 'text-xs leading-snug' : 'text-sm';
+                  const spacing = goalCount > 8 ? 'space-y-0' : goalCount > 5 ? 'space-y-0.5' : 'space-y-1';
+                  return (
                   <div className="mt-3 pt-3 border-t border-gray-200">
                     <div className="text-xs text-gray-600 mb-1">⚽ 得点経過</div>
-                    <div className="text-sm space-y-1">
-                      {match.goals.map((goal, idx) => (
-                        <div key={idx} className="flex gap-2">
+                    <div className={`${textSize} ${spacing}`}>
+                      {match.goals.map((goal: { minute?: number; player_name?: string; team_id?: number; is_own_goal?: boolean; assist_player_name?: string }, idx: number) => (
+                        <div key={idx} className="flex gap-1 flex-wrap">
                           <span className="text-gray-500">{goal.minute}'</span>
                           <span>{goal.player_name}</span>
+                          {goal.assist_player_name && (
+                            <span className="text-gray-400">(A: {goal.assist_player_name})</span>
+                          )}
                           <span className="text-gray-400">
                             ({goal.team_id === match.home_team?.id
                               ? match.home_team?.short_name || match.home_team?.name
@@ -203,7 +211,8 @@ const FinalResultPrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                       ))}
                     </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             )
           })}

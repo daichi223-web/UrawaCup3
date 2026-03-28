@@ -50,6 +50,7 @@ interface Scorer {
   time: string
   team: string
   name: string
+  assist?: string
 }
 
 // 会場別試合データ（PDF出力用）
@@ -294,12 +295,13 @@ export const reportApi = {
       // 得点者リストを作成
       const scorers: Scorer[] = (match.goals || [])
         .sort((a: Goal, b: Goal) => (a.minute || 0) - (b.minute || 0))
-        .map((goal: Goal) => ({
+        .map((goal: Goal & { assist_player_name?: string }) => ({
           time: String(goal.minute || ''),
           team: goal.team_id === match.home_team_id
             ? (match.home_team?.short_name || match.home_team?.name || '')
             : (match.away_team?.short_name || match.away_team?.name || ''),
           name: goal.player_name || '',
+          assist: goal.assist_player_name || undefined,
         }));
 
       matchesByVenue[venueName].push({
@@ -397,9 +399,15 @@ export const reportApi = {
           ? (m.awayScore1H as number) + (m.awayScore2H as number)
           : '';
 
-        // 得点者リスト
+        // 得点者リスト（アシスト付き）
         const scorersList = (m.scorers || [])
-          .map((s: Scorer) => `${s.time}' ${s.team} ${s.name}`)
+          .map((s: Scorer) => {
+            let text = `${s.time}' ${s.name}`;
+            if ((s as Scorer & { assist?: string }).assist) {
+              text += `(A:${(s as Scorer & { assist?: string }).assist})`;
+            }
+            return text;
+          })
           .join(', ');
 
         return [
@@ -412,6 +420,10 @@ export const reportApi = {
           scorersList || '-'
         ];
       });
+
+      // 得点者が多い試合があるかチェックしてフォントサイズを調整
+      const maxScorersLen = Math.max(...tableData.map((row: string[]) => (row[6] || '').length), 0);
+      const scorerFontSize = maxScorersLen > 80 ? 5 : maxScorersLen > 50 ? 6 : maxScorersLen > 30 ? 7 : 8;
 
       (doc as JsPDFWithAutoTable).autoTable({
         startY: 40,
@@ -426,7 +438,7 @@ export const reportApi = {
           3: { cellWidth: 20 },  // スコア
           4: { cellWidth: 15 },  // 前後半
           5: { cellWidth: 30 },  // アウェイ
-          6: { cellWidth: 55 },  // 得点者
+          6: { cellWidth: 55, fontSize: scorerFontSize },  // 得点者（自動縮小）
         },
       });
 
