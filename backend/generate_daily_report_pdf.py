@@ -119,7 +119,7 @@ class DailyReportGenerator:
         
         # ヘッダー
         content.append(Paragraph(
-            "第44回 浦和カップ高校サッカーフェスティバル",
+            "第45回 浦和カップ高校サッカーフェスティバル",
             self.styles['title']
         ))
         content.append(Paragraph(
