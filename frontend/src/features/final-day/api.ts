@@ -1013,103 +1013,119 @@ export const finalDayApi = {
       });
     }
 
-    // 8. 対戦ペアのスコアを計算（警告が少ないほど低スコア、低スコア優先で対戦）
-    const calculatePairScore = (teamA: TeamInfo, teamB: TeamInfo): number => {
+    // 8. ボーナススコアを計算（高スコア = 良い対戦、最大スコアのパターンを採用）
+    const calculatePairBonus = (teamA: TeamInfo, teamB: TeamInfo): number => {
       let score = 0;
 
-      // 同グループ（予選で対戦済み）→ 高ペナルティ（除外ではなく優先度低）
-      // 会場内の総当たりを完成させるため、同グループも対戦可能とする
-      if (teamA.groupId === teamB.groupId) score += 200;
-
-      // 過去に対戦済み → +100
+      // 初対戦（予選未対戦） → +100
       const pairKey = [teamA.teamId, teamB.teamId].sort((a, b) => a - b).join('-');
-      if (playedPairs.has(pairKey)) score += 100;
+      if (!playedPairs.has(pairKey)) score += 100;
 
-      // 地元同士 → +50
-      if (teamA.teamType === 'local' && teamB.teamType === 'local') score += 50;
+      // 別地域 → +30
+      if (!teamA.region || !teamB.region || teamA.region !== teamB.region) score += 30;
 
-      // 同地域 → +30
-      if (teamA.region && teamB.region && teamA.region === teamB.region) score += 30;
-
-      // 同リーグ → +20
-      if (teamA.leagueId && teamB.leagueId && teamA.leagueId === teamB.leagueId) score += 20;
+      // 別リーグ → +20
+      if (!teamA.leagueId || !teamB.leagueId || teamA.leagueId !== teamB.leagueId) score += 20;
 
       return score;
     };
 
-    // 9. 会場ごとのチーム数を計算: (参加校数 - 4) / 会場数
-    const totalTrainingTeams = typedAllTeams.length;
-    interface VenueInfo { id: number; name?: string; }
+    // 9. 会場設定
+    interface VenueInfo { id: number; name?: string; manager_team_id?: number | null; }
     const typedVenues = (venues || []) as VenueInfo[];
-    const teamsPerVenue = Math.ceil(totalTrainingTeams / typedVenues.length);
-    console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${typedVenues.length}, 会場あたり: ${teamsPerVenue}チーム`);
+    const totalTrainingTeams = typedAllTeams.length;
+    console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${typedVenues.length}`);
 
-    // 10. チームを順位順に並べて会場に均等分配
-    // 各会場に teamsPerVenue チームずつ、同じ順位のチームを異なる会場に分散
-    const venueAssignments: Map<number, TeamInfo[]> = new Map();
-    typedVenues.forEach(v => venueAssignments.set(v.id, []));
-
-    // 全チームを順位順にフラットに並べる
+    // 10. 各会場に地元1チーム + 招待3チーム = 4チームを配置
+    // Step A: 全チームを順位順にソート
     const allTeamsSorted: TeamInfo[] = [];
     const ranks = Object.keys(teamsByRank).map(Number).sort((a, b) => a - b);
     ranks.forEach(rank => {
-      const teams = teamsByRank[rank] || [];
-      allTeamsSorted.push(...teams);
+      allTeamsSorted.push(...(teamsByRank[rank] || []));
     });
 
-    // 各チームを順番に会場に振り分け（会場の上限を超えないように）
-    allTeamsSorted.forEach((team, index) => {
-      // 空きがある会場を探す（循環して均等に）
-      for (let attempt = 0; attempt < typedVenues.length; attempt++) {
-        const venueIndex = (index + attempt) % typedVenues.length;
-        const venue = typedVenues[venueIndex];
-        const currentTeams = venueAssignments.get(venue.id)!;
+    // Step B: 各会場の地元チームを決定
+    // - ホストチーム（manager_team_id）が研修参加 → そのまま配置
+    // - ホストチームが決勝進出 → 会場を持たない地元チームから補充
+    const localTeamType = 'local';
+    const managerTeamIds = new Set(typedVenues.map(v => v.manager_team_id).filter(Boolean) as number[]);
+    const allLocalTeams = allTeamsSorted.filter(t => t.teamType === localTeamType);
+    const nonHostLocals = allLocalTeams.filter(t => !managerTeamIds.has(t.teamId));
+    // 補充候補を順位順にソート（上位から使う）
+    nonHostLocals.sort((a, b) => a.rank - b.rank);
+    let replacementIdx = 0;
 
-        // この会場にチームを追加できるか（上限チェック）
-        if (currentTeams.length < teamsPerVenue) {
-          // 同じグループのチームがいないかチェック
-          const hasSameGroup = currentTeams.some(t => t.groupId === team.groupId);
-          if (!hasSameGroup) {
-            currentTeams.push(team);
-            break;
-          }
+    const venueLocalTeam: Map<number, TeamInfo> = new Map(); // 会場ID → 配置される地元チーム
+    for (const venue of typedVenues) {
+      const hostTeamId = venue.manager_team_id;
+      const hostTeam = hostTeamId ? allTeamsSorted.find(t => t.teamId === hostTeamId) : null;
+      if (hostTeam) {
+        // ホストチームが研修参加 → 自校会場に配置
+        venueLocalTeam.set(venue.id, hostTeam);
+      } else {
+        // ホストチームが決勝進出 → 補充
+        if (replacementIdx < nonHostLocals.length) {
+          venueLocalTeam.set(venue.id, nonHostLocals[replacementIdx++]);
+          console.log(`[Training] 会場${venue.name}: ホスト決勝進出 → ${nonHostLocals[replacementIdx - 1].teamName}を配置`);
         }
       }
+    }
 
-      // どの会場にも入れなかった場合、最も少ない会場に強制追加
-      const assigned = Array.from(venueAssignments.values()).some(teams =>
-        teams.includes(team)
-      );
-      if (!assigned) {
-        // 最も少ない会場に追加
-        let minVenue = typedVenues[0];
-        let minCount = Infinity;
-        typedVenues.forEach(v => {
-          const count = venueAssignments.get(v.id)!.length;
-          if (count < minCount) {
-            minCount = count;
-            minVenue = v;
-          }
-        });
-        venueAssignments.get(minVenue.id)!.push(team);
-        console.log(`[Training] 強制追加: ${team.teamName} → 会場${minVenue.id}`);
-      }
+    // Step C: 地元チームの順位で会場のブロック順を決定
+    const venueOrder = [...typedVenues].sort((a, b) => {
+      const localA = venueLocalTeam.get(a.id);
+      const localB = venueLocalTeam.get(b.id);
+      const rankA = localA ? localA.rank : 9999;
+      const rankB = localB ? localB.rank : 9999;
+      return rankA - rankB;
     });
+
+    console.log(`[Training] 会場ブロック順: ${venueOrder.map((v, i) => {
+      const local = venueLocalTeam.get(v.id);
+      return `${i + 1}. ${v.name || v.id}(${local ? local.rank + '位:' + local.teamName : '地元なし'})`;
+    }).join(', ')}`);
+
+    // Step D: 招待チーム（地元以外）を順位順に各会場へ振り分け
+    // 20チーム÷6会場 → 4チーム会場と3チーム会場が混在
+    // 上位ブロック（地元チームの順位が高い会場）から優先的に4チームにする
+    const assignedTeamIds = new Set(Array.from(venueLocalTeam.values()).map(t => t.teamId));
+    const invitedTeams = allTeamsSorted.filter(t => !assignedTeamIds.has(t.teamId));
+    const numVenues = venueOrder.length;
+    const totalWithLocal = invitedTeams.length + assignedTeamIds.size;
+    const basePerVenue = Math.floor(totalWithLocal / numVenues);
+    let remainder = totalWithLocal % numVenues;
+
+    const venueAssignments: Map<number, TeamInfo[]> = new Map();
+    venueOrder.forEach(v => {
+      const local = venueLocalTeam.get(v.id);
+      venueAssignments.set(v.id, local ? [local] : []);
+    });
+
+    let invIdx = 0;
+    for (const venue of venueOrder) {
+      const current = venueAssignments.get(venue.id)!;
+      // 余りがある会場は+1チーム（上位ブロック優先）
+      const targetSize = remainder > 0 ? basePerVenue + 1 : basePerVenue;
+      if (remainder > 0) remainder--;
+      while (current.length < targetSize && invIdx < invitedTeams.length) {
+        current.push(invitedTeams[invIdx++]);
+      }
+    }
+    // 余りチームがあれば最後の会場に追加
+    while (invIdx < invitedTeams.length) {
+      venueAssignments.get(venueOrder[venueOrder.length - 1].id)!.push(invitedTeams[invIdx++]);
+    }
 
     // 各会場のチーム数をログ出力
-    typedVenues.forEach(v => {
+    venueOrder.forEach((v, i) => {
       const teams = venueAssignments.get(v.id)!;
-      console.log(`[Training] 会場${v.id}: ${teams.length}チーム (${teams.map(t => `${t.rank}位:${t.teamName}`).join(', ')})`);
+      const local = venueLocalTeam.get(v.id);
+      console.log(`[Training] ブロック${i + 1} ${v.name || v.id}: ${teams.length}チーム [地元:${local?.teamName || 'なし'}] (${teams.map(t => `${t.rank}位:${t.teamName}`).join(', ')})`);
     });
 
-    console.log('[Training] 会場割り当て完了:',
-      Array.from(venueAssignments.entries()).map(([vid, teams]) => {
-        const groups = [...new Set(teams.map(t => t.groupId))];
-        return `会場${vid}: ${teams.length}チーム (グループ: ${groups.join(',') || 'なし'})`;
-      }).join(' | ')
-    );
-
-    // 11. 各会場でリーグ戦を生成（各チームがmatchesPerTeam試合になるよう調整）
+    // 11. 各会場で最適な対戦パターンを選択
+    // 4チームの場合、2試合ずつの組み合わせパターンは3通り:
+    //   パターン1: (0v1, 2v3)  パターン2: (0v2, 1v3)  パターン3: (0v3, 1v2)
     interface MatchInsertPayload {
       tournament_id: number;
       venue_id: number;
@@ -1124,6 +1140,11 @@ export const finalDayApi = {
     }
     const matchesToInsert: MatchInsertPayload[] = [];
 
+    // is_finals_venue情報を取得するため型を拡張
+    interface VenueWithFinals extends VenueInfo { is_finals_venue?: boolean; }
+    const typedVenuesWithFinals = (venues || []) as VenueWithFinals[];
+    const finalsVenueIds = new Set(typedVenuesWithFinals.filter(v => v.is_finals_venue).map(v => v.id));
+
     for (const venue of typedVenues) {
       const teamsInVenue = venueAssignments.get(venue.id) || [];
       if (teamsInVenue.length < 2) {
@@ -1131,79 +1152,72 @@ export const finalDayApi = {
         continue;
       }
 
-      // デバッグ: チーム情報を出力
-      console.log(`[Training] 会場${venue.id}のチーム:`, teamsInVenue.map(t => ({ id: t.teamId, name: t.teamName, group: t.groupId })));
-
-      // 会場内の平均順位（リーグ名用）
       const avgRank = Math.round(teamsInVenue.reduce((sum, t) => sum + t.rank, 0) / teamsInVenue.length);
 
-      // 各チームの試合数をカウント
-      const teamMatchCounts: Record<number, number> = {};
-      teamsInVenue.forEach(t => { teamMatchCounts[t.teamId] = 0; });
+      // 4チームの全2試合パターンを列挙し、合計ボーナスが最大のパターンを採用
+      type PairSet = [number, number][];
+      const pairingPatterns: PairSet[] = [];
 
-      // 全ペアを生成
-      const pairs: { teamA: TeamInfo; teamB: TeamInfo; score: number }[] = [];
-      for (let i = 0; i < teamsInVenue.length; i++) {
-        for (let j = i + 1; j < teamsInVenue.length; j++) {
-          const score = calculatePairScore(teamsInVenue[i], teamsInVenue[j]);
-          pairs.push({ teamA: teamsInVenue[i], teamB: teamsInVenue[j], score });
-        }
-      }
-
-      // スコア順にソート（警告が少ない試合を先に配置）
-      pairs.sort((a, b) => a.score - b.score);
-
-      // 各チームがmatchesPerTeam試合になるようペアを選択
-      const selectedPairs: typeof pairs = [];
-      const teamsInPrevSlot = new Set<number>(); // 連戦回避用
-
-      for (const pair of pairs) {
-        // 両チームがまだ上限に達していなければ選択
-        if (teamMatchCounts[pair.teamA.teamId] < matchesPerTeam &&
-            teamMatchCounts[pair.teamB.teamId] < matchesPerTeam) {
-
-          // 連戦チェック（直前の試合に出場したチームは後回し）
-          const isConsecutive = teamsInPrevSlot.has(pair.teamA.teamId) || teamsInPrevSlot.has(pair.teamB.teamId);
-
-          if (!isConsecutive || pairs.indexOf(pair) === pairs.length - 1) {
-            selectedPairs.push(pair);
-            teamMatchCounts[pair.teamA.teamId]++;
-            teamMatchCounts[pair.teamB.teamId]++;
-
-            // 連戦回避用の更新
-            teamsInPrevSlot.clear();
-            teamsInPrevSlot.add(pair.teamA.teamId);
-            teamsInPrevSlot.add(pair.teamB.teamId);
+      if (teamsInVenue.length === 4) {
+        pairingPatterns.push([[0, 1], [2, 3]]);
+        pairingPatterns.push([[0, 2], [1, 3]]);
+        pairingPatterns.push([[0, 3], [1, 2]]);
+      } else if (teamsInVenue.length === 3) {
+        // 3チーム: 1試合ずつ選ぶ3パターン
+        pairingPatterns.push([[0, 1]]);
+        pairingPatterns.push([[0, 2]]);
+        pairingPatterns.push([[1, 2]]);
+      } else if (teamsInVenue.length === 2) {
+        pairingPatterns.push([[0, 1]]);
+      } else {
+        // 5チーム以上: 全ペアからmatchesPerTeam試合ずつ貪欲に選択
+        const allPairs: { i: number; j: number; bonus: number }[] = [];
+        for (let i = 0; i < teamsInVenue.length; i++) {
+          for (let j = i + 1; j < teamsInVenue.length; j++) {
+            allPairs.push({ i, j, bonus: calculatePairBonus(teamsInVenue[i], teamsInVenue[j]) });
           }
         }
+        allPairs.sort((a, b) => b.bonus - a.bonus);
+        const counts: Record<number, number> = {};
+        teamsInVenue.forEach((_, idx) => { counts[idx] = 0; });
+        const selected: [number, number][] = [];
+        for (const p of allPairs) {
+          if (counts[p.i] < matchesPerTeam && counts[p.j] < matchesPerTeam) {
+            selected.push([p.i, p.j]);
+            counts[p.i]++;
+            counts[p.j]++;
+          }
+        }
+        pairingPatterns.push(selected);
       }
 
-      // 連戦を許容して残りを埋める（上限未満のチームがある場合）
-      for (const pair of pairs) {
-        if (selectedPairs.includes(pair)) continue;
-        if (teamMatchCounts[pair.teamA.teamId] < matchesPerTeam &&
-            teamMatchCounts[pair.teamB.teamId] < matchesPerTeam) {
-          selectedPairs.push(pair);
-          teamMatchCounts[pair.teamA.teamId]++;
-          teamMatchCounts[pair.teamB.teamId]++;
+      // 最大ボーナスのパターンを選択
+      let bestPattern = pairingPatterns[0];
+      let bestScore = -1;
+      for (const pattern of pairingPatterns) {
+        const totalBonus = pattern.reduce((sum, [i, j]) =>
+          sum + calculatePairBonus(teamsInVenue[i], teamsInVenue[j]), 0);
+        console.log(`[Training] 会場${venue.id} パターン ${JSON.stringify(pattern.map(([i,j]) => `${teamsInVenue[i].teamName} vs ${teamsInVenue[j].teamName}`))}: ボーナス=${totalBonus}`);
+        if (totalBonus > bestScore) {
+          bestScore = totalBonus;
+          bestPattern = pattern;
         }
       }
 
-      // 試合数の確認
-      const matchCountSummary = teamsInVenue.map(t => `${t.teamName}:${teamMatchCounts[t.teamId]}`).join(', ');
-      console.log(`[Training] 会場${venue.id}の試合数: ${matchCountSummary}`);
-
-      // 会場ごとのキックオフ時間とmatch_orderを計算（1から開始）
-      let currentTime = startTime;
+      // 選択されたパターンから試合を生成
+      // 準決勝会場は1枠遅れて開始（準決勝の後から研修開始）
+      const isFinalsVenue = finalsVenueIds.has(venue.id);
+      let currentTime = isFinalsVenue
+        ? addMinutes(startTime, matchDuration + intervalMinutes)
+        : startTime;
       let matchOrder = 1;
 
-      // 選択されたペアを試合として生成
-      for (const pair of selectedPairs) {
+      for (const [i, j] of bestPattern) {
         matchesToInsert.push({
           tournament_id: tournamentId,
           venue_id: venue.id,
-          home_team_id: pair.teamA.teamId,
-          away_team_id: pair.teamB.teamId,
+          home_team_id: teamsInVenue[i].teamId,
+          away_team_id: teamsInVenue[j].teamId,
           match_date: finalDate,
           match_time: currentTime,
           match_order: matchOrder++,
@@ -1211,11 +1225,10 @@ export const finalDayApi = {
           status: 'scheduled',
           notes: `${avgRank}位リーグ`,
         });
-        // 次の試合の時間を計算
         currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
       }
 
-      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${selectedPairs.length}試合 (${avgRank}位リーグ, ${startTime}〜${currentTime})`);
+      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${bestPattern.length}試合 (${avgRank}位リーグ, ボーナス=${bestScore})`);
     }
 
     // 10. 試合をDBに挿入
