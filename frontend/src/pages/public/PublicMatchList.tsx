@@ -215,11 +215,15 @@ export default function PublicMatchList() {
         return groupKey;
     };
 
-    // 時系列ソート: 日付・時間順（早い順）
+    // ソート: 結果入力済み（completed）を上に、その中では最新順。未入力は時系列昇順。
     const sortedMatches = [...matches].sort((a, b) => {
+        const aCompleted = a.status === 'completed' || a.status === 'in_progress';
+        const bCompleted = b.status === 'completed' || b.status === 'in_progress';
+        if (aCompleted !== bCompleted) return aCompleted ? -1 : 1;
         const timeA = new Date(`${a.match_date} ${a.match_time}`).getTime();
         const timeB = new Date(`${b.match_date} ${b.match_time}`).getTime();
-        return timeA - timeB;
+        // 結果入力済み: 最新が上、未入力: 早い順
+        return aCompleted ? timeB - timeA : timeA - timeB;
     });
 
     // グループ一覧を取得（1リーグ制の場合はグループタブを非表示）
