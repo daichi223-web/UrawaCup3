@@ -246,6 +246,9 @@ CREATE TABLE IF NOT EXISTS goals (
     half INTEGER NOT NULL,
     is_own_goal BOOLEAN NOT NULL DEFAULT FALSE,
     is_penalty BOOLEAN NOT NULL DEFAULT FALSE,
+    assist_player_id INTEGER REFERENCES players(id) ON DELETE SET NULL,
+    assist_player_name VARCHAR(100),
+    assist_jersey_number INTEGER,
     notes VARCHAR(200),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

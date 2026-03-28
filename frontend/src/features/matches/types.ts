@@ -68,6 +68,9 @@ export interface Goal {
   minute: number;
   half: 1 | 2;
   isOwnGoal: boolean;
+  assistPlayerId?: number | null;
+  assistPlayerName?: string | null;
+  assistJerseyNumber?: number | null;
 }
 
 export interface MatchScoreInput {

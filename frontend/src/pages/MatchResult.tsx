@@ -25,10 +25,13 @@ interface GoalInput {
   teamType: 'home' | 'away';
   minute: number;
   half: 1 | 2;
-  scorerNumber: string;  // 背番号入力値
+  scorerNumber: string;
   scorerName: string;
   playerId: number | null;
   isOwnGoal: boolean;
+  assistName: string;
+  assistNumber: string;
+  assistPlayerId: number | null;
 }
 
 // モバイル対応スコア入力コンポーネント
@@ -219,7 +222,7 @@ function MatchResult() {
       hasPenaltyShootout: match.hasPenaltyShootout ?? false,
     });
     // 既存の得点をGoalInput形式に変換
-    const existingGoals: GoalInput[] = (match.goals || []).map((g: ExtendedGoal, idx: number) => ({
+    const existingGoals: GoalInput[] = (match.goals || []).map((g: ExtendedGoal & { assist_player_name?: string; assist_jersey_number?: number; assist_player_id?: number }, idx: number) => ({
       id: `existing-${idx}`,
       teamId: g.teamId,
       teamType: g.teamId === match.homeTeamId ? 'home' : 'away',
@@ -229,6 +232,9 @@ function MatchResult() {
       scorerName: g.scorerName || g.playerName || "",
       playerId: g.playerId ?? null,
       isOwnGoal: g.isOwnGoal ?? false,
+      assistName: g.assist_player_name || '',
+      assistNumber: g.assist_jersey_number ? String(g.assist_jersey_number) : '',
+      assistPlayerId: g.assist_player_id ?? null,
     }));
     setGoals(existingGoals);
     setSuggestions([]);
@@ -265,6 +271,9 @@ function MatchResult() {
       scorerName: '',
       playerId: null,
       isOwnGoal: false,
+      assistName: '',
+      assistNumber: '',
+      assistPlayerId: null,
     };
     setGoals(prev => [...prev, newGoal]);
   };
@@ -335,6 +344,9 @@ function MatchResult() {
           minute: g.minute,
           half: g.half,
           isOwnGoal: g.isOwnGoal,
+          assistPlayerId: g.assistPlayerId,
+          assistPlayerName: g.assistName || null,
+          assistJerseyNumber: g.assistNumber ? parseInt(g.assistNumber) : null,
         })),
       };
 
@@ -645,24 +657,20 @@ function MatchResult() {
               ) : (
                 <div className="space-y-3">
                   {goals.map((goal) => (
-                    <div key={goal.id} className="flex flex-wrap items-start gap-2 p-2 bg-gray-50 rounded">
-                      <div className="w-14">
+                    <div key={goal.id} className="p-2 bg-gray-50 rounded space-y-2">
+                      <div className="flex flex-wrap items-start gap-2">
+                      <div className="w-16">
                         <input
                           type="text"
                           inputMode="numeric"
                           pattern="[0-9]*"
                           className="form-input text-center text-sm w-full"
                           value={goal.minute}
-                          onChange={(e) => updateGoal(goal.id, { minute: parseInt(e.target.value) || 1 })}
+                          onChange={(e) => updateGoal(goal.id, { minute: parseInt(e.target.value) || 0 })}
                           onFocus={(e) => e.target.select()}
                           placeholder="分"
                         />
                       </div>
-                      <select className="form-input text-sm w-16" value={goal.half}
-                        onChange={(e) => updateGoal(goal.id, { half: parseInt(e.target.value) as 1 | 2 })}>
-                        <option value={1}>前半</option>
-                        <option value={2}>後半</option>
-                      </select>
                       <select className="form-input text-sm flex-1 min-w-[100px]" value={goal.teamType}
                         onChange={(e) => { updateGoal(goal.id, { teamType: e.target.value as 'home' | 'away' }); setRosterDropdownGoalId(null); }}>
                         <option value="home">{selectedMatch?.homeTeam?.name}</option>
@@ -758,6 +766,60 @@ function MatchResult() {
                           className="h-4 w-4 rounded border-gray-300 text-primary-600" />OG
                       </label>
                       <button type="button" className="text-red-500 hover:text-red-700 p-1 text-lg" onClick={() => removeGoal(goal.id)}>×</button>
+                      </div>
+                      {/* アシスト入力行 */}
+                      <div className="flex items-center gap-2 pl-16">
+                        <span className="text-xs text-gray-400 whitespace-nowrap">Assist:</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          className="form-input text-sm w-14 text-center"
+                          value={goal.assistNumber}
+                          onChange={(e) => {
+                            const next = e.target.value.replace(/\D/g, '').slice(0, 3);
+                            updateGoal(goal.id, { assistNumber: next, assistPlayerId: null });
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          placeholder="#"
+                        />
+                        <div className="flex-1 relative">
+                          <input
+                            type="text"
+                            className="form-input text-sm w-full"
+                            value={goal.assistName}
+                            onChange={(e) => updateGoal(goal.id, { assistName: e.target.value, assistPlayerId: null })}
+                            placeholder="アシスト（任意）"
+                          />
+                        </div>
+                        {/* アシスト選手一覧ドロップダウン */}
+                        {(teamRosters[goal.teamId] || []).length > 0 && (
+                          <select
+                            className="form-input text-sm w-auto"
+                            value={goal.assistPlayerId ?? ''}
+                            onChange={(e) => {
+                              const pid = e.target.value ? parseInt(e.target.value) : null;
+                              if (pid) {
+                                const p = (teamRosters[goal.teamId] || []).find(pl => pl.id === pid);
+                                if (p) {
+                                  updateGoal(goal.id, {
+                                    assistName: p.name,
+                                    assistNumber: p.number ? String(p.number) : '',
+                                    assistPlayerId: p.id,
+                                  });
+                                }
+                              } else {
+                                updateGoal(goal.id, { assistName: '', assistNumber: '', assistPlayerId: null });
+                              }
+                            }}
+                          >
+                            <option value="">選択</option>
+                            {(teamRosters[goal.teamId] || []).map(p => (
+                              <option key={p.id} value={p.id}>#{p.number ?? '-'} {p.name}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

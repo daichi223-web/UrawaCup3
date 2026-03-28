@@ -266,6 +266,9 @@ export const matchApi = {
           minute: g.minute,
           half: g.half,
           is_own_goal: g.isOwnGoal || false,
+          assist_player_id: g.assistPlayerId || null,
+          assist_player_name: g.assistPlayerName || null,
+          assist_jersey_number: g.assistJerseyNumber || null,
         }));
 
         const { error: goalsError } = await supabase
