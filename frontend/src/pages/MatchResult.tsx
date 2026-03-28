@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { matchApi, type MatchScoreInput } from '@/features/matches';
 import { MatchWithDetails, Goal } from '@shared/types';
 import { Modal } from '@/components/ui/Modal';
+import { supabase } from '@/lib/supabase';
 
 // API から返される拡張 Goal 型
 interface ExtendedGoal extends Goal {
@@ -830,20 +831,54 @@ function MatchResult() {
             </div>
 
             {/* ボタン */}
-            <div className="flex justify-end gap-3 pt-4">
+            <div className="flex justify-between pt-4">
               <button
-                className="btn-secondary"
-                onClick={() => setShowModal(false)}
-              >
-                キャンセル
-              </button>
-              <button
-                className="btn-primary"
-                onClick={handleSaveScore}
+                className="text-sm text-red-500 hover:text-red-700 px-3 py-1.5"
+                onClick={async () => {
+                  if (!selectedMatch) return;
+                  if (!confirm('この試合の結果をリセットしますか？スコアと得点者が削除されます。')) return;
+                  setSaving(true);
+                  try {
+                    // 得点者を削除
+                    await supabase.from('goals').delete().eq('match_id', selectedMatch.id);
+                    // スコアをリセット
+                    await supabase.from('matches').update({
+                      status: 'scheduled',
+                      home_score_half1: null, home_score_half2: null, home_score_total: null,
+                      away_score_half1: null, away_score_half2: null, away_score_total: null,
+                      home_pk: null, away_pk: null,
+                      has_penalty_shootout: false,
+                      result: null,
+                    } as never).eq('id', selectedMatch.id);
+                    await fetchMatches();
+                    setShowModal(false);
+                    toast.success('結果をリセットしました');
+                  } catch (err) {
+                    console.error(err);
+                    toast.error('リセットに失敗しました');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
                 disabled={saving}
               >
-                {saving ? '保存中...' : '保存'}
+                結果をリセット
               </button>
+              <div className="flex gap-3">
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowModal(false)}
+                >
+                  キャンセル
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={handleSaveScore}
+                  disabled={saving}
+                >
+                  {saving ? '保存中...' : '保存'}
+                </button>
+              </div>
             </div>
           </div>
         )}

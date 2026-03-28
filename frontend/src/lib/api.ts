@@ -612,13 +612,14 @@ export const standingsApi = {
   },
 
   async recalculate(tournamentId: number, groupId?: string) {
-    // 該当グループの完了済み＆承認済み試合を取得（stageは問わない）
+    // 該当グループの完了済み＆承認済み試合を取得（B戦は除外）
     // approval_status が null（承認フロー未使用）または 'approved'（承認済み）のみ対象
     let matchQuery = supabase
       .from('matches')
       .select('*')
       .eq('tournament_id', tournamentId)
       .eq('status', 'completed')
+      .or('is_b_match.is.null,is_b_match.eq.false')
       .or('approval_status.is.null,approval_status.eq.approved')
 
     if (groupId) {
@@ -660,6 +661,7 @@ export const standingsApi = {
         .select('*')
         .eq('tournament_id', tournamentId)
         .eq('status', 'completed')
+        .or('is_b_match.is.null,is_b_match.eq.false')
         .or('approval_status.is.null,approval_status.eq.approved')
         .eq('stage', 'preliminary')
 
