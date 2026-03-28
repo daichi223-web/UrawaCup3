@@ -19,8 +19,8 @@ interface MatchData {
     away_score_half2: number | null;
     home_pk: number | null;
     away_pk: number | null;
-    home_team: { id: number; name: string } | null;
-    away_team: { id: number; name: string } | null;
+    home_team: { id: number; name: string; short_name?: string | null } | null;
+    away_team: { id: number; name: string; short_name?: string | null } | null;
     venue: { id: number; name: string } | null;
 }
 
@@ -313,6 +313,8 @@ export default function PublicMatchList() {
 function PublicMatchCard({ match, groupKey, groupLabel }: { match: MatchData; groupKey?: string; groupLabel?: string }) {
     const isFinished = match.status === 'completed';
     const isLive = match.status === 'in_progress';
+    const homeName = match.home_team?.short_name || match.home_team?.name || 'TBD';
+    const awayName = match.away_team?.short_name || match.away_team?.name || 'TBD';
 
     // グループに応じたアクセントカラー
     const accentColors: Record<string, string> = {
@@ -363,7 +365,7 @@ function PublicMatchCard({ match, groupKey, groupLabel }: { match: MatchData; gr
                     <div className="flex items-center">
                         {/* ホームチーム名 + 合計得点 */}
                         <div className="flex-1 flex items-center justify-end gap-2">
-                            <span className="font-bold text-sm truncate">{match.home_team?.name || 'TBD'}</span>
+                            <span className="font-bold text-sm truncate">{homeName}</span>
                             <span className="text-xl font-black text-gray-800 min-w-[1.5rem] text-center">
                                 {match.home_score_total ?? '-'}
                             </span>
@@ -396,7 +398,7 @@ function PublicMatchCard({ match, groupKey, groupLabel }: { match: MatchData; gr
                             <span className="text-xl font-black text-gray-800 min-w-[1.5rem] text-center">
                                 {match.away_score_total ?? '-'}
                             </span>
-                            <span className="font-bold text-sm truncate">{match.away_team?.name || 'TBD'}</span>
+                            <span className="font-bold text-sm truncate">{awayName}</span>
                         </div>
                     </div>
                 ) : (
@@ -405,10 +407,10 @@ function PublicMatchCard({ match, groupKey, groupLabel }: { match: MatchData; gr
                         {/* Home Team */}
                         <div className="flex-1 flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs flex-shrink-0">
-                                {match.home_team?.name?.slice(0, 1) || '?'}
+                                {homeName.slice(0, 1)}
                             </div>
                             <span className="font-bold text-sm truncate">
-                                {match.home_team?.name || 'TBD'}
+                                {homeName}
                             </span>
                         </div>
 
@@ -428,10 +430,10 @@ function PublicMatchCard({ match, groupKey, groupLabel }: { match: MatchData; gr
                         {/* Away Team */}
                         <div className="flex-1 flex items-center justify-end gap-2">
                             <span className="font-bold text-sm truncate">
-                                {match.away_team?.name || 'TBD'}
+                                {awayName}
                             </span>
                             <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs flex-shrink-0">
-                                {match.away_team?.name?.slice(0, 1) || '?'}
+                                {awayName.slice(0, 1)}
                             </div>
                         </div>
                     </div>
