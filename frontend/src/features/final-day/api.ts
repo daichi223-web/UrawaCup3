@@ -909,7 +909,8 @@ export const finalDayApi = {
     }
 
     // 4. 研修試合用のチームを取得（決勝進出チーム以外、制約情報も含む）
-    const { data: allTeams, error: teamsError } = await supabase
+    let allTeams;
+    const { data: standingsTeams, error: standingsError } = await supabase
       .from('standings')
       .select(`
         *,
@@ -920,7 +921,34 @@ export const finalDayApi = {
       .order('rank')
       .order('group_id');
 
-    if (teamsError) throw teamsError;
+    if (standingsError) throw standingsError;
+
+    if (standingsTeams && standingsTeams.length > 0) {
+      allTeams = standingsTeams;
+    } else {
+      // standingsが空の場合、teamsテーブルから直接取得（決勝進出チーム除外）
+      console.log('[Training] standingsが空のため、teamsテーブルからチームを取得');
+      let teamsQuery = supabase
+        .from('teams')
+        .select('id, name, short_name, group_id, region, league_id, team_type')
+        .eq('tournament_id', tournamentId)
+        .order('id');
+
+      if (qualifyingTeamIds.length > 0) {
+        teamsQuery = teamsQuery.not('id', 'in', `(${qualifyingTeamIds.join(',')})`);
+      }
+
+      const { data: directTeams, error: teamsError } = await teamsQuery;
+      if (teamsError) throw teamsError;
+
+      // standingsと同じ形式に変換
+      allTeams = (directTeams || []).map((t: { id: number; name: string; short_name?: string; group_id?: string; region?: string; league_id?: number; team_type?: string }, i: number) => ({
+        rank: i + 1,
+        team_id: t.id,
+        group_id: t.group_id || '',
+        team: t,
+      }));
+    }
 
     // 5. 過去の対戦履歴を取得
     const { data: pastMatchesData } = await supabase
