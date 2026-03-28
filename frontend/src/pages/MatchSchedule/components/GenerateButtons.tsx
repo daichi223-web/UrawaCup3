@@ -82,6 +82,19 @@ export function GenerateButtons({
         最終日生成
       </button>
     )
+    if (!hasTrainingMatches) {
+      buttons.push(
+        <button
+          key="training-generate"
+          className="btn-primary bg-purple-600 hover:bg-purple-700"
+          onClick={onGenerateTraining}
+          disabled={isGenerating || isDeleting || !hasPreliminaryMatches}
+          title={!hasPreliminaryMatches ? '予選リーグを先に生成してください' : ''}
+        >
+          研修試合を生成
+        </button>
+      )
+    }
     if (hasFinalsMatches || hasTrainingMatches) {
       buttons.push(
         <button
@@ -91,6 +104,18 @@ export function GenerateButtons({
           disabled={isGenerating || isDeleting}
         >
           最終日削除
+        </button>
+      )
+    }
+    if (hasTrainingMatches) {
+      buttons.push(
+        <button
+          key="training-delete"
+          className="btn-danger bg-red-400 hover:bg-red-500"
+          onClick={onDeleteTraining}
+          disabled={isGenerating || isDeleting}
+        >
+          研修試合削除
         </button>
       )
       buttons.push(
