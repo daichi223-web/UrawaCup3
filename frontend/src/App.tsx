@@ -101,6 +101,9 @@ function App() {
     <>
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
+          {/* ルート（/）は公開ページへリダイレクト */}
+          <Route path="/" element={<Navigate to="/public/matches" replace />} />
+
           {/* ログインページ（レイアウトなし） */}
           <Route path="/login" element={<Login />} />
 
@@ -108,7 +111,7 @@ function App() {
           <Route element={<Layout />}>
             {/* ダッシュボード（管理者専用） */}
             <Route
-              path="/"
+              path="/dashboard"
               element={
                 <RequireAdmin>
                   <Dashboard />

@@ -22,7 +22,7 @@ export default function Login() {
   const { login, isLoading, error, clearError } = useAuthStore()
 
   // リダイレクト先（ログイン後に戻るページ）
-  const from = (location.state as { from?: string })?.from || '/'
+  const from = (location.state as { from?: string })?.from || '/dashboard'
 
   const {
     register,
