@@ -187,8 +187,12 @@ const FinalResultPrintView = forwardRef<HTMLDivElement, Props>(({ data }, ref) =
                 {/* 得点者 */}
                 {match.goals && match.goals.length > 0 && (() => {
                   const goalCount = match.goals.length;
-                  // 得点者数に応じてフォントサイズを調整
-                  const textSize = goalCount > 8 ? 'text-[9px] leading-tight' : goalCount > 5 ? 'text-xs leading-snug' : 'text-sm';
+                  // 得点者数・文字数に応じてフォントサイズを調整
+                  const totalChars = match.goals.reduce((sum: number, g: { player_name?: string; assist_player_name?: string }) =>
+                    sum + (g.player_name?.length || 0) + (g.assist_player_name?.length || 0), 0);
+                  const needsShrink = goalCount > 8 || totalChars > 80;
+                  const needsMedium = goalCount > 5 || totalChars > 50;
+                  const textSize = needsShrink ? 'text-[9px] leading-tight' : needsMedium ? 'text-xs leading-snug' : 'text-sm';
                   const spacing = goalCount > 8 ? 'space-y-0' : goalCount > 5 ? 'space-y-0.5' : 'space-y-1';
                   return (
                   <div className="mt-3 pt-3 border-t border-gray-200">
