@@ -988,19 +988,37 @@ export const reportApi = {
 
   // 発信元設定更新
   updateSenderSettings: async (tournamentId: number, data: SenderSettingsUpdate): Promise<SenderSettings> => {
-    const { data: settings, error } = await supabase
-      .from('sender_settings')
-      .upsert({
-        tournament_id: tournamentId,
-        sender_name: data.senderName,
-        sender_title: (data as Record<string, unknown>).senderTitle ?? '',
-        sender_organization: data.senderOrganization,
-      } as never)
-      .select()
-      .single();
+    const updateData = {
+      sender_name: data.senderName,
+      sender_title: (data as Record<string, unknown>).senderTitle ?? '',
+      sender_organization: data.senderOrganization,
+    };
 
-    if (error) throw error;
-    return settings as SenderSettings;
+    // 既存レコードがあればUPDATE、なければINSERT
+    const { data: existing } = await supabase
+      .from('sender_settings')
+      .select('id')
+      .eq('tournament_id', tournamentId)
+      .maybeSingle();
+
+    let result;
+    if (existing) {
+      result = await supabase
+        .from('sender_settings')
+        .update(updateData as never)
+        .eq('tournament_id', tournamentId)
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from('sender_settings')
+        .insert({ ...updateData, tournament_id: tournamentId } as never)
+        .select()
+        .single();
+    }
+
+    if (result.error) throw result.error;
+    return result.data as SenderSettings;
   },
 
   // ================================================
