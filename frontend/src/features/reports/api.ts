@@ -300,7 +300,7 @@ export const reportApi = {
           team: goal.team_id === match.home_team_id
             ? (match.home_team?.short_name || match.home_team?.name || '')
             : (match.away_team?.short_name || match.away_team?.name || ''),
-          name: goal.player_name || '',
+          name: goal.is_own_goal ? `${goal.player_name || ''}(OG)` : (goal.player_name || ''),
           assist: goal.assist_player_name || undefined,
         }));
 
