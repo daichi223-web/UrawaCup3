@@ -337,8 +337,8 @@ export const reportApi = {
           day,
           dateStr,
           reportConfig: {
-            recipient: senderSettings?.recipient || '埼玉県サッカー協会 御中',
-            sender: senderSettings?.sender_name || '県立浦和高校',
+            recipient: '',
+            sender: [senderSettings?.sender_organization, senderSettings?.sender_name].filter(Boolean).join('  ') || '（未設定）',
             contact: senderSettings?.contact || '',
           },
           matchData: matchesByVenue,

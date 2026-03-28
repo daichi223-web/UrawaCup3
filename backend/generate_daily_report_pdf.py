@@ -130,7 +130,7 @@ class DailyReportGenerator:
 
         # 発信情報
         header_data = [
-            ['送信先：', recipient, '', '発信元：', sender],
+            ['送信先：', recipient, '', '発信元：', sender] if recipient else ['', '', '', '発信元：', sender],
             ['', '', '', '連絡先：', contact],
             ['', '', '', '', f'{date_str}　第{day}日'],
         ]
