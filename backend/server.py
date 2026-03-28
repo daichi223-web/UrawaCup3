@@ -31,8 +31,8 @@ app.add_middleware(
         "https://urawa-cup.vercel.app",
         "https://urawa-cup3.vercel.app",
         "https://urawacup3.vercel.app",
-        "https://urawacup3-*.vercel.app",  # Preview deployments
     ],
+    allow_origin_regex=r"https://urawa-?cup3.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
