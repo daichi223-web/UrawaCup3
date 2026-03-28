@@ -18,15 +18,18 @@ def register_japanese_font() -> str:
         ('MSGothic', r'C:\Windows\Fonts\msgothic.ttc', 0),
         ('Meiryo', r'C:\Windows\Fonts\meiryo.ttc', 0),
         ('MSMincho', r'C:\Windows\Fonts\msmincho.ttc', 0),
-        # Linux Noto CJK (Docker / Render)
-        ('NotoSansCJK', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', 0),
-        ('NotoSansCJK', '/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc', 0),
+        # Linux Noto Sans JP (Docker / Render) - TrueType形式
+        ('NotoSansJP', '/usr/share/fonts/truetype/noto/NotoSansJP[wght].ttf', None),
+        ('NotoSansJP', '/usr/share/fonts/truetype/noto/NotoSansJP-Regular.ttf', None),
     ]
 
     for font_name, font_path, subfont_index in font_candidates:
         if os.path.exists(font_path):
             try:
-                pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=subfont_index))
+                if subfont_index is not None:
+                    pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=subfont_index))
+                else:
+                    pdfmetrics.registerFont(TTFont(font_name, font_path))
                 return font_name
             except Exception:
                 continue
