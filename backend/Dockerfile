@@ -2,12 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies and download TrueType Japanese font
-RUN apt-get update && apt-get install -y curl \
-    && mkdir -p /usr/share/fonts/truetype/noto \
-    && curl -L -o "/usr/share/fonts/truetype/noto/NotoSansJP[wght].ttf" \
-       "https://github.com/google/fonts/raw/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf" \
-    && apt-get purge -y curl && apt-get autoremove -y \
+# Install system dependencies for PDF generation
+# fonts-ipafont: IPA fonts (TrueType, ReportLab compatible)
+RUN apt-get update && apt-get install -y \
+    fonts-ipafont-gothic \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies

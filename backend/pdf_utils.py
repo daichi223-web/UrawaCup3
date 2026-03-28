@@ -18,9 +18,8 @@ def register_japanese_font() -> str:
         ('MSGothic', r'C:\Windows\Fonts\msgothic.ttc', 0),
         ('Meiryo', r'C:\Windows\Fonts\meiryo.ttc', 0),
         ('MSMincho', r'C:\Windows\Fonts\msmincho.ttc', 0),
-        # Linux Noto Sans JP (Docker / Render) - TrueType形式
-        ('NotoSansJP', '/usr/share/fonts/truetype/noto/NotoSansJP[wght].ttf', None),
-        ('NotoSansJP', '/usr/share/fonts/truetype/noto/NotoSansJP-Regular.ttf', None),
+        # Linux IPA Gothic (Docker / Render) - TrueType形式
+        ('IPAGothic', '/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf', None),
     ]
 
     for font_name, font_path, subfont_index in font_candidates:
