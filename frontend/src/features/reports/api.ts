@@ -116,6 +116,7 @@ interface Match {
   goals?: Goal[]
   home_seed?: string | null
   away_seed?: string | null
+  is_b_match?: boolean
 }
 
 // Type for tournament query
@@ -241,7 +242,8 @@ export const reportApi = {
     const { data: matchesData, error } = await query;
     if (error) throw error;
 
-    const matches = matchesData as Match[] | null;
+    // B戦を除外
+    const matches = (matchesData as Match[] | null)?.filter(m => !m.is_b_match) || null;
 
     // デバッグ: 試合データと会場情報を確認
     IS_DEV && console.log('[downloadPdf] Matches count:', matches?.length || 0);
@@ -300,7 +302,7 @@ export const reportApi = {
           team: goal.team_id === match.home_team_id
             ? (match.home_team?.short_name || match.home_team?.name || '')
             : (match.away_team?.short_name || match.away_team?.name || ''),
-          name: goal.is_own_goal ? `${goal.player_name || ''}(OG)` : (goal.player_name || ''),
+          name: goal.is_own_goal ? 'OG' : (goal.player_name || ''),
           assist: goal.assist_player_name || undefined,
         }));
 
