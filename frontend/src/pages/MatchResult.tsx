@@ -383,6 +383,9 @@ function MatchResult() {
       });
       setMatches(updatedMatches);
 
+      // 保存後にDBから最新データを再取得（得点者・アシスト含む）
+      await fetchMatches();
+
       setShowModal(false);
       toast.success('試合結果を保存しました');
     } catch (err: unknown) {
