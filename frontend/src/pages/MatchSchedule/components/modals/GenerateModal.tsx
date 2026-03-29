@@ -1,4 +1,5 @@
 // src/pages/MatchSchedule/components/modals/GenerateModal.tsx
+import { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import type { GenerateType } from '../../types'
 
@@ -10,7 +11,7 @@ interface GenerateModalProps {
   matchesPerTeamPerDay: number
   teamCount: number
   isGenerating: boolean
-  onGenerate: () => void
+  onGenerate: (options?: { qualificationRule?: 'group_based' | 'overall_ranking' }) => void
 }
 
 export function GenerateModal({
@@ -23,10 +24,22 @@ export function GenerateModal({
   isGenerating,
   onGenerate,
 }: GenerateModalProps) {
+  const [qualificationRule, setQualificationRule] = useState<'group_based' | 'overall_ranking'>(
+    useGroupSystem ? 'group_based' : 'overall_ranking'
+  )
+
   const title =
     generateType === 'preliminary' ? '予選リーグ日程生成' :
     generateType === 'finals' ? '最終日生成' :
     '研修試合生成'
+
+  const handleGenerate = () => {
+    if (generateType === 'finals') {
+      onGenerate({ qualificationRule })
+    } else {
+      onGenerate()
+    }
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
@@ -56,11 +69,38 @@ export function GenerateModal({
           )}
           {generateType === 'finals' && (
             <>
-              決勝トーナメントの日程を生成します。
-              <br />
-              <span className="text-sm text-gray-500">
-                ※ 各グループ1位チームによる準決勝・3位決定戦・決勝を生成します。
-              </span>
+              決勝トーナメント＋研修試合を生成します。
+              <div className="mt-3 space-y-2">
+                <p className="text-sm font-medium text-gray-700">決勝進出チームの決定方法:</p>
+                <label className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-blue-50 has-[:checked]:border-blue-500 has-[:checked]:bg-blue-50">
+                  <input
+                    type="radio"
+                    name="qualificationRule"
+                    value="group_based"
+                    checked={qualificationRule === 'group_based'}
+                    onChange={() => setQualificationRule('group_based')}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <span className="font-medium">各グループ1位</span>
+                    <p className="text-xs text-gray-500">A, B, C, D... 各グループの1位チームが決勝T進出</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 p-3 border rounded-lg cursor-pointer hover:bg-green-50 has-[:checked]:border-green-500 has-[:checked]:bg-green-50">
+                  <input
+                    type="radio"
+                    name="qualificationRule"
+                    value="overall_ranking"
+                    checked={qualificationRule === 'overall_ranking'}
+                    onChange={() => setQualificationRule('overall_ranking')}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <span className="font-medium">総合順位 上位4チーム</span>
+                    <p className="text-xs text-gray-500">勝点→得失点差→得点で上位4チームが決勝T進出</p>
+                  </div>
+                </label>
+              </div>
             </>
           )}
           {generateType === 'training' && (
@@ -68,7 +108,7 @@ export function GenerateModal({
               研修試合の日程を生成します。
               <br />
               <span className="text-sm text-gray-500">
-                ※ 各グループの2〜6位チームによる研修試合を生成します。
+                ※ 決勝進出チーム以外のチームによる研修試合を生成します。
               </span>
             </>
           )}
@@ -79,7 +119,7 @@ export function GenerateModal({
           </button>
           <button
             className="btn-primary"
-            onClick={onGenerate}
+            onClick={handleGenerate}
             disabled={isGenerating}
           >
             {isGenerating ? '生成中...' : '生成する'}

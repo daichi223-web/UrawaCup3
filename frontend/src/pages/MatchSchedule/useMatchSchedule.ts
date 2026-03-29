@@ -464,8 +464,8 @@ export function useMatchSchedule() {
 
   // 最終日生成（決勝トーナメント＋研修試合を同時生成）
   const generateFinalsMutation = useMutation({
-    mutationFn: async () => {
-      const createdMatches = await finalDayApi.generateFinalDaySchedule(tournamentId)
+    mutationFn: async (options?: { qualificationRule?: 'group_based' | 'overall_ranking' }) => {
+      const createdMatches = await finalDayApi.generateFinalDaySchedule(tournamentId, options)
       return { created: createdMatches.length, warnings: [] as string[] }
     },
     onSuccess: (data) => {
@@ -614,10 +614,10 @@ export function useMatchSchedule() {
     if (deleteType) deleteMatchesMutation.mutate(deleteType)
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = (options?: { qualificationRule?: 'group_based' | 'overall_ranking' }) => {
     switch (generateType) {
       case 'preliminary': generatePreliminaryMutation.mutate(); break
-      case 'finals': generateFinalsMutation.mutate(); break
+      case 'finals': generateFinalsMutation.mutate(options); break
       case 'training': generateTrainingMutation.mutate(); break
     }
   }
