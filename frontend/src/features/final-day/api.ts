@@ -1346,14 +1346,17 @@ export const finalDayApi = {
       }
       let matchOrder = 1;
 
-      // 実際に生成する試合数（決勝会場は1試合減）
-      const effectivePattern = bestPattern.slice(0, maxTrainingMatches);
+      // 固定枠数: 通常6枠、SF会場は5枠
+      const totalSlots = isFinalsVenue ? 5 : 6;
+      // 実際に生成する試合数（枠数以下に制限）
+      const effectivePattern = bestPattern.slice(0, Math.min(bestPattern.length, totalSlots));
 
       // A戦の試合数 = 各チーム matchesPerTeam 試合分
       const aMatchCount = teamsInVenue.length === 4
         ? matchesPerTeam * teamsInVenue.length / 2  // 4
         : effectivePattern.length;
 
+      // 実際の試合を配置
       for (let pIdx = 0; pIdx < effectivePattern.length; pIdx++) {
         const [i, j] = effectivePattern[pIdx];
         const isBMatch = pIdx >= aMatchCount;
@@ -1373,7 +1376,26 @@ export const finalDayApi = {
         currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
       }
 
-      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${effectivePattern.length}試合${isFinalsVenue ? '(決勝会場)' : ''} (${avgRank}位リーグ, ボーナス=${bestScore})`);
+      // 空き枠を追加（チーム未定の枠を作成）
+      const emptySlots = totalSlots - effectivePattern.length;
+      for (let s = 0; s < emptySlots; s++) {
+        matchesToInsert.push({
+          tournament_id: tournamentId,
+          venue_id: venue.id,
+          home_team_id: null as unknown as number,
+          away_team_id: null as unknown as number,
+          match_date: finalDate,
+          match_time: currentTime,
+          match_order: matchOrder++,
+          stage: 'training',
+          status: 'scheduled',
+          notes: '空き枠',
+          is_b_match: false,
+        });
+        currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
+      }
+
+      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${effectivePattern.length}試合+${emptySlots}空き枠=${totalSlots}枠${isFinalsVenue ? '(SF会場)' : ''} (${avgRank}位リーグ)`);
     }
 
     // 10. 試合をDBに挿入
