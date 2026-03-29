@@ -952,19 +952,30 @@ export const finalDayApi = {
       return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
     };
 
-    // 2. 決勝進出チームを取得
+    // 2. 決勝進出チームを取得（既に生成済みの準決勝試合から確実に取得）
     let qualifyingTeamIds: number[] = [];
-    if (qualificationRule === 'overall_ranking') {
-      const overallStandings = await standingApi.getOverallStandings(tournamentId);
-      qualifyingTeamIds = overallStandings.entries.slice(0, 4).map(e => e.teamId);
-    } else {
-      const { data: groupWinners } = await supabase
-        .from('standings')
-        .select('team_id')
-        .eq('tournament_id', tournamentId)
-        .eq('rank', 1);
-      const winners = (groupWinners || []) as Array<{ team_id: number }>;
-      qualifyingTeamIds = winners.map(s => s.team_id);
+    const { data: sfMatches } = await supabase
+      .from('matches')
+      .select('home_team_id, away_team_id')
+      .eq('tournament_id', tournamentId)
+      .in('stage', ['semifinal', 'third_place', 'final']);
+
+    if (sfMatches && sfMatches.length > 0) {
+      const ids = new Set<number>();
+      for (const m of sfMatches as Array<{ home_team_id: number | null; away_team_id: number | null }>) {
+        if (m.home_team_id) ids.add(m.home_team_id);
+        if (m.away_team_id) ids.add(m.away_team_id);
+      }
+      qualifyingTeamIds = Array.from(ids);
+      console.log(`[Training] 決勝進出チーム(SF試合から): ${qualifyingTeamIds.join(',')}`);
+    }
+
+    // SFが未生成の場合のフォールバック
+    if (qualifyingTeamIds.length < 4) {
+      console.log('[Training] SF試合未検出、試合データから順位計算');
+      const topTeams = await calculateTopTeamsFromMatches(tournamentId, 4);
+      qualifyingTeamIds = topTeams.map(t => t.teamId);
+      console.log(`[Training] 決勝進出チーム(計算): ${qualifyingTeamIds.join(',')}`);
     }
 
     // 3. 会場を取得（forFinalDay = true の会場のみ）
