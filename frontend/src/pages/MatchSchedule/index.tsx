@@ -254,6 +254,7 @@ function MatchSchedule() {
         match={editingMatch}
         editForm={editForm}
         venues={venues}
+        teams={allTeams}
         isUpdating={isUpdatingMatch}
         onClose={() => { setEditingMatch(null); setEditForm(null) }}
         onFormChange={setEditForm}

@@ -1,11 +1,12 @@
 // src/pages/MatchSchedule/components/modals/EditMatchModal.tsx
 import { Modal } from '@/components/ui/Modal'
-import type { MatchWithDetails, VenueInfo, EditFormState } from '../../types'
+import type { MatchWithDetails, VenueInfo, EditFormState, TeamInfo } from '../../types'
 
 interface EditMatchModalProps {
   match: MatchWithDetails | null
   editForm: EditFormState | null
   venues: VenueInfo[]
+  teams: TeamInfo[]
   isUpdating: boolean
   onClose: () => void
   onFormChange: (form: EditFormState) => void
@@ -16,6 +17,7 @@ export function EditMatchModal({
   match,
   editForm,
   venues,
+  teams,
   isUpdating,
   onClose,
   onFormChange,
@@ -23,12 +25,42 @@ export function EditMatchModal({
 }: EditMatchModalProps) {
   if (!match || !editForm) return null
 
+  const sortedTeams = [...teams].sort((a, b) => (a.shortName || a.name).localeCompare(b.shortName || b.name, 'ja'))
+
   return (
-    <Modal isOpen={!!match} onClose={onClose} title="日程編集">
+    <Modal isOpen={!!match} onClose={onClose} title="試合編集">
       <div className="space-y-4">
-        <div className="text-center mb-4">
-          <div className="font-bold">
-            {match.homeTeam?.name} vs {match.awayTeam?.name}
+        {/* チーム選択 */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              ホーム
+            </label>
+            <select
+              className="form-input"
+              value={editForm.homeTeamId ?? ''}
+              onChange={(e) => onFormChange({ ...editForm, homeTeamId: e.target.value ? parseInt(e.target.value) : null })}
+            >
+              <option value="">未定</option>
+              {sortedTeams.map(t => (
+                <option key={t.id} value={t.id}>{t.shortName || t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              アウェイ
+            </label>
+            <select
+              className="form-input"
+              value={editForm.awayTeamId ?? ''}
+              onChange={(e) => onFormChange({ ...editForm, awayTeamId: e.target.value ? parseInt(e.target.value) : null })}
+            >
+              <option value="">未定</option>
+              {sortedTeams.map(t => (
+                <option key={t.id} value={t.id}>{t.shortName || t.name}</option>
+              ))}
+            </select>
           </div>
         </div>
 

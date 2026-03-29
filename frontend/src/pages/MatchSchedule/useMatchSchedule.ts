@@ -536,8 +536,11 @@ export function useMatchSchedule() {
 
   // 試合情報更新
   const updateMatchMutation = useMutation({
-    mutationFn: async (data: { matchId: number; matchDate: string; matchTime: string; venueId: number; matchOrder: number }) => {
-      return await matchesApi.update(data.matchId, { match_date: data.matchDate, match_time: data.matchTime, venue_id: data.venueId, match_order: data.matchOrder })
+    mutationFn: async (data: { matchId: number; matchDate: string; matchTime: string; venueId: number; matchOrder: number; homeTeamId?: number | null; awayTeamId?: number | null }) => {
+      const updates: Record<string, unknown> = { match_date: data.matchDate, match_time: data.matchTime, venue_id: data.venueId, match_order: data.matchOrder }
+      if (data.homeTeamId !== undefined) updates.home_team_id = data.homeTeamId
+      if (data.awayTeamId !== undefined) updates.away_team_id = data.awayTeamId
+      return await matchesApi.update(data.matchId, updates)
     },
     onSuccess: () => {
       toast.success('日程を更新しました')
@@ -592,7 +595,7 @@ export function useMatchSchedule() {
 
   const startEditing = (match: MatchWithDetails) => {
     setEditingMatch(match)
-    setEditForm({ matchDate: match.matchDate, matchTime: match.matchTime, venueId: match.venueId, matchOrder: match.matchOrder || 1 })
+    setEditForm({ matchDate: match.matchDate, matchTime: match.matchTime, venueId: match.venueId, matchOrder: match.matchOrder || 1, homeTeamId: match.homeTeamId, awayTeamId: match.awayTeamId })
   }
 
   const saveEdit = () => {

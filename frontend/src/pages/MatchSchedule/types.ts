@@ -17,6 +17,8 @@ export interface EditFormState {
   matchTime: string
   venueId: number
   matchOrder: number
+  homeTeamId?: number | null
+  awayTeamId?: number | null
 }
 
 export interface TeamInfo {
