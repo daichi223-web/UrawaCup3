@@ -996,6 +996,23 @@ export const finalDayApi = {
       throw new Error('最終日用の会場がありません');
     }
 
+    // メイン決勝会場（3位決定戦・決勝を行う会場）を研修試合から除外
+    // メイン会場 = is_finals_venue かつ 3位決定戦/決勝が配置される会場
+    const { data: mainFinalsMatches } = await supabase
+      .from('matches')
+      .select('venue_id')
+      .eq('tournament_id', tournamentId)
+      .in('stage', ['third_place', 'final']);
+
+    const mainFinalsVenueIds = new Set(
+      (mainFinalsMatches || []).map((m: { venue_id: number }) => m.venue_id)
+    );
+
+    // 研修試合用の会場からメイン決勝会場を除外
+    interface VenueRow { id: number; is_finals_venue?: boolean; [key: string]: unknown }
+    const trainingVenues = (venues as VenueRow[]).filter(v => !mainFinalsVenueIds.has(v.id));
+    console.log(`[Training] 研修試合会場: ${trainingVenues.map(v => `${v.id}`).join(',')} (メイン決勝会場${Array.from(mainFinalsVenueIds).join(',')}を除外)`);
+
     // 4. 研修試合用のチームを取得（決勝進出チーム以外、制約情報も含む）
     let allTeams;
     const { data: standingsTeams, error: standingsError } = await supabase
@@ -1120,7 +1137,7 @@ export const finalDayApi = {
 
     // 9. 会場設定
     interface VenueInfo { id: number; name?: string; manager_team_id?: number | null; }
-    const typedVenues = (venues || []) as VenueInfo[];
+    const typedVenues = (trainingVenues || []) as VenueInfo[];
     const totalTrainingTeams = typedAllTeams.length;
     console.log(`[Training] 研修参加: ${totalTrainingTeams}チーム, 会場: ${typedVenues.length}`);
 
@@ -1231,7 +1248,7 @@ export const finalDayApi = {
 
     // is_finals_venue情報を取得するため型を拡張
     interface VenueWithFinals extends VenueInfo { is_finals_venue?: boolean; }
-    const typedVenuesWithFinals = (venues || []) as VenueWithFinals[];
+    const typedVenuesWithFinals = (venues || []) as VenueWithFinals[]; // 全会場からfinalsフラグを確認
     const finalsVenueIds = new Set(typedVenuesWithFinals.filter(v => v.is_finals_venue).map(v => v.id));
 
     for (const venue of typedVenues) {
