@@ -1276,21 +1276,52 @@ export const finalDayApi = {
       }
 
       // 選択されたパターンから試合を生成
-      // 準決勝会場は1枠遅れて開始（準決勝の後から研修開始）
       const isFinalsVenue = finalsVenueIds.has(venue.id);
-      let currentTime = isFinalsVenue
-        ? addMinutes(startTime, matchDuration + intervalMinutes)
-        : startTime;
+      let currentTime: string;
+      let maxTrainingMatches: number = bestPattern.length;
+
+      if (isFinalsVenue) {
+        // 決勝会場: その会場の準決勝終了後から研修試合を開始
+        const { data: finalsAtVenue } = await supabase
+          .from('matches')
+          .select('match_time')
+          .eq('tournament_id', tournamentId)
+          .eq('venue_id', venue.id)
+          .in('stage', ['semifinal', 'third_place', 'final'])
+          .order('match_time', { ascending: false })
+          .limit(1);
+
+        if (finalsAtVenue && finalsAtVenue.length > 0) {
+          const lastFinalsTime = (finalsAtVenue[0] as { match_time: string }).match_time;
+          // HH:MM:SS → HH:MM
+          const timeParts = lastFinalsTime.split(':');
+          const lastTimeStr = `${timeParts[0]}:${timeParts[1]}`;
+          // 決勝T試合の時間は通常長い（60分+20分インターバル）ので、finalsMatchDuration を使用
+          const finalsMatchDuration = (t2 as TournamentSettings).finals_match_duration || 60;
+          const finalsInterval = (t2 as TournamentSettings).finals_interval_minutes || 20;
+          currentTime = addMinutes(lastTimeStr, finalsMatchDuration + finalsInterval);
+          console.log(`[Training] 決勝会場${venue.id}: SF終了後 ${lastTimeStr} → 研修開始 ${currentTime}`);
+        } else {
+          currentTime = addMinutes(startTime, matchDuration + intervalMinutes);
+        }
+        // 決勝会場は1枠分をSFに使うので研修試合を1試合減らす（6→5）
+        maxTrainingMatches = Math.min(bestPattern.length, bestPattern.length - 1);
+        if (maxTrainingMatches < 1) maxTrainingMatches = bestPattern.length;
+      } else {
+        currentTime = startTime;
+      }
       let matchOrder = 1;
 
+      // 実際に生成する試合数（決勝会場は1試合減）
+      const effectivePattern = bestPattern.slice(0, maxTrainingMatches);
+
       // A戦の試合数 = 各チーム matchesPerTeam 試合分
-      // 4チーム: A戦4試合(R1+R2) + B戦2試合(R3) = 6試合
       const aMatchCount = teamsInVenue.length === 4
         ? matchesPerTeam * teamsInVenue.length / 2  // 4
-        : bestPattern.length;
+        : effectivePattern.length;
 
-      for (let pIdx = 0; pIdx < bestPattern.length; pIdx++) {
-        const [i, j] = bestPattern[pIdx];
+      for (let pIdx = 0; pIdx < effectivePattern.length; pIdx++) {
+        const [i, j] = effectivePattern[pIdx];
         const isBMatch = pIdx >= aMatchCount;
         matchesToInsert.push({
           tournament_id: tournamentId,
@@ -1308,7 +1339,7 @@ export const finalDayApi = {
         currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
       }
 
-      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${bestPattern.length}試合 (${avgRank}位リーグ, ボーナス=${bestScore})`);
+      console.log(`[Training] 会場${venue.id}: ${teamsInVenue.length}チーム, ${effectivePattern.length}試合${isFinalsVenue ? '(決勝会場)' : ''} (${avgRank}位リーグ, ボーナス=${bestScore})`);
     }
 
     // 10. 試合をDBに挿入
