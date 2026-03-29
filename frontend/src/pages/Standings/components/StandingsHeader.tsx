@@ -11,13 +11,9 @@ interface StandingsHeaderProps {
   isLoadingOverall: boolean
   isLoading: boolean
   recentlyUpdated: boolean
-  onPrint: () => void
-  onStarTablePdf: () => void
   onRefresh: () => void
   onExcelDownload: () => void
   isExporting?: boolean
-  isPdfExporting?: boolean
-  isStarPdfExporting?: boolean
 }
 
 export function StandingsHeader({
@@ -29,13 +25,9 @@ export function StandingsHeader({
   isLoadingOverall,
   isLoading,
   recentlyUpdated,
-  onPrint,
-  onStarTablePdf,
   onRefresh,
   onExcelDownload,
   isExporting = false,
-  isPdfExporting = false,
-  isStarPdfExporting = false,
 }: StandingsHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -91,20 +83,11 @@ export function StandingsHeader({
           {isExporting ? 'Excel生成中...' : 'Excel'}
         </button>
         <button
-          onClick={onStarTablePdf}
-          disabled={isStarPdfExporting}
-          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
         >
-          <Download className={`w-4 h-4 ${isStarPdfExporting ? 'animate-pulse' : ''}`} />
-          {isStarPdfExporting ? '生成中...' : '成績表PDF'}
-        </button>
-        <button
-          onClick={onPrint}
-          disabled={isPdfExporting}
-          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Download className={`w-4 h-4 ${isPdfExporting ? 'animate-pulse' : ''}`} />
-          {isPdfExporting ? '生成中...' : '順位表PDF'}
+          <Download className="w-4 h-4" />
+          印刷 / PDF
         </button>
         <button
           onClick={onRefresh}

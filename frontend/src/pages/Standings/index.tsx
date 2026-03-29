@@ -36,13 +36,9 @@ function Standings() {
     isError,
     error,
     lastUpdated,
-    handlePrint,
     handleRefresh,
     handleExcelDownload,
     isExporting,
-    isPdfExporting,
-    handleStarTablePdf,
-    isStarPdfExporting,
     refetch,
   } = useStandings()
 
@@ -78,12 +74,8 @@ function Standings() {
           isLoadingOverall={isLoadingOverall}
           isLoading={isLoading}
           recentlyUpdated={recentlyUpdated}
-          onPrint={handlePrint}
           onRefresh={handleRefresh}
           onExcelDownload={handleExcelDownload}
-          onStarTablePdf={handleStarTablePdf}
-          isPdfExporting={isPdfExporting}
-          isStarPdfExporting={isStarPdfExporting}
           isExporting={isExporting}
         />
 

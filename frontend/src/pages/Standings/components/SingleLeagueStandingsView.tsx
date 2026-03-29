@@ -45,7 +45,7 @@ export function SingleLeagueStandingsView({
         <h3 className="text-lg font-semibold">全チーム 成績表</h3>
         <span className="text-sm opacity-80">{teamsData?.teams?.length || 0}チーム</span>
       </div>
-      <div className="card-body p-4 overflow-x-auto">
+      <div className="card-body p-4 overflow-x-auto star-table-container">
         {(teamsData?.teams?.length || 0) > 0 ? (
           <StarTable
             teams={(teamsData?.teams || []) as unknown as import('@/types').Team[]}
