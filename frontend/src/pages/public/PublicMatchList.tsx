@@ -68,8 +68,13 @@ export default function PublicMatchList() {
 
                 if (!mounted) return;
 
-                // Sort by date and time
-                const matchList = (data.matches || []).filter((m: MatchData) => !m.is_b_match);
+                // 終了済み試合のみ表示（日程は非公開）、決勝T・研修試合は非公開
+                const matchList = (data.matches || []).filter((m: MatchData) =>
+                    !m.is_b_match &&
+                    m.status === 'completed' &&
+                    m.stage !== 'semifinal' && m.stage !== 'final' && m.stage !== 'third_place' &&
+                    m.stage !== 'training'
+                );
                 const sorted = matchList.sort((a, b) => {
                     const aTime = `${a.match_date} ${a.match_time}`;
                     const bTime = `${b.match_date} ${b.match_time}`;
@@ -184,11 +189,10 @@ export default function PublicMatchList() {
             <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
                 <Calendar className="w-12 h-12 text-gray-400 mb-4" />
                 <h3 className="font-bold text-gray-700 mb-2">
-                    {tournamentName ? `${tournamentName}` : '試合日程'}
+                    {tournamentName ? `${tournamentName}` : '試合速報'}
                 </h3>
                 <p className="text-gray-500 text-sm">
-                    試合日程がまだ登録されていません。<br />
-                    大会開始前にご確認ください。
+                    終了した試合はまだありません。
                 </p>
             </div>
         );
@@ -229,8 +233,8 @@ export default function PublicMatchList() {
 
     // グループ一覧を取得（1リーグ制の場合はグループタブを非表示）
     const groupKeys = useGroupSystem
-        ? ['all', 'A', 'B', 'C', 'D', 'finals', 'training']
-        : ['all', 'finals', 'training'];
+        ? ['all', 'A', 'B', 'C', 'D']
+        : ['all'];
     const groupLabels: Record<string, string> = {
         all: 'すべて',
         A: 'Aグループ',

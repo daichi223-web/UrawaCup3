@@ -102,7 +102,7 @@ function App() {
       <Suspense fallback={<LoadingSpinner />}>
         <Routes>
           {/* ルート（/）は公開ページへリダイレクト */}
-          <Route path="/" element={<Navigate to="/public/matches" replace />} />
+          <Route path="/" element={<Navigate to="/public/standings" replace />} />
 
           {/* ログインページ（レイアウトなし） */}
           <Route path="/login" element={<Login />} />
@@ -252,7 +252,7 @@ function App() {
 
           {/* Public Routes (No Auth Required) */}
           <Route path="/public" element={<PublicLayout />}>
-            <Route index element={<Navigate to="matches" replace />} />
+            <Route index element={<Navigate to="standings" replace />} />
             <Route path="matches" element={<PublicMatchList />} />
             <Route path="standings" element={<PublicStandings />} />
             <Route path="scorers" element={<PublicScorerRanking />} />
@@ -264,7 +264,7 @@ function App() {
           )}
 
           {/* 404リダイレクト → 公開ページへ */}
-          <Route path="*" element={<Navigate to="/public/matches" replace />} />
+          <Route path="*" element={<Navigate to="/public/standings" replace />} />
         </Routes>
       </Suspense>
 
