@@ -68,14 +68,18 @@ export default function PublicMatchList() {
 
                 if (!mounted) return;
 
-                // 終了済み試合のみ表示（日程は非公開）、決勝T・研修試合は非公開
+                // 速報のみ: 予定・決勝T・研修試合・B戦を除外
                 const matchList = (data.matches || []).filter((m: MatchData) =>
                     !m.is_b_match &&
-                    m.status === 'completed' &&
+                    m.status !== 'scheduled' &&
                     m.stage !== 'semifinal' && m.stage !== 'final' && m.stage !== 'third_place' &&
                     m.stage !== 'training'
                 );
+                // 終わった試合から表示（completed → in_progress → その他）
                 const sorted = matchList.sort((a, b) => {
+                    const statusOrder = (s: string) => s === 'completed' ? 0 : s === 'in_progress' ? 1 : 2;
+                    const orderDiff = statusOrder(a.status) - statusOrder(b.status);
+                    if (orderDiff !== 0) return orderDiff;
                     const aTime = `${a.match_date} ${a.match_time}`;
                     const bTime = `${b.match_date} ${b.match_time}`;
                     return new Date(aTime).getTime() - new Date(bTime).getTime();
@@ -220,18 +224,10 @@ export default function PublicMatchList() {
         return groupKey;
     };
 
-    // ソート: 結果入力済み（completed）を上に、その中では最新順。未入力は時系列昇順。
-    const sortedMatches = [...matches].sort((a, b) => {
-        const aCompleted = a.status === 'completed' || a.status === 'in_progress';
-        const bCompleted = b.status === 'completed' || b.status === 'in_progress';
-        if (aCompleted !== bCompleted) return aCompleted ? -1 : 1;
-        const timeA = new Date(`${a.match_date} ${a.match_time}`).getTime();
-        const timeB = new Date(`${b.match_date} ${b.match_time}`).getTime();
-        // 結果入力済み: 最新が上、未入力: 早い順
-        return aCompleted ? timeB - timeA : timeA - timeB;
-    });
+    // 終わった試合から表示（fetchで既にソート済み）
+    const sortedMatches = matches;
 
-    // グループ一覧を取得（1リーグ制の場合はグループタブを非表示）
+    // グループ一覧を取得（速報モード: 決勝T・研修は非表示）
     const groupKeys = useGroupSystem
         ? ['all', 'A', 'B', 'C', 'D']
         : ['all'];
