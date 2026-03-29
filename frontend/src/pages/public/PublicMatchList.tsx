@@ -258,42 +258,10 @@ export default function PublicMatchList() {
 
     return (
         <div className="space-y-4 pb-20">
-            {/* グループタブ */}
-            <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
-                {groupKeys.map(groupKey => {
-                    const count = groupKey === 'all'
-                        ? matches.length
-                        : matchesByGroup[groupKey]?.length || 0;
-                    const isActive = selectedGroup === groupKey;
-
-                    // グループ別カラー
-                    const tabColors: Record<string, string> = {
-                        all: isActive ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600',
-                        A: isActive ? 'bg-red-600 text-white' : 'bg-red-50 text-red-700',
-                        B: isActive ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700',
-                        C: isActive ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700',
-                        D: isActive ? 'bg-yellow-500 text-white' : 'bg-yellow-50 text-yellow-700',
-                        finals: isActive ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700',
-                        training: isActive ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-600',
-                    };
-
-                    return (
-                        <button
-                            key={groupKey}
-                            onClick={() => setSelectedGroup(groupKey)}
-                            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${tabColors[groupKey]}`}
-                        >
-                            {groupLabels[groupKey]}
-                            <span className="ml-1 opacity-75">({count})</span>
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* 試合リスト（時系列順） */}
-            {filteredMatches.length > 0 ? (
+            {/* 試合リスト */}
+            {sortedMatches.length > 0 ? (
                 <div className="space-y-2">
-                    {filteredMatches.map(match => (
+                    {sortedMatches.map(match => (
                         <PublicMatchCard
                             key={match.id}
                             match={match}
