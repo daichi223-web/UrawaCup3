@@ -1,5 +1,5 @@
 // src/pages/Standings/useStandings.ts
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { standingApi, type GroupStandings } from '@/features/standings'
 import type { OverallStandings } from '@/features/standings/types'
@@ -7,6 +7,8 @@ import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates'
 import { useAppStore } from '@/stores/appStore'
 import { matchesApi, teamsApi, venuesApi } from '@/lib/api'
 import type { ViewMode, StandingsEntry, TeamStats, TeamsResponse, MatchesResponse } from './types'
+import { exportOverallStandingsExcel, exportGroupStandingsExcel } from './utils/exportStandingsExcel'
+import toast from 'react-hot-toast'
 
 export function useStandings() {
   const { currentTournament } = useAppStore()
@@ -211,8 +213,34 @@ export function useStandings() {
 
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString('ja-JP') : null
 
+  const [isExporting, setIsExporting] = useState(false)
+
   const handlePrint = () => window.print()
   const handleRefresh = () => { refetch(); refetchOverall() }
+
+  const handleExcelDownload = useCallback(async () => {
+    setIsExporting(true)
+    try {
+      const tournamentName = currentTournament?.name || ''
+      if (viewMode === 'star' && useGroupSystem) {
+        await exportGroupStandingsExcel(groupStandings, tournamentName)
+      } else {
+        const qualifyingCount = overallStandings?.qualifyingCount || 4
+        await exportOverallStandingsExcel(
+          displayOverallEntries,
+          qualifyingCount,
+          useGroupSystem,
+          tournamentName,
+        )
+      }
+      toast.success('Excelをダウンロードしました')
+    } catch (e) {
+      console.error('Excel export error:', e)
+      toast.error('Excelの生成に失敗しました')
+    } finally {
+      setIsExporting(false)
+    }
+  }, [viewMode, useGroupSystem, groupStandings, displayOverallEntries, overallStandings, currentTournament])
 
   return {
     // State
@@ -244,6 +272,8 @@ export function useStandings() {
     // Handlers
     handlePrint,
     handleRefresh,
+    handleExcelDownload,
+    isExporting,
     refetch,
   }
 }

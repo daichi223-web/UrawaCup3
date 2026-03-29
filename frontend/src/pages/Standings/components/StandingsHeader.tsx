@@ -1,5 +1,5 @@
 // src/pages/Standings/components/StandingsHeader.tsx
-import { RefreshCw, Clock, Printer, WifiOff } from 'lucide-react'
+import { RefreshCw, Clock, Printer, WifiOff, Download } from 'lucide-react'
 import type { ViewMode } from '../types'
 
 interface StandingsHeaderProps {
@@ -13,6 +13,8 @@ interface StandingsHeaderProps {
   recentlyUpdated: boolean
   onPrint: () => void
   onRefresh: () => void
+  onExcelDownload: () => void
+  isExporting?: boolean
 }
 
 export function StandingsHeader({
@@ -26,6 +28,8 @@ export function StandingsHeader({
   recentlyUpdated,
   onPrint,
   onRefresh,
+  onExcelDownload,
+  isExporting = false,
 }: StandingsHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -72,6 +76,14 @@ export function StandingsHeader({
             )}
           </span>
         )}
+        <button
+          onClick={onExcelDownload}
+          disabled={isExporting}
+          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Download className={`w-4 h-4 ${isExporting ? 'animate-pulse' : ''}`} />
+          {isExporting ? 'Excel生成中...' : 'Excel'}
+        </button>
         <button
           onClick={onPrint}
           className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"

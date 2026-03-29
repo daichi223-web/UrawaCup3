@@ -38,6 +38,8 @@ function Standings() {
     lastUpdated,
     handlePrint,
     handleRefresh,
+    handleExcelDownload,
+    isExporting,
     refetch,
   } = useStandings()
 
@@ -75,6 +77,8 @@ function Standings() {
           recentlyUpdated={recentlyUpdated}
           onPrint={handlePrint}
           onRefresh={handleRefresh}
+          onExcelDownload={handleExcelDownload}
+          isExporting={isExporting}
         />
 
         {/* 表示切り替えタブ */}
