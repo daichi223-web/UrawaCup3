@@ -587,21 +587,21 @@ export default function PublicStandings() {
                             )
                         )}
                     </div>
-                </>
-            )}
 
-            {/* PDF DL ボタン */}
-            {displayOverallEntries.length > 0 && (
-                <div className="flex justify-center">
-                    <button
-                        onClick={handleDownloadPdf}
-                        disabled={pdfLoading}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                    >
-                        <Download size={16} />
-                        {pdfLoading ? 'PDF生成中...' : '成績表PDF (A4)'}
-                    </button>
-                </div>
+                    {/* PDF DL ボタン（順位表タブ内） */}
+                    {displayOverallEntries.length > 0 && (
+                        <div className="flex justify-center mt-3">
+                            <button
+                                onClick={handleDownloadPdf}
+                                disabled={pdfLoading}
+                                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >
+                                <Download size={16} />
+                                {pdfLoading ? 'PDF生成中...' : '順位表PDF (A4)'}
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
 
             {/* 最終更新時刻 */}

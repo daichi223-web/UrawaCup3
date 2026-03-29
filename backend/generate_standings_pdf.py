@@ -81,9 +81,9 @@ class StandingsPDFGenerator:
                     s.get('points', 0),
                 ])
 
-            # A4幅(210mm - 30mm margin = 180mm ≈ 510pt)を活用
-            col_widths = [28, 150, 34, 30, 30, 30, 34, 34, 38, 38]
-            table = Table(table_data, colWidths=col_widths)
+            # A4幅(210mm - 30mm margins = 180mm = 510pt)にぴったり合わせる
+            col_widths = [30, 190, 35, 32, 32, 32, 38, 38, 40, 43]  # 合計510
+            table = Table(table_data, colWidths=col_widths, hAlign='CENTER')
 
             # 上位4チームの行をハイライト
             style_cmds = [
