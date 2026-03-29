@@ -267,6 +267,68 @@ export function useStandings() {
       setIsPdfExporting(false)
     }
   }, [displayOverallEntries, currentTournament])
+
+  const [isStarPdfExporting, setIsStarPdfExporting] = useState(false)
+
+  const handleStarTablePdf = useCallback(async () => {
+    const allTeams = (teamsData as TeamsResponse)?.teams || []
+    const allMatches = (matchesData as MatchesResponse)?.matches || []
+    if (allTeams.length === 0) { toast.error('チームデータがありません'); return }
+    setIsStarPdfExporting(true)
+    try {
+      const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || ''
+      if (!CORE_API_URL) throw new Error('API未設定')
+
+      // 順位順にチームをソート
+      const teamOrder = displayOverallEntries.length > 0
+        ? displayOverallEntries.map(e => e.teamId)
+        : allTeams.map((t: { id: number }) => t.id)
+
+      const sortedTeams = teamOrder.map(id => {
+        const t = allTeams.find((tm: { id: number }) => tm.id === id)
+        return t ? { id: t.id, shortName: (t as { short_name?: string }).short_name || t.name } : null
+      }).filter(Boolean)
+
+      // B戦を除外した完了済み試合
+      const completedMatches = allMatches
+        .filter((m: { status?: string; is_b_match?: boolean; stage?: string }) =>
+          m.status === 'completed' && !m.is_b_match && m.stage === 'preliminary')
+        .map((m: { home_team_id?: number; away_team_id?: number; home_score_total?: number; away_score_total?: number }) => ({
+          homeTeamId: m.home_team_id,
+          awayTeamId: m.away_team_id,
+          homeScore: m.home_score_total,
+          awayScore: m.away_score_total,
+        }))
+
+      const payload = {
+        title: `${currentTournament?.name || '浦和カップ'} 成績表`,
+        teams: sortedTeams,
+        matches: completedMatches,
+      }
+
+      const res = await fetch(`${CORE_API_URL}/star-table-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(`API error: ${res.status}`)
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${currentTournament?.name || '成績表'}_成績表.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('成績表PDFをダウンロードしました')
+    } catch (err) {
+      console.error('Star table PDF failed:', err)
+      toast.error('成績表PDF生成に失敗しました')
+    } finally {
+      setIsStarPdfExporting(false)
+    }
+  }, [teamsData, matchesData, displayOverallEntries, currentTournament])
+
   const handleRefresh = () => { refetch(); refetchOverall() }
 
   const handleExcelDownload = useCallback(async () => {
@@ -326,6 +388,8 @@ export function useStandings() {
     handleExcelDownload,
     isExporting,
     isPdfExporting,
+    handleStarTablePdf,
+    isStarPdfExporting,
     refetch,
   }
 }
