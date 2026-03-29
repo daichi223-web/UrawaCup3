@@ -102,21 +102,89 @@ async function getGroupWinners(tournamentId: number): Promise<QualifyingTeam[]> 
 
 /**
  * 総合順位ルール: 上位4チームを取得
+ * standingsテーブルが空の場合は試合データから直接計算
  */
 async function getOverallTopTeams(tournamentId: number, count: number = 4): Promise<QualifyingTeam[]> {
   const overallStandings = await standingApi.getOverallStandings(tournamentId);
   console.log(`[Finals] getOverallTopTeams: entries=${overallStandings.entries.length}, qualifyingCount=${overallStandings.qualifyingCount}`);
-  if (overallStandings.entries.length > 0) {
-    console.log('[Finals] Top entries:', overallStandings.entries.slice(0, 4).map(e => `${e.teamName}(pts:${e.points},played:${e.played})`));
+
+  if (overallStandings.entries.length >= count) {
+    console.log('[Finals] Top entries (from standings):', overallStandings.entries.slice(0, count).map(e => `${e.teamName}(pts:${e.points},played:${e.played})`));
+    return overallStandings.entries.slice(0, count).map(entry => ({
+      teamId: entry.teamId,
+      teamName: entry.shortName || entry.teamName,
+      groupId: entry.groupId,
+      rank: entry.groupRank,
+      overallRank: entry.overallRank,
+    }));
   }
 
-  return overallStandings.entries.slice(0, count).map(entry => ({
-    teamId: entry.teamId,
-    teamName: entry.shortName || entry.teamName,
-    groupId: entry.groupId,
-    rank: entry.groupRank,
-    overallRank: entry.overallRank,
+  // standingsが空または不足 → 試合データから直接計算
+  console.log('[Finals] standings不足、試合データから直接順位を計算');
+  return calculateTopTeamsFromMatches(tournamentId, count);
+}
+
+/**
+ * 試合データから直接順位を計算（standingsテーブルに依存しない）
+ */
+async function calculateTopTeamsFromMatches(tournamentId: number, count: number): Promise<QualifyingTeam[]> {
+  const { data: teams } = await supabase
+    .from('teams')
+    .select('id, name, short_name, group_id')
+    .eq('tournament_id', tournamentId);
+
+  const { data: matches } = await supabase
+    .from('matches')
+    .select('home_team_id, away_team_id, home_score_total, away_score_total')
+    .eq('tournament_id', tournamentId)
+    .eq('status', 'completed')
+    .or('is_b_match.is.null,is_b_match.eq.false');
+
+  if (!teams || !matches) return [];
+
+  const stats = new Map<number, { pts: number; gd: number; gf: number; played: number }>();
+  for (const t of teams) {
+    stats.set(t.id, { pts: 0, gd: 0, gf: 0, played: 0 });
+  }
+
+  for (const m of matches) {
+    const h = m.home_team_id, a = m.away_team_id;
+    const hs = m.home_score_total ?? 0, as_ = m.away_score_total ?? 0;
+    const hStats = stats.get(h), aStats = stats.get(a);
+    if (!hStats || !aStats) continue;
+
+    hStats.played++; aStats.played++;
+    hStats.gf += hs; hStats.gd += (hs - as_);
+    aStats.gf += as_; aStats.gd += (as_ - hs);
+
+    if (hs > as_) { hStats.pts += 3; }
+    else if (hs < as_) { aStats.pts += 3; }
+    else { hStats.pts += 1; aStats.pts += 1; }
+  }
+
+  const sorted = Array.from(stats.entries())
+    .filter(([, s]) => s.played > 0)
+    .sort(([, a], [, b]) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      if (b.gd !== a.gd) return b.gd - a.gd;
+      return b.gf - a.gf;
+    });
+
+  console.log('[Finals] Calculated top teams from matches:', sorted.slice(0, count).map(([tid, s]) => {
+    const team = teams.find(t => t.id === tid);
+    return `${team?.short_name || team?.name}(pts:${s.pts},gd:${s.gd})`;
   }));
+
+  return sorted.slice(0, count).map(([tid, s], idx) => {
+    const team = teams.find(t => t.id === tid);
+    return {
+      teamId: tid,
+      teamName: team?.short_name || team?.name || '',
+      groupId: team?.group_id || '',
+      rank: 1,
+      overallRank: idx + 1,
+    };
+  });
 }
 
 /**
