@@ -22,6 +22,7 @@ interface MatchData {
     home_team: { id: number; name: string; short_name?: string | null } | null;
     away_team: { id: number; name: string; short_name?: string | null } | null;
     venue: { id: number; name: string } | null;
+    is_b_match?: boolean;
 }
 
 export default function PublicMatchList() {
@@ -68,7 +69,7 @@ export default function PublicMatchList() {
                 if (!mounted) return;
 
                 // Sort by date and time
-                const matchList = data.matches || [];
+                const matchList = (data.matches || []).filter((m: MatchData) => !m.is_b_match);
                 const sorted = matchList.sort((a, b) => {
                     const aTime = `${a.match_date} ${a.match_time}`;
                     const bTime = `${b.match_date} ${b.match_time}`;

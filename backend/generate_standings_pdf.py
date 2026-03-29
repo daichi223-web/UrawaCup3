@@ -81,13 +81,16 @@ class StandingsPDFGenerator:
                     s.get('points', 0),
                 ])
 
-            col_widths = [25, 100, 30, 25, 25, 25, 30, 30, 30, 30]
+            # A4幅(210mm - 30mm margin = 180mm ≈ 510pt)を活用
+            col_widths = [28, 150, 34, 30, 30, 30, 34, 34, 38, 38]
             table = Table(table_data, colWidths=col_widths)
-            table.setStyle(TableStyle([
+
+            # 上位4チームの行をハイライト
+            style_cmds = [
                 ('FONTNAME', (0, 0), (-1, -1), FONT),
                 ('FONTSIZE', (0, 0), (-1, -1), 9),
                 ('FONTSIZE', (0, 0), (-1, 0), 8),
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#428bca')),
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2B6CB0')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('ALIGN', (1, 1), (1, -1), 'LEFT'),
@@ -96,7 +99,13 @@ class StandingsPDFGenerator:
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('TOPPADDING', (0, 0), (-1, -1), 3),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ]))
+            ]
+            # 上位4チーム（row 1-4）に薄黄ハイライト
+            for row_idx in range(1, min(5, len(table_data))):
+                style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.HexColor('#FEF3C7')))
+                style_cmds.append(('FONTNAME', (0, row_idx), (-1, row_idx), FONT))
+
+            table.setStyle(TableStyle(style_cmds))
             elements.append(table)
             elements.append(Spacer(1, 5 * mm))
 
