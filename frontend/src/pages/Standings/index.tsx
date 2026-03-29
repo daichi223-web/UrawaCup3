@@ -40,6 +40,7 @@ function Standings() {
     handleRefresh,
     handleExcelDownload,
     isExporting,
+    isPdfExporting,
     refetch,
   } = useStandings()
 
@@ -78,6 +79,7 @@ function Standings() {
           onPrint={handlePrint}
           onRefresh={handleRefresh}
           onExcelDownload={handleExcelDownload}
+          isPdfExporting={isPdfExporting}
           isExporting={isExporting}
         />
 

@@ -215,7 +215,58 @@ export function useStandings() {
 
   const [isExporting, setIsExporting] = useState(false)
 
-  const handlePrint = () => window.print()
+  const [isPdfExporting, setIsPdfExporting] = useState(false)
+
+  const handlePrint = useCallback(async () => {
+    if (displayOverallEntries.length === 0) { window.print(); return }
+    setIsPdfExporting(true)
+    try {
+      const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || ''
+      if (!CORE_API_URL) throw new Error('API未設定')
+
+      const pdfPayload = {
+        title: `${currentTournament?.name || '浦和カップ'} 順位表`,
+        groups: [{
+          groupId: 'all',
+          groupName: '',
+          standings: displayOverallEntries.map((e) => ({
+            rank: e.overallRank,
+            teamName: e.shortName || e.teamName,
+            played: e.played,
+            won: e.won,
+            drawn: e.drawn,
+            lost: e.lost,
+            goalsFor: e.goalsFor,
+            goalsAgainst: (e.goalsFor ?? 0) - (e.goalDifference ?? 0),
+            goalDifference: e.goalDifference,
+            points: e.points,
+          })),
+        }],
+      }
+
+      const res = await fetch(`${CORE_API_URL}/standings-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pdfPayload),
+      })
+      if (!res.ok) throw new Error(`API error: ${res.status}`)
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${currentTournament?.name || '順位表'}_順位表.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('PDFをダウンロードしました')
+    } catch (err) {
+      console.error('PDF download failed:', err)
+      toast.error('PDF生成に失敗しました。印刷機能にフォールバックします。')
+      window.print()
+    } finally {
+      setIsPdfExporting(false)
+    }
+  }, [displayOverallEntries, currentTournament])
   const handleRefresh = () => { refetch(); refetchOverall() }
 
   const handleExcelDownload = useCallback(async () => {
@@ -274,6 +325,7 @@ export function useStandings() {
     handleRefresh,
     handleExcelDownload,
     isExporting,
+    isPdfExporting,
     refetch,
   }
 }

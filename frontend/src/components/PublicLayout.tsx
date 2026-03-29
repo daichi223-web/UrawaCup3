@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Trophy, Calendar, List, Award, type LucideIcon } from 'lucide-react';
+import { Trophy, Calendar, List, type LucideIcon } from 'lucide-react';
 import { useAppStore } from '@/stores/appStore';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
@@ -69,12 +69,14 @@ function PublicLayout() {
                         icon={List}
                         label="順位表"
                     />
+                    {/* 得点ランキングは一時非表示
                     <NavLink
                         to="/public/scorers"
                         isActive={location.pathname === '/public/scorers'}
                         icon={Award}
                         label="得点者"
                     />
+                    */}
                 </div>
             </nav>
         </div>

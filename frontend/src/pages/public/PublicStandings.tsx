@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { standingApi } from '@/features/standings/api';
-import type { OverallStandings, GroupStandings, OverallStandingEntry } from '@/features/standings/types';
+import type { OverallStandings, GroupStandings } from '@/features/standings/types';
 import { supabase } from '@/lib/supabase';
 import { teamsApi, matchesApi } from '@/lib/api';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 import StarTable from '@/components/StarTable';
-import { Download } from 'lucide-react';
-
-const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || '';
 
 // API レスポンス型
 interface TeamApiData {
@@ -270,57 +267,6 @@ export default function PublicStandings() {
         }, 30000);
         return () => clearInterval(interval);
     }, [refreshData]);
-
-    const [pdfLoading, setPdfLoading] = useState(false);
-
-    const handleDownloadPdf = useCallback(async () => {
-        if (displayOverallEntries.length === 0) return;
-        setPdfLoading(true);
-        try {
-            const pdfPayload = {
-                title: '第45回浦和カップ 成績表',
-                groups: [{
-                    groupId: 'all',
-                    groupName: '',
-                    standings: displayOverallEntries.map((e: OverallStandingEntry) => ({
-                        rank: e.overallRank,
-                        teamName: e.shortName || e.teamName,
-                        played: e.played,
-                        won: e.won,
-                        drawn: e.drawn,
-                        lost: e.lost,
-                        goalsFor: e.goalsFor,
-                        goalsAgainst: (e.goalsFor ?? 0) - (e.goalDifference ?? 0),
-                        goalDifference: e.goalDifference,
-                        points: e.points,
-                    })),
-                }],
-            };
-
-            if (!CORE_API_URL) throw new Error('API未設定');
-
-            const res = await fetch(`${CORE_API_URL}/standings-pdf`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(pdfPayload),
-            });
-
-            if (!res.ok) throw new Error(`API error: ${res.status}`);
-
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = '第45回浦和カップ_成績表.pdf';
-            a.click();
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error('PDF download failed:', err);
-            alert('PDF生成に失敗しました。\nブラウザの印刷機能（Ctrl+P）でPDF保存してください。');
-        } finally {
-            setPdfLoading(false);
-        }
-    }, [displayOverallEntries]);
 
     const isLoading = isLoadingStandings || isLoadingOverall;
     const hasError = standingsError;
@@ -587,20 +533,6 @@ export default function PublicStandings() {
                             )
                         )}
                     </div>
-
-                    {/* PDF DL ボタン（順位表タブ内） */}
-                    {displayOverallEntries.length > 0 && (
-                        <div className="flex justify-center mt-3">
-                            <button
-                                onClick={handleDownloadPdf}
-                                disabled={pdfLoading}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                            >
-                                <Download size={16} />
-                                {pdfLoading ? 'PDF生成中...' : '順位表PDF (A4)'}
-                            </button>
-                        </div>
-                    )}
                 </>
             )}
 
