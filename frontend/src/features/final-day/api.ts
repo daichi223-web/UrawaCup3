@@ -28,6 +28,8 @@ interface TournamentSettings {
   finals_start_time?: string;
   finals_match_duration?: number;
   finals_interval_minutes?: number;
+  third_place_time?: string;
+  final_time?: string;
   preliminary_start_time?: string;
   preliminary_match_duration?: number;
   preliminary_interval_minutes?: number;
@@ -474,13 +476,15 @@ export const finalDayApi = {
     currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
 
     // 3位決定戦（メイン会場、チームはTBD - 準決勝後に決定）
+    // third_place_time が設定されていれば固定時刻を使用
+    const thirdPlaceTime = t.third_place_time || currentTime;
     matchesToInsert.push({
       tournament_id: tournamentId,
       venue_id: mainVenue.id,
       home_team_id: null,
       away_team_id: null,
       match_date: finalDate,
-      match_time: currentTime,
+      match_time: thirdPlaceTime,
       match_order: matchOrder++,
       stage: 'third_place',
       status: 'scheduled',
@@ -488,16 +492,17 @@ export const finalDayApi = {
       home_seed: 'SF1敗者',
       away_seed: 'SF2敗者',
     });
-    currentTime = addMinutes(currentTime, finalsMatchDuration + finalsIntervalMinutes);
 
     // 決勝（メイン会場、チームはTBD - 準決勝後に決定）
+    // final_time が設定されていれば固定時刻を使用
+    const finalTime = t.final_time || addMinutes(thirdPlaceTime, finalsMatchDuration + finalsIntervalMinutes);
     matchesToInsert.push({
       tournament_id: tournamentId,
       venue_id: mainVenue.id,
       home_team_id: null,
       away_team_id: null,
       match_date: finalDate,
-      match_time: currentTime,
+      match_time: finalTime,
       match_order: matchOrder++,
       stage: 'final',
       status: 'scheduled',
@@ -505,6 +510,7 @@ export const finalDayApi = {
       home_seed: 'SF1勝者',
       away_seed: 'SF2勝者',
     });
+    console.log(`[Finals] 3位決定戦: ${thirdPlaceTime}, 決勝: ${finalTime}`);
 
     // 8. 試合をDBに挿入
     const { error: insertError } = await supabase
