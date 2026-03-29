@@ -259,6 +259,9 @@ export default function FinalDaySchedule() {
     }
   };
 
+  // 生成方式選択ダイアログ
+  const [showGenerateDialog, setShowGenerateDialog] = useState(false);
+
   // 自動生成
   const handleGenerate = async () => {
     // 予選リーグの未完了試合数をチェック
@@ -278,15 +281,15 @@ export default function FinalDaySchedule() {
       )) {
         return;
       }
-    } else {
-      if (!confirm('最終日の組み合わせを自動生成しますか？\n既存の試合は上書きされます。')) {
-        return;
-      }
     }
 
+    setShowGenerateDialog(true);
+  };
+
+  const executeGenerate = async (qualificationRule: 'group_based' | 'overall_ranking') => {
+    setShowGenerateDialog(false);
     try {
-      // 統一スケジュール生成APIを呼び出し
-      await generateSchedule.mutateAsync();
+      await generateSchedule.mutateAsync({ qualificationRule });
       toast.success('組み合わせを生成しました');
       refetch();
     } catch (error) {
@@ -463,6 +466,47 @@ export default function FinalDaySchedule() {
         onConfirm={handleForceSwap}
         onCancel={handleCancelSwap}
       />
+
+      {/* 生成方式選択ダイアログ */}
+      {showGenerateDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold mb-2">決勝進出チームの決定方法</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              決勝トーナメントに進出する4チームの決め方を選択してください。
+              既存の最終日試合は上書きされます。
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => executeGenerate('group_based')}
+                disabled={generateSchedule.isPending}
+                className="w-full text-left p-4 border-2 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+              >
+                <div className="font-bold text-blue-700">各グループ1位</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  A, B, C, D... 各グループの1位チームが決勝T進出
+                </div>
+              </button>
+              <button
+                onClick={() => executeGenerate('overall_ranking')}
+                disabled={generateSchedule.isPending}
+                className="w-full text-left p-4 border-2 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors"
+              >
+                <div className="font-bold text-green-700">総合順位 上位4チーム</div>
+                <div className="text-sm text-gray-600 mt-1">
+                  全チームの総合順位（勝点→得失点差→得点）で上位4チームが決勝T進出
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowGenerateDialog(false)}
+              className="w-full mt-4 py-2 text-sm text-gray-500 hover:text-gray-700"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -213,7 +213,10 @@ export const finalDayApi = {
    * - 決勝トーナメント（準決勝、3位決定戦、決勝）
    * - 研修試合（決勝進出チーム以外）
    */
-  generateFinalDaySchedule: async (tournamentId: number): Promise<MatchWithDetails[]> => {
+  generateFinalDaySchedule: async (
+    tournamentId: number,
+    options?: { qualificationRule?: 'group_based' | 'overall_ranking' },
+  ): Promise<MatchWithDetails[]> => {
     // 1. 大会設定を取得
     const { data: tournament, error: tournamentError } = await supabase
       .from('tournaments')
@@ -226,7 +229,7 @@ export const finalDayApi = {
     }
 
     const t = tournament as TournamentSettings;
-    const qualificationRule = (t.qualification_rule || 'group_based') as QualificationRule;
+    const qualificationRule = (options?.qualificationRule || t.qualification_rule || 'group_based') as QualificationRule;
     const bracketMethod = t.bracket_method || 'seed_order'; // 'diagonal' or 'seed_order'
     const finalDate = t.end_date;
     if (!finalDate) {
@@ -1137,6 +1140,7 @@ export const finalDayApi = {
       stage: string;
       status: string;
       notes: string;
+      is_b_match: boolean;
     }
     const matchesToInsert: MatchInsertPayload[] = [];
 
@@ -1159,14 +1163,13 @@ export const finalDayApi = {
       const pairingPatterns: PairSet[] = [];
 
       if (teamsInVenue.length === 4) {
-        pairingPatterns.push([[0, 1], [2, 3]]);
-        pairingPatterns.push([[0, 2], [1, 3]]);
-        pairingPatterns.push([[0, 3], [1, 2]]);
+        // 4チーム: フルラウンドロビン（6試合 = A戦4 + B戦2）
+        // R1: 0v1, 2v3 (A戦) → R2: 0v2, 1v3 (A戦) → R3: 0v3, 1v2 (B戦)
+        // 各チーム: A戦2試合 + B戦1試合
+        pairingPatterns.push([[0, 1], [2, 3], [0, 2], [1, 3], [0, 3], [1, 2]]);
       } else if (teamsInVenue.length === 3) {
-        // 3チーム: 1試合ずつ選ぶ3パターン
-        pairingPatterns.push([[0, 1]]);
-        pairingPatterns.push([[0, 2]]);
-        pairingPatterns.push([[1, 2]]);
+        // 3チーム: フルラウンドロビン（3試合）
+        pairingPatterns.push([[0, 1], [0, 2], [1, 2]]);
       } else if (teamsInVenue.length === 2) {
         pairingPatterns.push([[0, 1]]);
       } else {
@@ -1212,7 +1215,15 @@ export const finalDayApi = {
         : startTime;
       let matchOrder = 1;
 
-      for (const [i, j] of bestPattern) {
+      // A戦の試合数 = 各チーム matchesPerTeam 試合分
+      // 4チーム: A戦4試合(R1+R2) + B戦2試合(R3) = 6試合
+      const aMatchCount = teamsInVenue.length === 4
+        ? matchesPerTeam * teamsInVenue.length / 2  // 4
+        : bestPattern.length;
+
+      for (let pIdx = 0; pIdx < bestPattern.length; pIdx++) {
+        const [i, j] = bestPattern[pIdx];
+        const isBMatch = pIdx >= aMatchCount;
         matchesToInsert.push({
           tournament_id: tournamentId,
           venue_id: venue.id,
@@ -1223,7 +1234,8 @@ export const finalDayApi = {
           match_order: matchOrder++,
           stage: 'training',
           status: 'scheduled',
-          notes: `${avgRank}位リーグ`,
+          notes: `${avgRank}位リーグ${isBMatch ? '(B)' : ''}`,
+          is_b_match: isBMatch,
         });
         currentTime = addMinutes(currentTime, matchDuration + intervalMinutes);
       }

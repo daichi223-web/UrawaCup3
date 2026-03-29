@@ -57,7 +57,8 @@ export function useGenerateFinalDaySchedule(tournamentId: number) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => finalDayApi.generateFinalDaySchedule(tournamentId),
+    mutationFn: (options?: { qualificationRule?: 'group_based' | 'overall_ranking' }) =>
+      finalDayApi.generateFinalDaySchedule(tournamentId, options),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: finalDayKeys.all });
     },
