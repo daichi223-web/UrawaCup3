@@ -715,6 +715,7 @@ export function useMatchSchedule() {
         const groupId = cols[5] || ''
         const bMatchFlag = (cols[6] || '').trim().toUpperCase()
         const isBMatch = bMatchFlag === 'B' || bMatchFlag === '1' || bMatchFlag === 'TRUE' || bMatchFlag === 'B戦'
+        const stageStr = (cols[7] || '').trim()
 
         // 日付バリデーション
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -739,35 +740,48 @@ export function useMatchSchedule() {
           continue
         }
 
-        const homeTeam = findTeam(homeName)
-        if (!homeTeam) {
+        // チーム未定（TBD）対応: 空欄やTBDの場合はnull
+        const homeTbd = !homeName || homeName === 'TBD' || homeName === '未定'
+        const awayTbd = !awayName || awayName === 'TBD' || awayName === '未定'
+
+        const homeTeam = homeTbd ? null : findTeam(homeName)
+        if (!homeTbd && !homeTeam) {
           errors.push(`${i + 2}行目: ホームチーム「${homeName}」が見つかりません`)
           continue
         }
 
-        const awayTeam = findTeam(awayName)
-        if (!awayTeam) {
+        const awayTeam = awayTbd ? null : findTeam(awayName)
+        if (!awayTbd && !awayTeam) {
           errors.push(`${i + 2}行目: アウェイチーム「${awayName}」が見つかりません`)
           continue
         }
+
+        // ステージ解決
+        const stageMap: Record<string, string> = {
+          '予選': 'preliminary', '準決勝': 'semifinal', 'SF': 'semifinal',
+          '3位決': 'third_place', '3決': 'third_place',
+          '決勝': 'final', 'F': 'final',
+          '研修': 'training',
+        }
+        const resolvedStage = stageMap[stageStr] || (stageStr && ['preliminary','semifinal','third_place','final','training'].includes(stageStr) ? stageStr : 'preliminary')
 
         // match_order: 会場+日付ごとに連番
         const orderKey = `${venue.id}-${dateStr}`
         orderCounters[orderKey] = (orderCounters[orderKey] || 0) + 1
 
         // グループID: CSV指定（1文字のみ有効） > チームのgroup_id
-        const resolvedGroup = (groupId.length === 1 ? groupId : '') || homeTeam.group_id || null
+        const resolvedGroup = (groupId.length === 1 ? groupId : '') || homeTeam?.group_id || null
 
         matchesToInsert.push({
           tournament_id: tournamentId,
           group_id: resolvedGroup,
-          home_team_id: homeTeam.id,
-          away_team_id: awayTeam.id,
+          home_team_id: homeTeam?.id ?? null as unknown as number,
+          away_team_id: awayTeam?.id ?? null as unknown as number,
           venue_id: venue.id,
           match_date: dateStr,
           match_time: matchTime,
           match_order: orderCounters[orderKey],
-          stage: 'preliminary',
+          stage: resolvedStage,
           status: 'scheduled',
           is_b_match: isBMatch,
         })

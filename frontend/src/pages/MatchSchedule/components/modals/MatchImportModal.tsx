@@ -47,6 +47,7 @@ export function MatchImportModal({
       away: cols[4] || '',
       group: cols[5] || '',
       bMatch: (cols[6] || '').trim().toUpperCase(),
+      stage: (cols[7] || '').trim(),
     }
   })
 
@@ -61,10 +62,10 @@ export function MatchImportModal({
       <div className="space-y-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
           <p className="font-bold mb-1">CSV形式（ヘッダー行必須）</p>
-          <p className="font-mono text-xs">日付,時間,会場名,ホーム,アウェイ,グループ,B戦</p>
+          <p className="font-mono text-xs">日付,時間,会場名,ホーム,アウェイ,グループ,B戦,ステージ</p>
           <p className="mt-1 text-xs">例:</p>
-          <p className="font-mono text-xs text-blue-600">2026-08-01,09:30,浦和南高G,浦和南,市立浦和,A,</p>
-          <p className="font-mono text-xs text-blue-600">2026-08-01,12:00,浦和南高G,浦和学院,武南,A,B</p>
+          <p className="font-mono text-xs text-blue-600">2026-08-01,09:30,浦和南高G,浦和南,市立浦和,A,,</p>
+          <p className="font-mono text-xs text-blue-600">2026-08-01,12:00,駒場スタジアム,TBD,TBD,,,決勝</p>
           <details className="mt-2">
             <summary className="cursor-pointer text-xs font-medium">詳細仕様</summary>
             <ul className="mt-1 text-xs space-y-0.5 list-disc list-inside">
@@ -74,6 +75,8 @@ export function MatchImportModal({
               <li>ホーム/アウェイ: チーム名または略称（部分一致可）</li>
               <li>グループ: A, B, C, D 等（省略可 - チームのグループを自動使用）</li>
               <li>B戦: 「B」と記入でB戦（順位計算対象外）。省略で通常試合</li>
+              <li>ステージ: 予選/準決勝/3位決/決勝/研修（省略で予選）</li>
+              <li>ホーム/アウェイ: 「TBD」または空欄でチーム未定</li>
             </ul>
           </details>
         </div>
@@ -132,14 +135,17 @@ export function MatchImportModal({
                   <th className="pb-1 pr-2">ホーム</th>
                   <th className="pb-1 pr-2">アウェイ</th>
                   <th className="pb-1 pr-2">G</th>
-                  <th className="pb-1">B戦</th>
+                  <th className="pb-1 pr-2">B戦</th>
+                  <th className="pb-1">ステージ</th>
                 </tr>
               </thead>
               <tbody>
                 {previewRows.map((row, i) => {
                   const venueOk = venueNames.some(v => v.includes(row.venue) || row.venue.includes(v))
-                  const homeOk = teamNames.some(t => t.includes(row.home) || row.home.includes(t))
-                  const awayOk = teamNames.some(t => t.includes(row.away) || row.away.includes(t))
+                  const homeTbd = !row.home || row.home === 'TBD' || row.home === '未定'
+                  const awayTbd = !row.away || row.away === 'TBD' || row.away === '未定'
+                  const homeOk = homeTbd || teamNames.some(t => t.includes(row.home) || row.home.includes(t))
+                  const awayOk = awayTbd || teamNames.some(t => t.includes(row.away) || row.away.includes(t))
                   return (
                     <tr key={i} className="border-b border-gray-200">
                       <td className="py-0.5 pr-2">{row.date}</td>
@@ -154,8 +160,11 @@ export function MatchImportModal({
                         {row.away}{!awayOk && ' ?'}
                       </td>
                       <td className="py-0.5 pr-2">{row.group}</td>
-                      <td className={`py-0.5 ${row.bMatch === 'B' ? 'text-orange-600 font-bold' : ''}`}>
+                      <td className={`py-0.5 pr-2 ${row.bMatch === 'B' ? 'text-orange-600 font-bold' : ''}`}>
                         {row.bMatch === 'B' ? 'B' : ''}
+                      </td>
+                      <td className={`py-0.5 ${row.stage ? 'text-purple-600 font-bold' : ''}`}>
+                        {row.stage}
                       </td>
                     </tr>
                   )
