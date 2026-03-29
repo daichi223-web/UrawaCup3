@@ -118,7 +118,7 @@ export default function PublicStandings() {
     const calculatedOverallData = useMemo(() => {
         if (teams.length === 0 || matches.length === 0) return { map: new Map<number, number>(), entries: [] };
 
-        const completedMatches = matches.filter((m) => m.status === 'completed' && m.stage === 'preliminary');
+        const completedMatches = matches.filter((m) => m.status === 'completed' && m.stage === 'preliminary' && !m.is_b_match && !m.isBMatch);
         if (completedMatches.length === 0) return { map: new Map<number, number>(), entries: [] };
 
         // チームごとの成績を集計

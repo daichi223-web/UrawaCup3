@@ -36,6 +36,7 @@ export default function StarTable({ teams, matches, groupId, byePairs = [], over
   const allPreliminaryMatches = useMemo(() => {
     return matches.filter(m =>
       m.stage === 'preliminary' &&
+      !m.is_b_match && !m.isBMatch &&
       (groupId === 'all' || !groupId || m.groupId === groupId || m.group_id === groupId || !m.groupId && !m.group_id)
     )
   }, [matches, groupId])

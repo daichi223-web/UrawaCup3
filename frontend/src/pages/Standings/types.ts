@@ -24,6 +24,8 @@ export interface MatchData {
   away_score_total?: number
   group_id?: string
   groupId?: string
+  is_b_match?: boolean
+  isBMatch?: boolean
 }
 
 export interface TeamsResponse {

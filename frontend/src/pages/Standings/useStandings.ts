@@ -88,7 +88,7 @@ export function useStandings() {
   // ローカル計算による総合順位（フォールバック用）
   const calculatedOverallRankings = useMemo(() => {
     const teams = teamsData?.teams || []
-    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed') || []
+    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed' && !m.is_b_match && !m.isBMatch) || []
     if (teams.length === 0 || matches.length === 0) return undefined
 
     const statsMap = new Map<number, { teamId: number; points: number; goalDiff: number; goalsFor: number; played: number }>()
@@ -142,7 +142,7 @@ export function useStandings() {
     }
 
     const teams = teamsData?.teams || []
-    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed') || []
+    const matches = matchesData?.matches?.filter(m => m.stage === 'preliminary' && m.status === 'completed' && !m.is_b_match && !m.isBMatch) || []
     if (teams.length === 0 || matches.length === 0) return []
 
     const statsMap = new Map<number, TeamStats>()
