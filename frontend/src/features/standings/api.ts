@@ -297,26 +297,42 @@ export const standingApi = {
    */
   recalculateAll: async (tournamentId: number): Promise<{ groups: number; success: boolean }> => {
     try {
-      // グループ一覧を取得
-      const { data: groupsData, error: groupsError } = await supabase
-        .from('groups')
-        .select('id')
-        .eq('tournament_id', tournamentId);
+      // 大会設定を確認（1リーグ制かグループ制か）
+      const { data: tournamentData } = await supabase
+        .from('tournaments')
+        .select('use_group_system')
+        .eq('id', tournamentId)
+        .single();
 
-      if (groupsError) throw groupsError;
-      const groups = groupsData as GroupQueryResult[] | null;
+      const useGroupSystem = (tournamentData as { use_group_system?: boolean } | null)?.use_group_system !== false;
 
       let calculatedGroups = 0;
-      if (groups && groups.length > 0) {
-        // グループ制: 各グループを再計算（試合group_id=nullでもチームIDフォールバックあり）
-        for (const group of groups) {
-          await standingsApi.recalculate(tournamentId, group.id);
-          calculatedGroups++;
-          console.log(`[Standings] Recalculated group ${group.id}`);
+
+      if (useGroupSystem) {
+        // グループ制: 各グループを再計算
+        const { data: groupsData, error: groupsError } = await supabase
+          .from('groups')
+          .select('id')
+          .eq('tournament_id', tournamentId);
+
+        if (groupsError) throw groupsError;
+        const groups = groupsData as GroupQueryResult[] | null;
+
+        if (groups && groups.length > 0) {
+          for (const group of groups) {
+            await standingsApi.recalculate(tournamentId, group.id);
+            calculatedGroups++;
+            console.log(`[Standings] Recalculated group ${group.id}`);
+          }
+        } else {
+          // グループ制だがgroupsテーブルが空 → 単一リーグとして計算
+          console.log('[Standings] Group system enabled but no groups found, recalculating as single league');
+          await standingsApi.recalculate(tournamentId);
+          calculatedGroups = 1;
         }
       } else {
-        // 一グループ制: group_id なしで再計算
-        console.log('[Standings] No groups found, recalculating as single league');
+        // 1リーグ制: group_id なしで全チーム一括再計算
+        console.log('[Standings] Single league mode, recalculating all teams together');
         await standingsApi.recalculate(tournamentId);
         calculatedGroups = 1;
       }
