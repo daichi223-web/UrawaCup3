@@ -565,20 +565,33 @@ export const finalDayApi = {
    * 準決勝結果に基づいて決勝・3位決定戦のチームを更新
    */
   updateFinalsBracket: async (tournamentId: number): Promise<void> => {
-    // 準決勝の結果を取得
+    // 準決勝の結果を取得（statusフィルタなしで全準決勝を確認）
     const { data: semiFinalsData, error } = await supabase
       .from('matches')
       .select('*')
       .eq('tournament_id', tournamentId)
-      .eq('stage', 'semifinal')
-      .eq('status', 'completed');
+      .eq('stage', 'semifinal');
 
     if (error) throw error;
 
     const semiFinals = semiFinalsData as MatchQueryResult[] | null;
+    console.log('[updateFinalsBracket] 準決勝データ:', JSON.stringify(semiFinals?.map(m => ({
+      id: m.id, status: m.status, result: m.result,
+      home: m.home_team_id, away: m.away_team_id,
+      score: `${m.home_score_total}-${m.away_score_total}`,
+      pk: m.has_penalty_shootout ? `PK ${m.home_pk}-${m.away_pk}` : null,
+    }))));
+
     if (!semiFinals || semiFinals.length < 2) {
-      console.warn('準決勝が完了していません');
-      return;
+      throw new Error(`準決勝が${semiFinals?.length ?? 0}試合しかありません`);
+    }
+
+    // completedでない試合をチェック
+    const notCompleted = semiFinals.filter(m => m.status !== 'completed');
+    if (notCompleted.length > 0) {
+      throw new Error(
+        `準決勝${notCompleted.length}試合が未完了です（status: ${notCompleted.map(m => m.status).join(', ')}）`
+      );
     }
 
     // 勝者と敗者を決定
@@ -586,7 +599,9 @@ export const finalDayApi = {
     const losers: number[] = [];
 
     for (const match of semiFinals) {
-      if (!match.home_team_id || !match.away_team_id) continue;
+      if (!match.home_team_id || !match.away_team_id) {
+        throw new Error(`準決勝(id=${match.id})にチームが設定されていません`);
+      }
 
       if (match.result === 'home_win') {
         winners.push(match.home_team_id);
@@ -594,57 +609,61 @@ export const finalDayApi = {
       } else if (match.result === 'away_win') {
         winners.push(match.away_team_id);
         losers.push(match.home_team_id);
-      } else if (match.result === 'draw' && match.has_penalty_shootout) {
-        // PK戦で決着
-        if ((match.home_pk ?? 0) > (match.away_pk ?? 0)) {
-          winners.push(match.home_team_id);
-          losers.push(match.away_team_id);
+      } else if (match.result === 'draw') {
+        // 引き分けの場合: PK戦結果またはスコア差で判定
+        if (match.has_penalty_shootout && match.home_pk != null && match.away_pk != null) {
+          if (match.home_pk > match.away_pk) {
+            winners.push(match.home_team_id);
+            losers.push(match.away_team_id);
+          } else {
+            winners.push(match.away_team_id);
+            losers.push(match.home_team_id);
+          }
         } else {
-          winners.push(match.away_team_id);
-          losers.push(match.home_team_id);
+          throw new Error(
+            `準決勝(id=${match.id})が引き分けです。PK戦の結果を入力してください。`
+          );
         }
-      }
-    }
-
-    if (winners.length < 2 || losers.length < 2) {
-      const incomplete = semiFinals.filter(
-        (m) => m.result === 'draw' && !m.has_penalty_shootout
-      );
-      if (incomplete.length > 0) {
+      } else {
         throw new Error(
-          `準決勝${incomplete.length}試合が引き分けのままです。PK戦の結果を入力してください。`
+          `準決勝(id=${match.id})のresultが未設定です（result=${match.result}, status=${match.status}）`
         );
       }
-      throw new Error(
-        `準決勝の結果が不完全です（勝者: ${winners.length}/2, 敗者: ${losers.length}/2）`
-      );
     }
 
+    console.log('[updateFinalsBracket] 勝者:', winners, '敗者:', losers);
+
     // 決勝戦を更新
-    if (winners.length === 2) {
-      const { error: finalError } = await supabase
-        .from('matches')
-        .update({
-          home_team_id: winners[0],
-          away_team_id: winners[1],
-        } as never)
-        .eq('tournament_id', tournamentId)
-        .eq('stage', 'final');
-      if (finalError) throw new Error(`決勝の更新に失敗: ${finalError.message}`);
+    const { data: finalData, error: finalError } = await supabase
+      .from('matches')
+      .update({
+        home_team_id: winners[0],
+        away_team_id: winners[1],
+      } as never)
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'final')
+      .select();
+    if (finalError) throw new Error(`決勝の更新に失敗: ${finalError.message}`);
+    if (!finalData || finalData.length === 0) {
+      throw new Error('決勝の試合が見つかりません。先に最終日の組み合わせを生成してください。');
     }
 
     // 3位決定戦を更新
-    if (losers.length === 2) {
-      const { error: thirdError } = await supabase
-        .from('matches')
-        .update({
-          home_team_id: losers[0],
-          away_team_id: losers[1],
-        } as never)
-        .eq('tournament_id', tournamentId)
-        .eq('stage', 'third_place');
-      if (thirdError) throw new Error(`3位決定戦の更新に失敗: ${thirdError.message}`);
+    const { data: thirdData, error: thirdError } = await supabase
+      .from('matches')
+      .update({
+        home_team_id: losers[0],
+        away_team_id: losers[1],
+      } as never)
+      .eq('tournament_id', tournamentId)
+      .eq('stage', 'third_place')
+      .select();
+    if (thirdError) throw new Error(`3位決定戦の更新に失敗: ${thirdError.message}`);
+    if (!thirdData || thirdData.length === 0) {
+      throw new Error('3位決定戦の試合が見つかりません。先に最終日の組み合わせを生成してください。');
     }
+
+    console.log('[updateFinalsBracket] 更新完了 - 決勝:', finalData, '3位決定戦:', thirdData);
   },
 
   /**
