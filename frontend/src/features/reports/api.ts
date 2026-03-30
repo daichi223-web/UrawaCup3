@@ -865,19 +865,7 @@ export const reportApi = {
 
   // 最終結果報告書PDFダウンロード
   downloadFinalResult: async (tournamentId: number): Promise<Blob> => {
-    // 決勝・3位決定戦の結果を取得
-    const { data: finalMatchesData } = await supabase
-      .from('matches')
-      .select(`
-        *,
-        home_team:teams!matches_home_team_id_fkey(name, short_name),
-        away_team:teams!matches_away_team_id_fkey(name, short_name)
-      `)
-      .eq('tournament_id', tournamentId)
-      .in('stage', ['final', 'third_place'])
-      .eq('status', 'completed');
-
-    const finalMatches = (finalMatchesData || []) as Match[];
+    const data = await reportApi.getFinalResultData(tournamentId);
 
     const doc = new jsPDF();
     doc.setFont('helvetica');
@@ -887,34 +875,52 @@ export const reportApi = {
     let yPos = 35;
     doc.setFontSize(14);
 
-    const finalMatch = finalMatches.find((m) => m.stage === 'final');
-    const thirdMatch = finalMatches.find((m) => m.stage === 'third_place');
+    // 最終順位
+    const labels = ['優勝', '準優勝', '第3位', '第4位'];
+    data.ranking.forEach((team, i) => {
+      if (team) {
+        doc.text(`${labels[i]}: ${team.name || '未定'}`, 14, yPos);
+        yPos += 10;
+      }
+    });
+    yPos += 5;
 
-    if (finalMatch) {
-      const winner = finalMatch.result === 'home_win' ? finalMatch.home_team : finalMatch.away_team;
-      const runnerUp = finalMatch.result === 'home_win' ? finalMatch.away_team : finalMatch.home_team;
+    // 決勝トーナメント結果
+    const finalMatch = data.tournament.find((m) => m.stage === 'final');
+    const thirdMatch = data.tournament.find((m) => m.stage === 'third_place');
 
-      doc.text(`優勝: ${winner?.name || '未定'}`, 14, yPos);
-      yPos += 10;
-      doc.text(`準優勝: ${runnerUp?.name || '未定'}`, 14, yPos);
-      yPos += 10;
-    }
-
-    if (thirdMatch) {
-      const third = thirdMatch.result === 'home_win' ? thirdMatch.home_team : thirdMatch.away_team;
-      doc.text(`第3位: ${third?.name || '未定'}`, 14, yPos);
-      yPos += 15;
-    }
-
-    // 決勝戦詳細
     if (finalMatch) {
       doc.setFontSize(12);
       doc.text('【決勝戦】', 14, yPos);
       yPos += 8;
       doc.text(
-        `${finalMatch.home_team?.name} ${finalMatch.home_score_total} - ${finalMatch.away_score_total} ${finalMatch.away_team?.name}`,
+        `${finalMatch.home_team?.name || ''} ${finalMatch.home_score_total ?? 0} - ${finalMatch.away_score_total ?? 0} ${finalMatch.away_team?.name || ''}`,
         14, yPos
       );
+      yPos += 10;
+    }
+
+    if (thirdMatch) {
+      doc.text('【3位決定戦】', 14, yPos);
+      yPos += 8;
+      doc.text(
+        `${thirdMatch.home_team?.name || ''} ${thirdMatch.home_score_total ?? 0} - ${thirdMatch.away_score_total ?? 0} ${thirdMatch.away_team?.name || ''}`,
+        14, yPos
+      );
+      yPos += 15;
+    }
+
+    // 優秀選手
+    if (data.players.length > 0) {
+      doc.setFontSize(14);
+      doc.text('【優秀選手】', 14, yPos);
+      yPos += 10;
+      doc.setFontSize(11);
+      for (const p of data.players) {
+        doc.text(`${p.type}: ${p.name} (${p.team})`, 14, yPos);
+        yPos += 8;
+        if (yPos > 270) { doc.addPage(); yPos = 20; }
+      }
     }
 
     return doc.output('blob');
@@ -922,44 +928,35 @@ export const reportApi = {
 
   // 最終結果報告書Excelダウンロード
   downloadFinalResultExcel: async (tournamentId: number): Promise<Blob> => {
-    const { data: finalMatchesData } = await supabase
-      .from('matches')
-      .select(`
-        *,
-        home_team:teams!matches_home_team_id_fkey(name, short_name),
-        away_team:teams!matches_away_team_id_fkey(name, short_name)
-      `)
-      .eq('tournament_id', tournamentId)
-      .in('stage', ['final', 'third_place'])
-      .eq('status', 'completed');
-
-    const finalMatches = (finalMatchesData || []) as Match[];
-    const finalMatch = finalMatches.find((m) => m.stage === 'final');
-    const thirdMatch = finalMatches.find((m) => m.stage === 'third_place');
+    const data = await reportApi.getFinalResultData(tournamentId);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('最終結果');
 
+    // 最終順位
     worksheet.addRow(['最終結果']);
     worksheet.addRow([]);
+    const labels = ['優勝', '準優勝', '第3位', '第4位'];
+    data.ranking.forEach((team, i) => {
+      if (team) worksheet.addRow([labels[i], team.name || '']);
+    });
 
-    if (finalMatch) {
-      const winner = finalMatch.result === 'home_win' ? finalMatch.home_team : finalMatch.away_team;
-      const runnerUp = finalMatch.result === 'home_win' ? finalMatch.away_team : finalMatch.home_team;
-
-      worksheet.addRow(['優勝', winner?.name || '']);
-      worksheet.addRow(['準優勝', runnerUp?.name || '']);
-    }
-
-    if (thirdMatch) {
-      const third = thirdMatch.result === 'home_win' ? thirdMatch.home_team : thirdMatch.away_team;
-      worksheet.addRow(['第3位', third?.name || '']);
-    }
-
+    // 決勝トーナメント結果
     worksheet.addRow([]);
-    worksheet.addRow(['【決勝戦詳細】']);
-    if (finalMatch) {
-      worksheet.addRow(['', finalMatch.home_team?.name || '', finalMatch.home_score_total ?? 0, '-', finalMatch.away_score_total ?? 0, finalMatch.away_team?.name || '']);
+    worksheet.addRow(['【決勝トーナメント】']);
+    for (const m of data.tournament) {
+      const stageLabel = m.stage === 'final' ? '決勝' : m.stage === 'third_place' ? '3位決定戦' : '準決勝';
+      worksheet.addRow([stageLabel, m.home_team?.name || '', m.home_score_total ?? 0, '-', m.away_score_total ?? 0, m.away_team?.name || '']);
+    }
+
+    // 優秀選手
+    if (data.players.length > 0) {
+      worksheet.addRow([]);
+      worksheet.addRow(['【優秀選手】']);
+      worksheet.addRow(['賞', '選手名', 'チーム名']);
+      for (const p of data.players) {
+        worksheet.addRow([p.type, p.name, p.team]);
+      }
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
