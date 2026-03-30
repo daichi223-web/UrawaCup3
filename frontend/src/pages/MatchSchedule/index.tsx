@@ -54,7 +54,7 @@ function MatchSchedule() {
     isUpdatingMatch, isUpdatingBracket, isBulkUpdating,
 
     // Handlers
-    handleSwapTeams, handleEditorSave,
+    handleSwapTeams, handleEditorSave, handleUpdateBracket,
     startEditing, saveEdit,
     openGenerateModal, openDeleteModal,
     handleDelete, handleGenerate,
@@ -176,7 +176,7 @@ function MatchSchedule() {
               hasTrainingMatches={hasTrainingMatches}
               isUpdatingBracket={isUpdatingBracket}
               onSwapTeams={handleSwapTeams}
-              onUpdateBracket={() => {}}
+              onUpdateBracket={handleUpdateBracket}
             />
           ) : isEditMode && isPreliminaryTab ? (
             <EditModeView

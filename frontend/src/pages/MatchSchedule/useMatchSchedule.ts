@@ -859,6 +859,7 @@ export function useMatchSchedule() {
 
     // Handlers
     handleSwapTeams, handleEditorSave,
+    handleUpdateBracket: () => updateBracketMutation.mutate(),
     startEditing, saveEdit,
     openGenerateModal, openDeleteModal,
     handleDelete, handleGenerate,
