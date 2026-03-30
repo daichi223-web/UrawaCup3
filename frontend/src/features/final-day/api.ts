@@ -622,7 +622,7 @@ export const finalDayApi = {
 
     // 決勝戦を更新
     if (winners.length === 2) {
-      await supabase
+      const { error: finalError } = await supabase
         .from('matches')
         .update({
           home_team_id: winners[0],
@@ -630,11 +630,12 @@ export const finalDayApi = {
         } as never)
         .eq('tournament_id', tournamentId)
         .eq('stage', 'final');
+      if (finalError) throw new Error(`決勝の更新に失敗: ${finalError.message}`);
     }
 
     // 3位決定戦を更新
     if (losers.length === 2) {
-      await supabase
+      const { error: thirdError } = await supabase
         .from('matches')
         .update({
           home_team_id: losers[0],
@@ -642,6 +643,7 @@ export const finalDayApi = {
         } as never)
         .eq('tournament_id', tournamentId)
         .eq('stage', 'third_place');
+      if (thirdError) throw new Error(`3位決定戦の更新に失敗: ${thirdError.message}`);
     }
   },
 

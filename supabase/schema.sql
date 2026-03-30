@@ -683,6 +683,8 @@ CREATE POLICY "Admin full access" ON report_recipients FOR ALL USING (is_admin()
 CREATE POLICY "Admin full access" ON outstanding_players FOR ALL USING (is_admin());
 CREATE POLICY "Admin full access" ON venue_assignments FOR ALL USING (is_admin());
 
+CREATE POLICY "Admin full access" ON matches FOR ALL USING (is_admin());
+
 CREATE POLICY "Venue staff can update matches" ON matches
     FOR UPDATE USING (can_edit_match(venue_id));
 CREATE POLICY "Venue staff can insert goals" ON goals
